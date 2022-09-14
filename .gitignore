@@ -1,0 +1,12 @@
+__pycache__/
+.ipynb_checkpoints/
+*.egg-info/
+ipynb_checkpoints
+/.ipynb_checkpoints/
+/.ipynb_checkpoints/
+/.coverage
+/docs/_build/
+~$*
+/build/
+*.orig
+*.ini
