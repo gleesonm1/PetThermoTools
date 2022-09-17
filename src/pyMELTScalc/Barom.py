@@ -10,7 +10,10 @@ from subprocess import Popen, PIPE
 import Thermobar as pt
 from pyMELTScalc.Liq import *
 from pyMELTScalc.Crystallise import *
-from pyMELTScalc.Holland import *
+try:
+    from pyMELTScalc.Holland import *
+except:
+    print('Warning: MAGEMin calculations cannot be performed')
 from pyMELTScalc.MELTS import *
 
 def SatPress(P, Model, bulk, T_initial = None, Phases = None, Fe3 = None, H2O = None, fO2 = None, dt = None, T_step = None, T_cut = None, Plot = None, findRange = None, findMin = None, cores = None):

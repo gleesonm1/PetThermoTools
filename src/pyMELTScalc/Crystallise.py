@@ -10,7 +10,10 @@ from subprocess import Popen, PIPE
 import Thermobar as pt
 from pyMELTScalc.Barom import *
 from pyMELTScalc.Liq import *
-from pyMELTScalc.Holland import *
+try:
+    from pyMELTScalc.Holland import *
+except:
+    print('Warning: MAGEMin calculations cannot be performed')
 from pyMELTScalc.MELTS import *
 import asyncio
 import multiprocessing

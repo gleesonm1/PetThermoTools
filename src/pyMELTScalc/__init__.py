@@ -21,5 +21,8 @@ from pyMELTScalc.Crystallise import *
 # This contains the functions used to call MELTS calculations
 from pyMELTScalc.MELTS import *
 # This contains the functions used to perform calculations using the Holland et al. 2018 thermodynamic dataset
-from pyMELTScalc.Holland import *
+try:
+    from pyMELTScalc.Holland import *
+except:
+    print('Warning: MAGEMin calculations cannot be performed')
 

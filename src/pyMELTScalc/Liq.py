@@ -2,7 +2,10 @@ import numpy as np
 import pandas as pd
 from pyMELTScalc.Barom import *
 from pyMELTScalc.Crystallise import *
-from pyMELTScalc.Holland import *
+try:
+    from pyMELTScalc.Holland import *
+except:
+    print('Warning: MAGEMin calculations cannot be performed')
 from pyMELTScalc.MELTS import *
 import multiprocessing
 from multiprocessing import Queue
