@@ -64,13 +64,13 @@ def multi_crystallise(cores = None, Model = None, comp = None, Frac_solid = None
 
         for p in ps:
             try:
-                ret = q.get(timeout = 60)
+                ret = q.get(timeout = 180)
             except:
                 ret = []
 
             qs.append(ret)
 
-        TIMEOUT = 30
+        TIMEOUT = 5
         start = time.time()
         for p in ps:
             if p.is_alive():
@@ -87,22 +87,40 @@ def multi_crystallise(cores = None, Model = None, comp = None, Frac_solid = None
                 p.join()
                 p.terminate()
 
-    return qs
+    if type(P_bar) == np.ndarray:
+        Results = {}
+        for i in range(len(qs)):
+            if len(qs[i]) > 0:
+                Res, index = qs[i]
+                Results['P = ' + str(round(P_bar[index],2)) + ' bars'] = Res
+    else:
+        Results = {}
+        for i in range(len(qs)):
+            if len(qs[i]) > 0:
+                Res, index = qs[i]
+                Results['index = ' + str(index)] = Res
+
+    return Results
 
 def crystallise(q, index, *, Model = None, comp = None, Frac_solid = None, Frac_fluid = None, T_path_C = None, T_start_C = None, T_end_C = None, dt_C = None, P_path_bar = None, P_start_bar = None, P_end_bar = None, dp_bar = None, isochoric = None, find_liquidus = None):
 
     Results = {}
 
     if Model == "MELTS":
+        try:
+            Results = crystallise_MELTS(Model = Model, comp = comp, Frac_solid = Frac_solid, Frac_fluid = Frac_fluid, T_path_C = T_path_C, T_start_C = T_start_C, T_end_C = T_end_C, dt_C = dt_C, P_path_bar = P_path_bar, P_start_bar = P_start_bar, P_end_bar = P_end_bar, dp_bar = dp_bar, isochoric = isochoric, find_liquidus = find_liquidus)
+            q.put([Results, index])
+            return
+        except:
+            q.put([Results, index])
+            return
+
+    if Model == "Holland":
         #try:
-        Results = crystallise_MELTS(Model = Model, comp = comp, Frac_solid = Frac_solid, Frac_fluid = Frac_fluid, T_path_C = T_path_C, T_start_C = T_start_C, T_end_C = T_end_C, dt_C = dt_C, P_path_bar = P_path_bar, P_start_bar = P_start_bar, P_end_bar = P_end_bar, dp_bar = dp_bar, isochoric = isochoric, find_liquidus = find_liquidus)
+        Results = crystallise_holland(comp = comp, Frac_solid = Frac_solid, Frac_fluid = Frac_fluid, T_path_C = T_path_C, T_start_C = T_start_C, T_end_C = T_end_C, dt_C = dt_C, P_path_bar = P_path_bar, P_start_bar = P_start_bar, P_end_bar = P_end_bar, dp_bar = dp_bar, isochoric = isochoric, find_liquidus = find_liquidus)
         q.put([Results, index])
         return
         #except:
         #    q.put([Results, index])
         #    return
-
-    # if Model == "Holland":
-    #     Results = findLiq_holland(bulk, index, T = T, P = P, V = V, S = S, H = H)
-    #     q.put([Results, index])
 
