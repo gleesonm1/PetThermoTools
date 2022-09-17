@@ -11,7 +11,7 @@ def findLiq_MELTS(P_bar = None, Model = None, T_C_init = None, comp = None, melt
         raise Exception("Please specify a pressure for calculations")
 
     if Model is None:
-        Model = "MELTS"
+        Model = "MELTSv1.0.2"
 
     if T_C_init is None:
         T_C_init = 1300
@@ -30,7 +30,14 @@ def findLiq_MELTS(P_bar = None, Model = None, T_C_init = None, comp = None, melt
     from meltsdynamic import MELTSdynamic
 
     if melts is None:
-        melts = MELTSdynamic(1)
+        if Model is None or Model == "MELTSv1.0.2":
+            melts = MELTSdynamic(1)
+        elif Model == "pMELTS":
+            melts = MELTSdynamic(2)
+        elif Model == "MELTSv1.1.0":
+            melts = MELTSdynamic(3)
+        elif Model == "MELTSv1.2.0":
+            melts = MELTSdynamic(4)
 
     melts.engine.setBulkComposition(bulk)
     melts.engine.pressure = P_bar
@@ -262,8 +269,14 @@ def crystallise_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid =
 
     from meltsdynamic import MELTSdynamic
 
-    if Model is None or Model == "MELTS":
+    if Model is None or Model == "MELTSv1.0.2":
         melts = MELTSdynamic(1)
+    elif Model == "pMELTS":
+        melts = MELTSdynamic(2)
+    elif Model == "MELTSv1.1.0":
+        melts = MELTSdynamic(3)
+    elif Model == "MELTSv1.2.0":
+        melts = MELTSdynamic(4)
 
     bulk = [comp['SiO2_Liq'], comp['TiO2_Liq'], comp['Al2O3_Liq'], comp['Fe3Fet']*((159.59/2)/71.844)*comp['FeOt_Liq'], 0.0, (1- comp['Fe3Fet'])*comp['FeOt_Liq'], comp['MnO_Liq'], comp['MgO_Liq'], 0.0, 0.0, comp['CaO_Liq'], comp['Na2O_Liq'], comp['K2O_Liq'], comp['P2O5_Liq'], comp['H2O_Liq'], comp['CO2_Liq'], 0.0, 0.0, 0.0]
     bulk = list(100*np.array(bulk)/np.sum(bulk))

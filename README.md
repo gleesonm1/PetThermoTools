@@ -11,3 +11,6 @@ c. Pkg.add(url = "https://github.com/gleesonm1/MAGEMinCalc")
 d. ]
 e. precompile
 
+The alphaMELTS for Python packages will also need to be downloaded. These can be found here:
+https://magmasource.caltech.edu/gitlist/MELTS_Matlab.git/
+

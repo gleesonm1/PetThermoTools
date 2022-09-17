@@ -20,7 +20,7 @@ def findLiq_multi(cores = None, Model = None, comp = None, T_initial_C = None, P
 
     Model: string
         "MELTS" or "Holland". Dictates whether MELTS or MAGEMin calculations are performed. Default "MELTS".
-        Version of melts can be specified by additing "v1.0.1", "v1.1.0", "v1.2.0", or "p" to "MELTS". Default "v.1.0.1".
+        Version of melts can be specified "MELTSv1.0.2", "MELTSv1.1.0", "MELTSv1.2.0", or "pMELTS". Default "v.1.0.2".
 
     comp: np.ndarray or pd.DataFrame
         Matrix containing all oxide values required for the calculations.
@@ -46,7 +46,7 @@ def findLiq_multi(cores = None, Model = None, comp = None, T_initial_C = None, P
     index = np.zeros(len(comp['SiO2_Liq'].values)) - 1
 
     if Model is None:
-        Model == "MELTS"
+        Model == "MELTSv1.0.1"
 
     if cores is None:
         cores = 4
@@ -165,7 +165,7 @@ def findLiq(q, index,*, Model = None, P_bar = None, T_initial_C = None, comp = N
     T_in = T_initial_C
     H2O_Melt = 0
 
-    if Model == "MELTS":
+    if "MELTS" in Model:
         try:
             T_Liq, H2O_Melt = findLiq_MELTS(P_bar = P_bar, Model = Model, T_C_init = T_initial_C, comp = comp)
             q.put([T_Liq, H2O_Melt, index, T_in])
