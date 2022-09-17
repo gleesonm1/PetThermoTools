@@ -34,7 +34,8 @@ setup(
             'matplotlib',
             'scikit-learn',
             'scipy',
-            'julia'
+            'julia',
+            'tinynumpy'
             ],
 
     classifiers=[
