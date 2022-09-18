@@ -13,7 +13,7 @@ from pyMELTScalc.Liq import *
 try:
     from pyMELTScalc.Holland import *
 except:
-    print('Warning: MAGEMin calculations cannot be performed')
+    pass
 from pyMELTScalc.MELTS import *
 import asyncio
 import multiprocessing

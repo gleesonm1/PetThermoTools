@@ -5,7 +5,7 @@ from pyMELTScalc.Crystallise import *
 try:
     from pyMELTScalc.Holland import *
 except:
-    print('Warning: MAGEMin calculations cannot be performed')
+    pass
 from pyMELTScalc.MELTS import *
 import multiprocessing
 from multiprocessing import Queue
