@@ -44,7 +44,7 @@ Names = {'liquid1': '_Liq',
         'apatite1': '_Apa',
         'apatite2': '_Apa2'}
 
-def multi_iso_crystallise(cores = None, Model = None, comp = None, Frac_solid = None, Frac_fluid = None, T_start_C = None, T_end_C = None, dt_C = None, P_path_bar = None, isochoric = None, find_liquidus = None):
+def multi_iso_crystallise(cores = None, Model = None, comp = None, Frac_solid = None, Frac_fluid = None, T_start_C = None, T_end_C = None, dt_C = None, P_path_bar = None, Fe3Fet_Liq = None, isochoric = None, find_liquidus = None):
     '''
     Carry out multiple crystallisation calculations in parallel. Allows isobaric or isochoric calculations to be performed. All temperature inputs/outputs are reported in degrees celcius and pressure is reported in bars.
 
@@ -78,6 +78,9 @@ def multi_iso_crystallise(cores = None, Model = None, comp = None, Frac_solid = 
     P_path_bar: float or np.ndarray
         Single pressure or an array of pressures equal to the number of calculations to be performed. Specifies the pressure of calculation (bar).
 
+    Fe3Fet_Liq: float or np.ndarray
+        Fe 3+/total ratio. If type(comp) == dict, Fe3Fet_Liq must be a float and will set the Fe redox state in the initial composition. If comp is a pd.DataFrame, a single Fe3Fet_Liq value may be passed (float) and will be used as the Fe redox state for all starting compostions, or an array of Fe3Fet_Liq values, equal to the number of compositions specified in comp can specify a different Fe redox state for each sample. If None, the Fe redox state must be specified in the comp variable.
+
     isochoric: True/False
         If True, the volume of the system will be held constant instead of the pressure. Default is False.
 
@@ -93,6 +96,37 @@ def multi_iso_crystallise(cores = None, Model = None, comp = None, Frac_solid = 
 
     P_bar = P_path_bar
 
+    # set the liquid Fe redox state if specified separate to the bulk composition
+    if Fe3Fet_Liq is not None:
+        if type(comp) == dict:
+            comp['Fe3Fet_Liq'] = Fe3Fet_Liq
+        else:
+            comp['Fe3Fet_Liq'] = np.zeros(len(comp.iloc[:,0])) + Fe3Fet_Liq
+
+    # check all required columns are present with appropriate suffix
+    Columns_bad = ['SiO2', 'TiO2', 'Al2O3', 'FeOt', 'MnO', 'MgO', 'CaO', 'Na2O', 'K2O', 'P2O5', 'H2O', 'CO2', 'Fe3Fet']
+    Columns_ideal = ['SiO2_Liq', 'TiO2_Liq', 'Al2O3_Liq', 'FeOt_Liq', 'MnO_Liq', 'MgO_Liq', 'CaO_Liq', 'Na2O_Liq', 'K2O_Liq', 'P2O5_Liq', 'H2O_Liq', 'CO2_Liq', 'Fe3Fet_Liq']
+    Comp_start = comp.copy()
+    if type(comp) == pd.core.frame.DataFrame:
+        for el in Comp_start:
+            if el in Columns_bad:
+                comp = comp.rename(columns = {el:el + '_Liq'})
+
+        for el in Columns_ideal:
+            if el not in list(comp.keys()):
+                comp[el] = np.zeros(len(comp.iloc[:,0]))
+
+    elif type(comp) == dict:
+        for el in Comp_start:
+            if el in Columns_bad:
+                comp[el + '_Liq'] = comp[el]
+                del comp[el]
+
+        for el in Columns_ideal:
+            if el not in list(comp.keys()):
+                comp[el] = 0.0
+
+    # set default values if required
     if Model is None:
         Model == "MELTSv1.0.2"
 
@@ -102,6 +136,7 @@ def multi_iso_crystallise(cores = None, Model = None, comp = None, Frac_solid = 
     if dt_C is None and T_path_C is None:
         dt_C = 2
 
+    # specify the number of calculations to be performed in each sequence
     if type(P_bar) == np.ndarray:
         A = len(P_bar)//cores
         B = len(P_bar) % cores
@@ -118,6 +153,7 @@ def multi_iso_crystallise(cores = None, Model = None, comp = None, Frac_solid = 
     qs = []
     q = Queue()
 
+    # perform calculation if only 1 calculation is specified
     if type(comp) == dict and type(P_bar) != np.ndarray:
         p = Process(target = iso_crystallise, args = (q, 1),
                     kwargs = {'Model': Model, 'comp': comp, 'Frac_solid': Frac_solid, 'Frac_fluid': Frac_fluid,
@@ -154,7 +190,7 @@ def multi_iso_crystallise(cores = None, Model = None, comp = None, Frac_solid = 
             Results = {}
             return Results
 
-    else:
+    else: # perform multiple crystallisation calculations
         for j in range(len(Group)):
             ps = []
 
@@ -238,10 +274,20 @@ def stich(Res, multi = None):
         A copy of the input dict with a new DataFrame titled 'All' included.
     '''
     Results = Res.copy()
+    Order = ['SiO2', 'TiO2', 'Al2O3', 'Cr2O3', 'Fe2O3', 'FeO', 'FeOt', 'MnO', 'MgO', 'CaO', 'Na2O', 'K2O', 'P2O5', 'H2O', 'CO2', 'Fe3Fet']
     if multi is None:
+
+        Results['Conditions'] = Results['Conditions'].rename(columns = {'temperature':'T_C'})
+        Results['Conditions'] = Results['Conditions'].rename(columns = {'pressure':'P_bar'})
+
         for R in Results:
             if "_prop" not in R and R != "Conditions":
+                Results[R]['FeOt'] = Results[R]['FeO'] + 71.844/(158.69/2)*Results[R]['Fe2O3']
+                Results[R]['Fe3Fet'] = (71.844/(159.69/2)*Results[R]['Fe2O3'])/Results[R]['FeOt']
                 Results[R][Results[R + '_prop']['mass'] == 0.0] = np.nan
+                Results[R] = Results[R][Order]
+            if len(np.where(Res['Conditions']['temperature'] == 0.0)[0]) > 0:
+                Results[R] = Results[R].drop(labels = np.where(Res['Conditions']['temperature'] == 0.0)[0])
 
         Results_All = Results['Conditions']
 
@@ -259,27 +305,39 @@ def stich(Res, multi = None):
 
         Results['All'] = Results_All
 
+
     else:
-        for Ind in Results:
-            for R in Results[Ind]:
+        for Ind in Res:
+            Result = Res[Ind].copy()
+            Result['Conditions'] = Result['Conditions'].rename(columns = {'temperature':'T_C'})
+            Result['Conditions'] = Result['Conditions'].rename(columns = {'pressure':'P_bar'})
+
+            for R in Result:
                 if "_prop" not in R and R != "Conditions":
-                    Results[Ind][R][Results[Ind][R + '_prop']['mass'] == 0.0] = np.nan
+                    Result[R]['FeOt'] = Result[R]['FeO'] + 71.844/(158.69/2)*Result[R]['Fe2O3']
+                    Result[R]['Fe3Fet'] = (71.844/(159.69/2)*Result[R]['Fe2O3'])/Result[R]['FeOt']
+                    Result[R][Result[R + '_prop']['mass'] == 0.0] = np.nan
+                    Result[R] = Result[R][Order]
+                if len(np.where(Res[Ind]['Conditions']['temperature'] == 0.0)[0]) > 0:
+                    Result[R] = Result[R].drop(labels = np.where(Res[Ind]['Conditions']['temperature'] == 0.0)[0])
 
-            Results_All = Results[Ind]['Conditions']
+            Results_All = Result['Conditions']
 
-            for R in Results[Ind]:
+            for R in Result:
                 if R != "Conditions":
                     if any(n in R for n in Names):
                         for n in Names:
                             if n in R:
-                                Results[Ind][R] = Results[Ind][R].add_suffix(Names[n])
+                                Result[R] = Result[R].add_suffix(Names[n])
                     else:
-                        Results[Ind][R] = Results[Ind][R].add_suffix('_' + R)
+                        Result[R] = Result[R].add_suffix('_' + R)
 
 
-                    Results_All = pd.concat([Results_All, Res[Ind][R]], axis = 1)
+                    Results_All = pd.concat([Results_All, Result[R]], axis = 1)
 
-            Results[Ind]['All'] = Results_All
+            Result['All'] = Results_All
+
+            Results[Ind] = Result.copy()
 
     return Results
 
@@ -339,20 +397,12 @@ def iso_crystallise(q, index, *, Model = None, comp = None, Frac_solid = None, F
     Results = {}
 
     if "MELTS" in Model:
-        try:
-            Results = crystallise_MELTS(Model = Model, comp = comp, Frac_solid = Frac_solid, Frac_fluid = Frac_fluid, T_start_C = T_start_C, T_end_C = T_end_C, dt_C = dt_C, P_path_bar = P_path_bar, isochoric = isochoric, find_liquidus = find_liquidus)
-            q.put([Results, index])
-            return
-        except:
-            q.put([Results, index])
-            return
+        Results = crystallise_MELTS(Model = Model, comp = comp, Frac_solid = Frac_solid, Frac_fluid = Frac_fluid, T_start_C = T_start_C, T_end_C = T_end_C, dt_C = dt_C, P_path_bar = P_path_bar, isochoric = isochoric, find_liquidus = find_liquidus)
+        q.put([Results, index])
+        return
 
     if Model == "Holland":
-        try:
-            Results = crystallise_holland(comp = comp, Frac_solid = Frac_solid, Frac_fluid = Frac_fluid, T_start_C = T_start_C, T_end_C = T_end_C, dt_C = dt_C, P_path_bar = P_path_bar, isochoric = isochoric, find_liquidus = find_liquidus)
-            q.put([Results, index])
-            return
-        except:
-            q.put([Results, index])
-            return
+        Results = crystallise_holland(comp = comp, Frac_solid = Frac_solid, Frac_fluid = Frac_fluid, T_start_C = T_start_C, T_end_C = T_end_C, dt_C = dt_C, P_path_bar = P_path_bar, isochoric = isochoric, find_liquidus = find_liquidus)
+        q.put([Results, index])
+        return
 

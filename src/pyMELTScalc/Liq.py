@@ -25,7 +25,7 @@ def findLiq_multi(cores = None, Model = None, comp = None, T_initial_C = None, P
         "MELTS" or "Holland". Dictates whether MELTS or MAGEMin calculations are performed. Default "MELTS".
         Version of melts can be specified "MELTSv1.0.2", "MELTSv1.1.0", "MELTSv1.2.0", or "pMELTS". Default "v.1.0.2".
 
-    comp: np.ndarray or pd.DataFrame
+    comp: pd.DataFrame
         Matrix containing all oxide values required for the calculations.
 
     T_initial_C: float or np.ndarray
@@ -58,8 +58,8 @@ def findLiq_multi(cores = None, Model = None, comp = None, T_initial_C = None, P
         A = len(P_bar)//cores
         B = len(P_bar) % cores
     else:
-        A = len(comp['SiO2'])//cores
-        B = len(comp['SiO2']) % cores
+        A = len(comp['SiO2_Liq'])//cores
+        B = len(comp['SiO2_Liq']) % cores
 
     Group = np.zeros(A) + cores
     Group = np.append(Group, B)
