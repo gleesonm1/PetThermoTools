@@ -26,3 +26,5 @@ try:
 except:
     print('Warning: MAGEMin calculations cannot be performed')
 
+# version
+from ._version import __version__
