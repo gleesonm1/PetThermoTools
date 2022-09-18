@@ -35,8 +35,7 @@ setup(
             'scikit-learn',
             'scipy',
             'julia',
-            'tinynumpy',
-            'sys'
+            'tinynumpy'
             ],
 
     classifiers=[
