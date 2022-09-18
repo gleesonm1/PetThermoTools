@@ -6,6 +6,35 @@ from pyMELTScalc.Crystallise import *
 from pyMELTScalc.Liq import *
 
 def findLiq_MELTS(P_bar = None, Model = None, T_C_init = None, comp = None, melts = None):
+    '''
+    Perform a single find liquidus calculation in MELTS. WARNING! Running this function directly from the command land/jupyter notebook will initiate the MELTS C library in the main python process. Once this has been initiated the MELTS C library cannot be re-loaded and failures during the calculation will likely cause a terminal error to occur.
+
+    Parameters:
+    ----------
+    P_bar: float
+        Specifies the pressure of calculation (bar).
+
+    Model: string
+        Dictates the MELTS model to be used: "MELTSv1.0.2", "MELTSv1.1.0", "MELTSv1.2.0", or "pMELTS". Default "v.1.0.2".
+
+    T_C_init: float
+        Initial 'guess' temperature for findLiq calculations (degrees C).
+
+    comp: list or dict
+        Input oxide values required for the calculations.
+
+    melts: melts.engine
+        If used as part of a crystallisation or decompression model, an instance of the MELTS C library will have been previously initiated and can be loaded here. When liquidus calculations are run in isolation this should be kept blank and a new instance of the MELTS C library will be initiated.
+
+    Returns:
+    ----------
+    T_Liq_C: np.ndarray
+        Array of liquidus temperatures.
+
+    H2O: np.ndarray
+        Array of melt H2O contents at the liquidus.
+
+    '''
 
     if P_bar is None:
         raise Exception("Please specify a pressure for calculations")
@@ -98,6 +127,9 @@ def findLiq_MELTS(P_bar = None, Model = None, T_C_init = None, comp = None, melt
     return T_Liq, H2O_Melt
 
 def satTemperature_MELTS(q, Model, phases, P, T_initial, bulk, dt, T_step):
+    '''
+    calculate the saturation temperature for the different phases of interest. Calculations can be performed in parallel.
+    '''
 
     from meltsdynamic import MELTSdynamic
 
@@ -256,6 +288,59 @@ def satTemperature_MELTS(q, Model, phases, P, T_initial, bulk, dt, T_step):
         return
 
 def crystallise_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid = None, T_path_C = None, T_start_C = None, T_end_C = None, dt_C = None, P_path_bar = None, P_start_bar = None, P_end_bar = None, dp_bar = None, isochoric = None, find_liquidus = None):
+    '''
+    Perform a single crystallisation calculation in MELTS. WARNING! Running this function directly from the command land/jupyter notebook will initiate the MELTS C library in the main python process. Once this has been initiated the MELTS C library cannot be re-loaded and failures during the calculation will likely cause a terminal error to occur.
+
+    Parameters:
+    ----------
+    Model: string
+        Dictates the MELTS model to be used: "MELTSv1.0.2", "MELTSv1.1.0", "MELTSv1.2.0", or "pMELTS". Default "v.1.0.2".
+
+    comp: list or dict
+        Input oxide values required for the calculations.
+
+    Frac_solid: True/False
+        If True, solid phases will be removed from the system at the end of each crystallisation step. Default False.
+
+    Frac_fluid: True/False
+        If True, fluid phases will be removed from the system at the end of each crystallisation step. Default False.
+
+    T_path_C: float or np.ndarray
+        Initial temperature (if float) or temperature path for the calculation (if np.ndarray)
+
+    T_start_C: float
+        Initial temperature used for crystallisation calculations.
+
+    T_end_C: float
+        Final temperature in crystallisation calculations.
+
+    dt_C: float
+        Temperature increment during crystallisation calculations.
+
+    P_path_bar: float or np.ndarray
+        Initial pressure (if float) or pressure path for the calculation (if np.ndarray)
+
+    P_start_bar: float
+        Initial pressure used for crystallisation calculations.
+
+    P_end_bar: float
+        Final pressure in polybaric crystallisation calculations.
+
+    dp_bar: float
+        Pressure increment during polybaric crystallisation calculations.
+
+    isochoric: True/False
+        If True, the volume of the system will be held constant instead of the pressure. Default is False.
+
+    find_liquidus: True/False
+        If True, the calculations will start with a search for the melt liquidus temperature. Default is False.
+
+    Returns:
+    ----------
+    Results: Dict
+        Dict containing a series of pandas DataFrames that display the composition and thermodynamic properties of each phase.
+
+    '''
 
     Results = {}
 
@@ -406,7 +491,10 @@ def crystallise_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid =
             else:
                 Results['Conditions'][R].loc[i] = melts.engine.getProperty(R, 'bulk')
 
-        PhaseList = ['liquid1'] + melts.engine.solidNames
+        try:
+            PhaseList = ['liquid1'] + melts.engine.solidNames
+        except:
+            return Results
 
         for phase in PhaseList:
             if phase not in list(Results.keys()):

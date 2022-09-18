@@ -44,7 +44,7 @@ Names = {'liquid1': '_Liq',
         'apatite1': '_Apa',
         'apatite2': '_Apa2'}
 
-def multi_iso_crystallise(cores = None, Model = None, comp = None, Frac_solid = None, Frac_fluid = None, T_start_C = None, T_end_C = None, dt_C = None, P_bar = None, isochoric = None, find_liquidus = None):
+def multi_iso_crystallise(cores = None, Model = None, comp = None, Frac_solid = None, Frac_fluid = None, T_start_C = None, T_end_C = None, dt_C = None, P_path_bar = None, isochoric = None, find_liquidus = None):
     '''
     Carry out multiple crystallisation calculations in parallel. Allows isobaric or isochoric calculations to be performed. All temperature inputs/outputs are reported in degrees celcius and pressure is reported in bars.
 
@@ -75,7 +75,7 @@ def multi_iso_crystallise(cores = None, Model = None, comp = None, Frac_solid = 
     dt_C: float
         Temperature increment during crystallisation calculations. Default = 2.
 
-    P_bar: float or np.ndarray
+    P_path_bar: float or np.ndarray
         Single pressure or an array of pressures equal to the number of calculations to be performed. Specifies the pressure of calculation (bar).
 
     isochoric: True/False
@@ -90,6 +90,8 @@ def multi_iso_crystallise(cores = None, Model = None, comp = None, Frac_solid = 
         Dictionary where each entry represents the results of a single calculation. Within the dictionary each single calculation is reported as a series of pandas DataFrames, displaying the composition and thermodynamic properties of each phase.
 
     '''
+
+    P_bar = P_path_bar
 
     if Model is None:
         Model == "MELTSv1.0.2"
@@ -219,6 +221,22 @@ def multi_iso_crystallise(cores = None, Model = None, comp = None, Frac_solid = 
         return Results
 
 def stich(Res, multi = None):
+    '''
+    Takes the outputs from the multiple crystallisation/decompression calculations and stiches them together into a single dataframe. Additionally, it adds the relevant suffix to the composition and properties of each mineral (e.g., SiO2 -> SiO2_Liq for the liquid phase).
+
+    Parameters:
+    ----------
+    Results: dict
+        Final results from the multiple crystallisation/decompression calculations.
+
+    multi: True/False
+        If True, Results is composed of multiple dictionaries, each representing a single crystallisation/decompression calculation. Default is False.
+
+    Returns:
+    ----------
+    Results: dict
+        A copy of the input dict with a new DataFrame titled 'All' included.
+    '''
     Results = Res.copy()
     if multi is None:
         for R in Results:
@@ -266,6 +284,57 @@ def stich(Res, multi = None):
     return Results
 
 def iso_crystallise(q, index, *, Model = None, comp = None, Frac_solid = None, Frac_fluid = None, T_start_C = None, T_end_C = None, dt_C = None, P_path_bar = None, isochoric = None, find_liquidus = None):
+    '''
+    Crystallisation calculations to be performed in parallel. Calculations may be either isobaric or isochoric.
+
+    Parameters:
+    ----------
+    q: Multiprocessing Queue instance
+        Queue instance to record the output variables
+
+    index: int
+        index of the calculation in the master code (e.g., position within a for loop) to aid indexing results after calculations are complete.
+
+    Model: string
+        "MELTS" or "Holland". Dictates whether MELTS or MAGEMin calculations are performed. Default "MELTS".
+        Version of melts can be specified "MELTSv1.0.2", "MELTSv1.1.0", "MELTSv1.2.0", or "pMELTS". Default "v.1.0.2".
+
+    comp: Dict
+        Initial compositon for calculations.
+
+    Frac_solid: True/False
+        If True, solid phases will be removed from the system at the end of each crystallisation step. Default False.
+
+    Frac_fluid: True/False
+        If True, fluid phases will be removed from the system at the end of each crystallisation step. Default False.
+
+    T_start_C: float
+        Initial temperature used for crystallisation calculations.
+
+    T_end_C: float
+        Final temperature in crystallisation calculations. Default = 750.
+
+    dt_C: float
+        Temperature increment during crystallisation calculations. Default = 2.
+
+    P_path_bar: float
+         Specifies the pressure of calculation (bar).
+
+    isochoric: True/False
+        If True, the volume of the system will be held constant instead of the pressure. Default is False.
+
+    find_liquidus: True/False
+        If True, the calculations will start with a search for the melt liquidus temperature. Default is False.
+
+    Returns:
+    ----------
+    Results: Dict
+        Dict containing a series of pandas DataFrames that display the composition and thermodynamic properties of each phase.
+
+    index: int
+        index of the calculation
+
+    '''
 
     Results = {}
 

@@ -17,6 +17,9 @@ except:
 from pyMELTScalc.MELTS import *
 
 def SatPress(P, Model, bulk, T_initial = None, Phases = None, Fe3 = None, H2O = None, fO2 = None, dt = None, T_step = None, T_cut = None, Plot = None, findRange = None, findMin = None, cores = None):
+    '''
+    Find the location in P (+ H2O + fO2) where there is the minimum misfit between the saturation curves of the listed phases.
+    '''
 
     if T_initial is None:
         T_initial = 1200
@@ -373,6 +376,9 @@ def SatPress(P, Model, bulk, T_initial = None, Phases = None, Fe3 = None, H2O = 
                 return Results, f
 
 def findMinimum(P, Results, Phases, Fe3 = None, H2O = None, T_cut = None):
+    '''
+    Take the results of SatPress and search for the minimum point using a parabolic fit.
+    '''
     if T_cut is None:
         T_cut = 5
 
@@ -395,6 +401,9 @@ def findMinimum(P, Results, Phases, Fe3 = None, H2O = None, T_cut = None):
         return PolyMin
 
 def detRange(P, Model, bulk, Results, Phases, T_initial = None, Fe3 = None, H2O = None, T_cut = None, findRange = None, cores = None):
+    '''
+    re-run the SatPress calculations using a higher resolution to determine the range of P (+H2O +fO2) where the maximum difference between the target saturation curve is below some reference value.
+    '''
     if T_cut is None:
         T_cut = 5
 
@@ -796,6 +805,9 @@ def detRange(P, Model, bulk, Results, Phases, T_initial = None, Fe3 = None, H2O 
 
 
 def findResiduals(a_Sat, b_Sat, c_Sat = None):
+    '''
+    Determine the temperature offse between the different saturation curves.
+    '''
     Res = {}
 
     if c_Sat is not None:
@@ -825,6 +837,9 @@ def findResiduals(a_Sat, b_Sat, c_Sat = None):
     return Res
 
 def polymin(P, Res):
+    '''
+    Finds the minimum residual temperature using a 2nd degree polynomial.
+    '''
     arr = np.sort(Res)
     Ind = np.where(Res == arr[0])[0][0]
 
@@ -845,6 +860,9 @@ def polymin(P, Res):
     return p, p_min
 
 def findSat(P, Model, Phases, bulk, T_initial = None, dt = None, T_step = None, cores = None):
+    '''
+    Calculation to find saturation temperatures. Can be run in parallel.
+    '''
     if dt is None:
         dt = 25
 
