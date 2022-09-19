@@ -18,7 +18,7 @@ from multiprocessing import Queue
 from multiprocessing import Process
 import time
 
-def multi_iso_crystallise(cores = None, Model = None, comp = None, Frac_solid = None, Frac_fluid = None, T_start_C = None, T_end_C = None, dt_C = None, P_path_bar = None, Fe3Fet_Liq = None, isochoric = None, find_liquidus = None):
+def multi_iso_crystallise(cores = None, Model = None, comp = None, Frac_solid = None, Frac_fluid = None, T_start_C = None, T_end_C = None, dt_C = None, P_path_bar = None, Fe3Fet_Liq = None, H2O_Liq = None, isochoric = None, find_liquidus = None):
     '''
     Carry out multiple crystallisation calculations in parallel. Allows isobaric or isochoric calculations to be performed. All temperature inputs/outputs are reported in degrees celcius and pressure is reported in bars.
 
@@ -55,6 +55,9 @@ def multi_iso_crystallise(cores = None, Model = None, comp = None, Frac_solid = 
     Fe3Fet_Liq: float or np.ndarray
         Fe 3+/total ratio. If type(comp) == dict, Fe3Fet_Liq must be a float and will set the Fe redox state in the initial composition. If comp is a pd.DataFrame, a single Fe3Fet_Liq value may be passed (float) and will be used as the Fe redox state for all starting compostions, or an array of Fe3Fet_Liq values, equal to the number of compositions specified in comp can specify a different Fe redox state for each sample. If None, the Fe redox state must be specified in the comp variable.
 
+    H2O_Liq: float or np.ndarray
+        H2O content of the initial melt phase. If type(comp) == dict, H2O_Liq must be a float. If comp is a pd.DataFrame, a single H2O_Liq value may be passes (float) and will be used as the initial melt H2O content for all starting compositions. Alternatively, if an array of H2O_Liq values is passed, equal to the number of compositions specified in comp, a different initial melt H2O value will be passed for each sample. If None, H2O_Liq must be specified in the comp variable.
+
     isochoric: True/False
         If True, the volume of the system will be held constant instead of the pressure. Default is False.
 
@@ -74,9 +77,12 @@ def multi_iso_crystallise(cores = None, Model = None, comp = None, Frac_solid = 
     if Model is None:
         Model == "MELTSv1.0.2"
 
+    # if comp is entered as a pandas series, it must first be converted to a dict
+    if type(comp) == pd.core.series.Series:
+        comp = comp.to_dict()
+
     # ensure the bulk composition has the correct headers etc.
-    from pyMELTScalc.GenFuncs import comp_fix
-    comp = comp_fix(Model = Model, comp = comp, Fe3Fet_Liq = Fe3Fet_Liq)
+    comp = comp_fix(Model = Model, comp = comp, Fe3Fet_Liq = Fe3Fet_Liq, H2O_Liq = H2O_Liq)
 
     if cores is None:
         cores = 4

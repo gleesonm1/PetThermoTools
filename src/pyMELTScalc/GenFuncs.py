@@ -32,7 +32,7 @@ Names = {'liquid1': '_Liq',
         'apatite1': '_Apa',
         'apatite2': '_Apa2'}
 
-def comp_fix(Model = None, comp = None, Fe3Fet_Liq = None):
+def comp_fix(Model = None, comp = None, Fe3Fet_Liq = None, H2O_Liq = None):
     '''
     Ensure that the input variables contain the correct column headers for the following variables.
 
@@ -47,6 +47,9 @@ def comp_fix(Model = None, comp = None, Fe3Fet_Liq = None):
     Fe3Fet_Liq: float or np.ndarray
         Fe 3+/total ratio. If type(comp) == dict, Fe3Fet_Liq must be a float and will set the Fe redox state in the initial composition. If comp is a pd.DataFrame, a single Fe3Fet_Liq value may be passed (float) and will be used as the Fe redox state for all starting compostions, or an array of Fe3Fet_Liq values, equal to the number of compositions specified in comp can specify a different Fe redox state for each sample. If None, the Fe redox state must be specified in the comp variable.
 
+    H2O_Liq: float or np.ndarray
+        H2O content of the initial melt phase. If type(comp) == dict, H2O_Liq must be a float. If comp is a pd.DataFrame, a single H2O_Liq value may be passes (float) and will be used as the initial melt H2O content for all starting compositions. Alternatively, if an array of H2O_Liq values is passed, equal to the number of compositions specified in comp, a different initial melt H2O value will be passed for each sample. If None, H2O_Liq must be specified in the comp variable.
+
     Returns:
     ---------
     comp: dict or DataFrame
@@ -58,6 +61,13 @@ def comp_fix(Model = None, comp = None, Fe3Fet_Liq = None):
             comp['Fe3Fet_Liq'] = Fe3Fet_Liq
         else:
             comp['Fe3Fet_Liq'] = np.zeros(len(comp.iloc[:,0])) + Fe3Fet_Liq
+
+
+    if H2O_Liq is not None:
+        if type(comp) == dict:
+            comp['H2O_Liq'] = H2O_Liq
+        else:
+            comp['H2O_Liq'] = np.zeros(len(comp.iloc[:,0])) + H2O_Liq
 
     if "MELTS" in Model:
         # check all required columns are present with appropriate suffix

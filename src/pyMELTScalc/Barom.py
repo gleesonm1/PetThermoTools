@@ -1,16 +1,8 @@
 import numpy as np
 import pandas as pd
-import sys
-import os
-import pickle
 import matplotlib.pyplot as plt
-import subprocess
-import glob
-from subprocess import Popen, PIPE
 import Thermobar as pt
 from pyMELTScalc.GenFuncs import *
-# from pyMELTScalc.Liq import *
-# from pyMELTScalc.Crystallise import *
 from pyMELTScalc.MELTS import *
 try:
     from pyMELTScalc.Holland import *
@@ -26,7 +18,7 @@ def SatPress(P, Model, bulk, T_initial = None, Phases = None, Fe3 = None, H2O = 
         T_initial = 1200
 
     if cores is None:
-        cores = 20
+        cores = 4
 
     if Phases is None:
         Phases = ['quartz1', 'plagioclase1', 'k-feldspar1']
@@ -49,9 +41,6 @@ def SatPress(P, Model, bulk, T_initial = None, Phases = None, Fe3 = None, H2O = 
             f = plt.figure(figsize = plt.figaspect(0.5))
             a0 = f.add_subplot(1,2,1)
             a1 = f.add_subplot(1,2,2)
-
-        with open('bulk.obj', 'wb') as f:
-            pickle.dump(bulk, f)
 
         if len(Phases) == 3:
             a_Sat, b_Sat, c_Sat, T_Liq, H2O_Melt = findSat(P, Model, Phases, bulk, T_initial = T_initial, dt = dt, T_step = T_step, cores = cores)

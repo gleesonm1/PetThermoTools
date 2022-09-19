@@ -13,7 +13,7 @@ from multiprocessing import Queue
 from multiprocessing import Process
 from tqdm.notebook import tqdm, trange
 
-def findLiq_multi(cores = None, Model = None, comp = None, T_initial_C = None, P_bar = None):
+def findLiq_multi(cores = None, Model = None, comp = None, T_initial_C = None, P_bar = None, Fe3Fet_Liq = None, H2O_Liq = None):
     '''
     Carry out multiple findLiq calculations in parallel.
 
@@ -35,6 +35,12 @@ def findLiq_multi(cores = None, Model = None, comp = None, T_initial_C = None, P
     P_bar: float or np.ndarray
         Single pressure or array of pressures equal to length of compositions in bulk. Specifies the pressure of calculation (bar).
 
+    Fe3Fet_Liq: float or np.ndarray
+        Fe 3+/total ratio. If type(comp) == dict, Fe3Fet_Liq must be a float and will set the Fe redox state in the initial composition. If comp is a pd.DataFrame, a single Fe3Fet_Liq value may be passed (float) and will be used as the Fe redox state for all starting compostions, or an array of Fe3Fet_Liq values, equal to the number of compositions specified in comp can specify a different Fe redox state for each sample. If None, the Fe redox state must be specified in the comp variable.
+
+    H2O_Liq: float or np.ndarray
+        H2O content of the initial melt phase. If type(comp) == dict, H2O_Liq must be a float. If comp is a pd.DataFrame, a single H2O_Liq value may be passes (float) and will be used as the initial melt H2O content for all starting compositions. Alternatively, if an array of H2O_Liq values is passed, equal to the number of compositions specified in comp, a different initial melt H2O value will be passed for each sample. If None, H2O_Liq must be specified in the comp variable.
+
     Returns:
     ----------
     T_Liq_C: np.ndarray
@@ -46,8 +52,12 @@ def findLiq_multi(cores = None, Model = None, comp = None, T_initial_C = None, P
     if Model is None:
         Model == "MELTSv1.0.2"
 
+    # if comp is entered as a pandas series, it must first be converted to a dict
+    if type(comp) == pd.core.series.Series:
+        comp = comp.to_dict()
+
     # ensure the bulk composition has the correct headers etc.
-    comp = comp_fix(Model = Model, comp = comp, Fe3Fet_Liq = Fe3Fet_Liq)
+    comp = comp_fix(Model = Model, comp = comp, Fe3Fet_Liq = Fe3Fet_Liq, H2O_Liq = H2O_Liq)
 
     T_Liq = np.zeros(len(comp['SiO2_Liq'].values))
     T_in = np.zeros(len(comp['SiO2_Liq'].values))
