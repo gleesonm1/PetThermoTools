@@ -1,10 +1,11 @@
 import numpy as np
 import julia
 import time
-from pyMELTScalc.Liq import *
-from pyMELTScalc.Crystallise import *
-from pyMELTScalc.Barom import *
-from pyMELTScalc.MELTS import *
+# from pyMELTScalc.GenFuncs import *
+# from pyMELTScalc.Liq import *
+# from pyMELTScalc.Crystallise import *
+# from pyMELTScalc.Barom import *
+# from pyMELTScalc.MELTS import *
 #from julia import Main
 from julia import MAGEMinCalc
 from os import path

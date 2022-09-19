@@ -1,12 +1,13 @@
 import numpy as np
 import pandas as pd
-from pyMELTScalc.Barom import *
-from pyMELTScalc.Crystallise import *
+from pyMELTScalc.GenFuncs import *
+# from pyMELTScalc.Barom import *
+# from pyMELTScalc.Crystallise import *
+from pyMELTScalc.MELTS import *
 try:
     from pyMELTScalc.Holland import *
 except:
     pass
-from pyMELTScalc.MELTS import *
 import multiprocessing
 from multiprocessing import Queue
 from multiprocessing import Process
@@ -42,14 +43,16 @@ def findLiq_multi(cores = None, Model = None, comp = None, T_initial_C = None, P
     H2O: np.ndarray
         Array of melt H2O contents at the liquidus.
     '''
+    if Model is None:
+        Model == "MELTSv1.0.2"
+
+    # ensure the bulk composition has the correct headers etc.
+    comp = comp_fix(Model = Model, comp = comp, Fe3Fet_Liq = Fe3Fet_Liq)
 
     T_Liq = np.zeros(len(comp['SiO2_Liq'].values))
     T_in = np.zeros(len(comp['SiO2_Liq'].values))
     H2O_melt = np.zeros(len(comp['SiO2_Liq'].values))
     index = np.zeros(len(comp['SiO2_Liq'].values)) - 1
-
-    if Model is None:
-        Model == "MELTSv1.0.1"
 
     if cores is None:
         cores = 4
@@ -61,25 +64,21 @@ def findLiq_multi(cores = None, Model = None, comp = None, T_initial_C = None, P
         A = len(comp['SiO2_Liq'])//cores
         B = len(comp['SiO2_Liq']) % cores
 
-    Group = np.zeros(A) + cores
-    Group = np.append(Group, B)
+    if A > 0:
+        Group = np.zeros(A) + cores
+        Group = np.append(Group, B)
+    else:
+        Group = np.array([B])
 
     qs = []
     q = Queue()
     for j in tqdm(range(len(Group))):
         ps = []
         for i in range(int(cores*j), int(cores*j + Group[j])):
-            if type(comp) == np.ndarray:
-                if type(P_bar) == np.ndarray:
-                    p = Process(target = findLiq, args = (q, i), kwargs = {'Model': Model, 'P_bar': P_bar[i], 'T_initial_C': T_initial_C[i], 'comp': list(comp[:,i])})
-                else:
-                    p = Process(target = findLiq, args = (q, i), kwargs = {'Model': Model, 'P_bar': P_bar, 'T_initial_C': T_initial_C[i], 'comp': list(comp[:,i])})
-
-            elif type(comp) == pd.core.frame.DataFrame:
-                if type(P_bar) == np.ndarray:
-                    p = Process(target = findLiq, args = (q, i), kwargs = {'Model': Model, 'P_bar': P_bar[i], 'T_initial_C': T_initial_C[i], 'comp': comp.loc[i].to_dict()})
-                else:
-                    p = Process(target = findLiq, args = (q, i), kwargs = {'Model': Model, 'P_bar': P_bar, 'T_initial_C': T_initial_C[i], 'comp': comp.loc[i].to_dict()})
+            if type(P_bar) == np.ndarray:
+                p = Process(target = findLiq, args = (q, i), kwargs = {'Model': Model, 'P_bar': P_bar[i], 'T_initial_C': T_initial_C[i], 'comp': comp.loc[i].to_dict()})
+            else:
+                p = Process(target = findLiq, args = (q, i), kwargs = {'Model': Model, 'P_bar': P_bar, 'T_initial_C': T_initial_C[i], 'comp': comp.loc[i].to_dict()})
 
             ps.append(p)
             p.start()

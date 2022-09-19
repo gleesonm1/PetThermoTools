@@ -12,6 +12,8 @@ from subprocess import Popen, PIPE
 import Thermobar as pt
 from os import path
 
+# General functions that are used across multiple types of calculations
+from pyMELTScalc.GenFuncs import *
 # This has the main functions that call the barometry calculations
 from pyMELTScalc.Barom import *
 # This contains the functions required to find liquidi via subprocesses
