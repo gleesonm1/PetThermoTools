@@ -55,6 +55,9 @@ def comp_fix(Model = None, comp = None, Fe3Fet_Liq = None, H2O_Liq = None):
     comp: dict or DataFrame
         new composition file with correct headers.
     '''
+    if Model is None:
+        Model = "MELTSv1.0.2"
+
     # set the liquid Fe redox state if specified separate to the bulk composition
     if Fe3Fet_Liq is not None:
         if type(comp) == dict:
@@ -73,6 +76,29 @@ def comp_fix(Model = None, comp = None, Fe3Fet_Liq = None, H2O_Liq = None):
         # check all required columns are present with appropriate suffix
         Columns_bad = ['SiO2', 'TiO2', 'Al2O3', 'FeOt', 'MnO', 'MgO', 'CaO', 'Na2O', 'K2O', 'P2O5', 'H2O', 'CO2', 'Fe3Fet']
         Columns_ideal = ['SiO2_Liq', 'TiO2_Liq', 'Al2O3_Liq', 'FeOt_Liq', 'MnO_Liq', 'MgO_Liq', 'CaO_Liq', 'Na2O_Liq', 'K2O_Liq', 'P2O5_Liq', 'H2O_Liq', 'CO2_Liq', 'Fe3Fet_Liq']
+        Comp_start = comp.copy()
+        if type(comp) == pd.core.frame.DataFrame:
+            for el in Comp_start:
+                if el in Columns_bad:
+                    comp = comp.rename(columns = {el:el + '_Liq'})
+
+            for el in Columns_ideal:
+                if el not in list(comp.keys()):
+                    comp[el] = np.zeros(len(comp.iloc[:,0]))
+
+        elif type(comp) == dict:
+            for el in Comp_start:
+                if el in Columns_bad:
+                    comp[el + '_Liq'] = comp[el]
+                    del comp[el]
+
+            for el in Columns_ideal:
+                if el not in list(comp.keys()):
+                    comp[el] = 0.0
+    else:
+        # check all required columns are present with appropriate suffix
+        Columns_bad = ['SiO2', 'TiO2', 'Al2O3', 'FeOt', 'MgO', 'CaO', 'Na2O', 'K2O', 'H2O', 'Fe3Fet']
+        Columns_ideal = ['SiO2_Liq', 'TiO2_Liq', 'Al2O3_Liq', 'FeOt_Liq', 'MgO_Liq', 'CaO_Liq', 'Na2O_Liq', 'K2O_Liq', 'H2O_Liq', 'Fe3Fet_Liq']
         Comp_start = comp.copy()
         if type(comp) == pd.core.frame.DataFrame:
             for el in Comp_start:
@@ -116,69 +142,81 @@ def stich(Res, multi = None, Model = None):
         A copy of the input dict with a new DataFrame titled 'All' included.
     '''
     Results = Res.copy()
-    Order = ['SiO2', 'TiO2', 'Al2O3', 'Cr2O3', 'Fe2O3', 'FeO', 'FeOt', 'MnO', 'MgO', 'CaO', 'Na2O', 'K2O', 'P2O5', 'H2O', 'CO2', 'Fe3Fet']
-    if multi is None:
+    if "MELTS" in Model:
+        Order = ['SiO2', 'TiO2', 'Al2O3', 'Cr2O3', 'Fe2O3', 'FeO', 'FeOt', 'MnO', 'MgO', 'CaO', 'Na2O', 'K2O', 'P2O5', 'H2O', 'CO2', 'Fe3Fet']
+        if multi is None:
+            Results = stich_work(Results = Results, Order = Order)
+        else:
+            for Ind in Res:
+                Result = Res[Ind].copy()
+                Result = stich_work(Results = Result, Order = Order)
+                Results[Ind] = Result.copy()
+    else:
+        Order = ['SiO2', 'TiO2', 'Al2O3', 'Cr2O3', 'Fe2O3', 'FeO', 'FeOt', 'MgO', 'CaO', 'Na2O', 'K2O', 'H2O', 'Fe3Fet']
+        if multi is None:
+            Results = stich_work(Results = Results, Order = Order)
+        else:
+            for Ind in Res:
+                Result = Res[Ind].copy()
+                Result = stich_work(Results = Result, Order = Order)
+                Results[Ind] = Result.copy()
 
-        Results['Conditions'] = Results['Conditions'].rename(columns = {'temperature':'T_C'})
-        Results['Conditions'] = Results['Conditions'].rename(columns = {'pressure':'P_bar'})
+    return Results
 
-        for R in Results:
-            if "_prop" not in R and R != "Conditions":
-                Results[R]['FeOt'] = Results[R]['FeO'] + 71.844/(158.69/2)*Results[R]['Fe2O3']
-                Results[R]['Fe3Fet'] = (71.844/(159.69/2)*Results[R]['Fe2O3'])/Results[R]['FeOt']
-                Results[R][Results[R + '_prop']['mass'] == 0.0] = np.nan
-                Results[R] = Results[R][Order]
-            if len(np.where(Res['Conditions']['temperature'] == 0.0)[0]) > 0:
-                Results[R] = Results[R].drop(labels = np.where(Res['Conditions']['temperature'] == 0.0)[0])
+def stich_work(Results = None, Order = None):
+    '''
+    Does the work required by Stich.
+    '''
+    Res = Results.copy()
+    Results['Conditions'] = Results['Conditions'].rename(columns = {'temperature':'T_C'})
+    Results['Conditions'] = Results['Conditions'].rename(columns = {'pressure':'P_bar'})
 
-        Results_All = Results['Conditions']
+    SN = []
+    for R in Results:
+        if '_prop' not in R and R != 'Conditions':
+            SN += [R]
 
-        for R in Results:
-            if R != "Conditions":
-                if any(n in R for n in Names):
-                    for n in Names:
-                        if n in R:
-                            Results[R] = Results[R].add_suffix(Names[n])
+    for R in Results:
+        if "_prop" not in R and R != "Conditions":
+            Results[R]['FeOt'] = Results[R]['FeO'] + 71.844/(158.69/2)*Results[R]['Fe2O3']
+            Results[R]['Fe3Fet'] = (71.844/(159.69/2)*Results[R]['Fe2O3'])/Results[R]['FeOt']
+            Results[R][Results[R + '_prop']['mass'] == 0.0] = np.nan
+            Results[R] = Results[R][Order]
+        if len(np.where(Res['Conditions']['temperature'] == 0.0)[0]) > 0:
+            Results[R] = Results[R].drop(labels = np.where(Res['Conditions']['temperature'] == 0.0)[0])
+
+    Results_Mass = pd.DataFrame(data = np.zeros((len(Results['Conditions']['T_C']), len(SN))), columns = SN)
+    Results_Volume = Results_Mass.copy()
+    Results_rho = Results_Mass.copy()
+    for n in SN:
+        Results_Mass[n] = Results[n + '_prop']['mass']
+        Results_Volume[n] = Results[n + '_prop']['v']
+        Results_rho[n] = Results[n + '_prop']['rho']
+
+    if Results_Mass.sum(axis=1)[0] != Results_Mass.sum(axis=1)[1]:
+        for n in SN:
+            if n != 'liquid1':
+                Results_Mass[n + '_sum'] = Results_Mass[n].cumsum()
+
+    Results_All = Results['Conditions'].copy()
+    for R in Results:
+        if R != "Conditions":
+            if any(n in R for n in Names):
+                for n in Names:
+                    if n in R:
+                        Results[R] = Results[R].add_suffix(Names[n])
+            else:
+                if '_prop' in R:
+                    Results[R] = Results[R].add_suffix('_' + R[:-5])
                 else:
                     Results[R] = Results[R].add_suffix('_' + R)
 
 
-                Results_All = pd.concat([Results_All, Results[R]], axis = 1)
+            Results_All = pd.concat([Results_All, Results[R]], axis = 1)
 
-        Results['All'] = Results_All
-
-
-    else:
-        for Ind in Res:
-            Result = Res[Ind].copy()
-            Result['Conditions'] = Result['Conditions'].rename(columns = {'temperature':'T_C'})
-            Result['Conditions'] = Result['Conditions'].rename(columns = {'pressure':'P_bar'})
-
-            for R in Result:
-                if "_prop" not in R and R != "Conditions":
-                    Result[R]['FeOt'] = Result[R]['FeO'] + 71.844/(158.69/2)*Result[R]['Fe2O3']
-                    Result[R]['Fe3Fet'] = (71.844/(159.69/2)*Result[R]['Fe2O3'])/Result[R]['FeOt']
-                    Result[R][Result[R + '_prop']['mass'] == 0.0] = np.nan
-                    Result[R] = Result[R][Order]
-                if len(np.where(Res[Ind]['Conditions']['temperature'] == 0.0)[0]) > 0:
-                    Result[R] = Result[R].drop(labels = np.where(Res[Ind]['Conditions']['temperature'] == 0.0)[0])
-
-            Results_All = Result['Conditions']
-
-            for R in Result:
-                if R != "Conditions":
-                    if any(n in R for n in Names):
-                        for n in Names:
-                            if n in R:
-                                Result[R] = Result[R].add_suffix(Names[n])
-                    else:
-                        Result[R] = Result[R].add_suffix('_' + R)
-
-
-                    Results_All = pd.concat([Results_All, Result[R]], axis = 1)
-
-            Result['All'] = Results_All
-
-            Results[Ind] = Result.copy()
+    Results['All'] = Results_All
+    Results['Mass'] = Results_Mass
+    Results['Volume'] = Results_Volume
+    Results['rho'] = Results_rho
 
     return Results

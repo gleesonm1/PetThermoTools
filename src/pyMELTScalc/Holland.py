@@ -1,24 +1,7 @@
 import numpy as np
 import julia
 import time
-# from pyMELTScalc.GenFuncs import *
-# from pyMELTScalc.Liq import *
-# from pyMELTScalc.Crystallise import *
-# from pyMELTScalc.Barom import *
-# from pyMELTScalc.MELTS import *
-#from julia import Main
 from julia import MAGEMinCalc
-from os import path
-from pathlib import Path
-import pickle
-
-#with open('directory', 'rb') as f:
-#    this_directory = pickle.load(f)
-
-#file_dir = Path(__file__).parent
-#Main.using("MAGEMinCalc")
-
-#Main.include("functions.jl")
 
 def findLiq_holland(P_bar = None, T_C_init = None, comp = None):
 
@@ -34,7 +17,7 @@ def findLiq_holland(P_bar = None, T_C_init = None, comp = None):
         if type(comp) == list:
             bulk = comp
         else:
-            bulk = [comp['SiO2_Liq'], comp['Al2O3_Liq'], comp['CaO_Liq'], comp['MgO_Liq'], comp['FeOt_Liq'], comp['K2O_Liq'], comp['Na2O_Liq'], comp['TiO2_Liq'], comp['Fe3Fet']*(((159.59/2)/71.844)*comp['FeOt_Liq'] - comp['FeOt_Liq']), comp['Cr2O3_Liq'], comp['H2O_Liq']]
+            bulk = [comp['SiO2_Liq'], comp['Al2O3_Liq'], comp['CaO_Liq'], comp['MgO_Liq'], comp['FeOt_Liq'], comp['K2O_Liq'], comp['Na2O_Liq'], comp['TiO2_Liq'], comp['Fe3Fet_Liq']*(((159.59/2)/71.844)*comp['FeOt_Liq'] - comp['FeOt_Liq']), comp['Cr2O3_Liq'], comp['H2O_Liq']]
 
     T_Liq = 0
 

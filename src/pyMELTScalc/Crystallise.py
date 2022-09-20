@@ -1,13 +1,8 @@
 import numpy as np
 import pandas as pd
-# import sys
-# import os
-# import pickle
-# import matplotlib.pyplot as plt
 # import Thermobar as pt
 from pyMELTScalc.GenFuncs import *
-# from pyMELTScalc.Barom import *
-# from pyMELTScalc.Liq import *
+from pyMELTScalc.Plotting import *
 from pyMELTScalc.MELTS import *
 try:
     from pyMELTScalc.Holland import *
@@ -17,8 +12,10 @@ import multiprocessing
 from multiprocessing import Queue
 from multiprocessing import Process
 import time
+import sys
+from tqdm.notebook import tqdm, trange
 
-def multi_iso_crystallise(cores = None, Model = None, comp = None, Frac_solid = None, Frac_fluid = None, T_start_C = None, T_end_C = None, dt_C = None, P_path_bar = None, Fe3Fet_Liq = None, H2O_Liq = None, isochoric = None, find_liquidus = None):
+def multi_iso_crystallise(cores = None, Model = None, comp = None, Frac_solid = None, Frac_fluid = None, T_start_C = None, T_end_C = None, dt_C = None, P_path_bar = None, Fe3Fet_Liq = None, H2O_Liq = None, isochoric = None, find_liquidus = None, Print_suppress = None):
     '''
     Carry out multiple crystallisation calculations in parallel. Allows isobaric or isochoric calculations to be performed. All temperature inputs/outputs are reported in degrees celcius and pressure is reported in bars.
 
@@ -64,6 +61,8 @@ def multi_iso_crystallise(cores = None, Model = None, comp = None, Frac_solid = 
     find_liquidus: True/False
         If True, the calculations will start with a search for the melt liquidus temperature. Default is False.
 
+    Print_suppress: True/False
+        If True, print messages concerning the status of the thermodynamic calculations will not be displayed.
     Returns:
     ----------
     Results: Dict
@@ -84,6 +83,13 @@ def multi_iso_crystallise(cores = None, Model = None, comp = None, Frac_solid = 
     # ensure the bulk composition has the correct headers etc.
     comp = comp_fix(Model = Model, comp = comp, Fe3Fet_Liq = Fe3Fet_Liq, H2O_Liq = H2O_Liq)
 
+    if type(comp) == dict:
+        if comp['H2O_Liq'] == 0.0 and "MELTS" in Model:
+            raise Warning("Adding small amounts of H$_{2}$O may improve the ability of MELTS to accurately reproduce the saturation of oxide minerals. Additionally, sufficient H$_{2}$O is required in the model for MELTS to predict the crystallisation of apatite, rather than whitlockite.")
+
+        if comp['Fe3Fet_Liq'] == 0.0 and "MELTS" in Model:
+            raise Warning("MELTS often fails to produce any results when no ferric Fe is included in the starting composition.")
+
     if cores is None:
         cores = 4
 
@@ -102,13 +108,18 @@ def multi_iso_crystallise(cores = None, Model = None, comp = None, Frac_solid = 
         B = len(comp['SiO2_Liq']) % cores
 
     Group = np.zeros(A) + cores
-    Group = np.append(Group, B)
+    if B > 0:
+        Group = np.append(Group, B)
 
     qs = []
     q = Queue()
 
     # perform calculation if only 1 calculation is specified
     if type(comp) == dict and type(P_bar) != np.ndarray:
+        if Print_suppress is None:
+            print("Running " + Model + " calculation...", end = "", flush = True)
+            s = time.time()
+
         p = Process(target = iso_crystallise, args = (q, 1),
                     kwargs = {'Model': Model, 'comp': comp, 'Frac_solid': Frac_solid, 'Frac_fluid': Frac_fluid,
                             'T_start_C': T_start_C, 'T_end_C': T_end_C, 'dt_C': dt_C,
@@ -136,6 +147,9 @@ def multi_iso_crystallise(cores = None, Model = None, comp = None, Frac_solid = 
             p.join()
             p.terminate()
 
+        if Print_suppress is None:
+            print(" Complete (time taken = " + str(round(time.time() - s,2)) + " seconds)", end = "", flush = True)
+
         if len(ret) > 0:
             Results, index = ret
             Results = stich(Results, Model = Model)
@@ -145,8 +159,12 @@ def multi_iso_crystallise(cores = None, Model = None, comp = None, Frac_solid = 
             return Results
 
     else: # perform multiple crystallisation calculations
-        for j in range(len(Group)):
+        for j in tqdm(range(len(Group))):
             ps = []
+
+            if Print_suppress is None:
+                print("Running " + Model + " calculations " + str(int(cores*j)) + " to " + str(int(cores*j) + Group[j] - 1) + " ...", end = "", flush = True)
+                s = time.time()
 
             for i in range(int(cores*j), int(cores*j + Group[j])):
                 if type(comp) == dict and type(P_bar) == np.ndarray:
@@ -192,6 +210,9 @@ def multi_iso_crystallise(cores = None, Model = None, comp = None, Frac_solid = 
                 else:
                     p.join()
                     p.terminate()
+
+            if Print_suppress is None:
+                print(" Complete (time taken = " + str(round(time.time() - s,2)) + " seconds)", end = "\n", flush = True)
 
         if type(P_bar) == np.ndarray:
             Results = {}
@@ -266,7 +287,6 @@ def iso_crystallise(q, index, *, Model = None, comp = None, Frac_solid = None, F
     '''
 
     Results = {}
-
     if "MELTS" in Model:
         Results = crystallise_MELTS(Model = Model, comp = comp, Frac_solid = Frac_solid, Frac_fluid = Frac_fluid, T_start_C = T_start_C, T_end_C = T_end_C, dt_C = dt_C, P_path_bar = P_path_bar, isochoric = isochoric, find_liquidus = find_liquidus)
         q.put([Results, index])

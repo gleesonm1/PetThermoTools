@@ -1,10 +1,7 @@
 import numpy as np
 import pandas as pd
 import sys
-# from pyMELTScalc.GenFuncs import *
-# from pyMELTScalc.Barom import *
-# from pyMELTScalc.Crystallise import *
-# from pyMELTScalc.Liq import *
+import time
 
 def findLiq_MELTS(P_bar = None, Model = None, T_C_init = None, comp = None, melts = None):
     '''

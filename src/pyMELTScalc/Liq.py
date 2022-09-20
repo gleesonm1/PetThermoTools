@@ -1,8 +1,7 @@
 import numpy as np
 import pandas as pd
 from pyMELTScalc.GenFuncs import *
-# from pyMELTScalc.Barom import *
-# from pyMELTScalc.Crystallise import *
+from pyMELTScalc.Plotting import *
 from pyMELTScalc.MELTS import *
 try:
     from pyMELTScalc.Holland import *

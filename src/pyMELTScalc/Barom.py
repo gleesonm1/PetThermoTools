@@ -3,6 +3,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import Thermobar as pt
 from pyMELTScalc.GenFuncs import *
+from pyMELTScalc.Plotting import *
 from pyMELTScalc.MELTS import *
 try:
     from pyMELTScalc.Holland import *
