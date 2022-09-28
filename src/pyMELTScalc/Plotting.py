@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+from shapely.geometry import MultiPoint, Point, Polygon
 import matplotlib.pyplot as plt
 from pyMELTScalc.GenFuncs import *
 
@@ -91,6 +92,112 @@ def harker(Results = None, x_axis = None, y_axis = None, phase = None, line_styl
                     a[i][j].axis('off')
 
     f.tight_layout()
+
+def residualT_plot(Results = None, P_bar = None, phases = None, H2O_Liq = None, Fe3Fet_Liq = None, sat_surface = None):
+    if H2O_Liq is None and Fe3Fet_Liq is None:
+        if len(Results['CurveMin']) == 4:
+            f, a = plt.subplots(2,2, figsize = (10,8), sharex = True, sharey = True)
+            f.tight_layout()
+            a[1][0].set_xlabel('P (bars)')
+            a[1][1].set_xlabel('P (bars)')
+            a[0][0].set_ylabel('Residual T ($\degree$C)')
+            a[1][0].set_ylabel('Residual T ($\degree$C)')
+
+            m = np.array([['Res_abc', 'Res_ab'], ['Res_ac', 'Res_bc']])
+            Name = np.array([['Three phase saturation', phases[0] + ' - ' + phases[1]],
+                [phases[0] + ' - ' + phases[2], phases[1] + ' - ' + phases[2]]])
+
+            for i in range(2):
+                for j in range(2):
+                    a[i][j].set_title(Name[i,j])
+                    if ~np.isnan(Results['CurveMin'][m[i,j]]['P_min']):
+                        a[i][j].plot(P_bar, Results[m[i,j]][0,0,:], 'ok', markerfacecolor="b", label="original", markersize = 8)
+                        a[i][j].plot(Results['CurveMin'][m[i,j]]['P_new'], Results['CurveMin'][m[i,j]]['y_new'],
+                                    '-', c="r", label="spline fit")
+                        a[i][j].plot([np.nanmin(Results['CurveMin'][m[i,j]]['P_new']), np.nanmax(Results['CurveMin'][m[i,j]]['P_new'])],
+                                    [Results['CurveMin'][m[i,j]]['Res_min'], Results['CurveMin'][m[i,j]]['Res_min']], ':k')
+                        a[i][j].plot([Results['CurveMin'][m[i,j]]['P_min'], Results['CurveMin'][m[i,j]]['P_min']],
+                                    [np.nanmin(Results['CurveMin'][m[i,j]]['y_new']) - 5,
+                                    np.nanmax(Results['CurveMin'][m[i,j]]['y_new']) + 5], ':k')
+        else:
+            f, a = plt.subplots(1,1, figsize = (5,4))
+            a.set_xlabel('P (bars)')
+            a.set_ylabel('Residual T ($\degree$C)')
+            a.set_title(phases[0] + ' - ' + phases[1])
+            if ~np.isnan(Results['CurveMin']['Res_ab']['P_min']):
+                a.plot(P_bar, Results['Res_ab'][0,0,:], 'ok', markerfacecolor="b", label="original", markersize = 8)
+                a.plot(Results['CurveMin']['Res_ab']['P_new'], Results['CurveMin']['Res_ab']['y_new'],
+                            '-', c="r", label="spline fit")
+                a.plot([np.nanmin(Results['CurveMin']['Res_ab']['P_new']), np.nanmax(Results['CurveMin']['Res_ab']['P_new'])],
+                            [Results['CurveMin']['Res_ab']['Res_min'], Results['CurveMin']['Res_ab']['Res_min']], ':k')
+                a.plot([Results['CurveMin']['Res_ab']['P_min'], Results['CurveMin']['Res_ab']['P_min']],
+                            [np.nanmin(Results['CurveMin']['Res_ab']['y_new']) - 5,
+                            np.nanmax(Results['CurveMin']['Res_ab']['y_new']) + 5], ':k')
+
+    if H2O_Liq is not None and Fe3Fet_Liq is None:
+        if len(Results['CurveMin']) == 4:
+            f = plt.figure(figsize = (10,8))
+            a1 = f.add_subplot(2,2,1, projection = '3d')
+            a2 = f.add_subplot(2,2,2, projection = '3d')
+            a3 = f.add_subplot(2,2,3, projection = '3d')
+            a4 = f.add_subplot(2,2,4, projection = '3d')
+
+            a = np.array([[a1,a2], [a3, a4]])
+
+            m = np.array([['Res_abc', 'Res_ab'], ['Res_ac', 'Res_bc']])
+            Name = np.array([['Three phase saturation', phases[0] + ' - ' + phases[1]],
+                [phases[0] + ' - ' + phases[2], phases[1] + ' - ' + phases[2]]])
+
+            X, Y = np.meshgrid(P_bar, H2O_Liq)
+            Y = Results['H2O_melt'][:,0,:].copy()
+
+            for i in range(2):
+                for j in range(2):
+                    a[i][j].set_xlabel('P (bars)')
+                    a[i][j].set_ylabel('H$_{2}$O (wt%)')
+                    a[i][j].set_zlabel('Residual T ($\degree$C)')
+                    a[i][j].set_title(Name[i,j])
+
+            for i in range(2):
+                for j in range(2):
+                    if ~np.isnan(Results['CurveMin'][m[i,j]]['P_min']):
+                        A = Results[m[i][j]][:,0,:].copy()
+                        X, Y = np.meshgrid(P_bar, H2O_Liq)
+                        Y = Results['H2O_melt'][:,0,:].copy()
+
+                        a[i][j].scatter(X, Y, A+1, marker = 'o', facecolor = 'red')
+
+                        H2O_new = np.linspace(np.nanmin(Y[np.where(~np.isnan(A))]), np.nanmax(Y[np.where(~np.isnan(A))]), 200)
+                        P_new = np.linspace(np.nanmin(X[np.where(~np.isnan(A))]), np.nanmax(X[np.where(~np.isnan(A))]), 200)
+
+                        X_new, Y_new = np.meshgrid(P_new, H2O_new)
+                        x = X[~np.isnan(A)].flatten()
+                        y = Y[~np.isnan(A)].flatten()
+
+                        MyPoly = MultiPoint(list(zip(x, y))).convex_hull
+
+                        points = list(zip(X_new.flatten(), Y_new.flatten()))
+                        Include = np.zeros(len(X_new.flatten()))
+                        for k in range(len(points)):
+                            p = Point(points[k])
+                            Include[k] = p.within(MyPoly)
+
+                        YayNay = Include.reshape(X_new.shape)
+                        x_new = X_new[np.where(YayNay == True)].flatten()
+                        y_new = Y_new[np.where(YayNay == True)].flatten()
+
+                        z_plot = X_new.copy() * 0
+                        z_plot = z_plot.flatten()
+                        z_plot[np.where(Include == True)] = Results['CurveMin'][m[i][j]]['z_new'](x_new, y_new, grid = False)
+                        z_plot = z_plot.reshape(X_new.shape)
+                        X_new[np.where(YayNay == False)] = np.nan
+                        Y_new[np.where(YayNay == False)] = np.nan
+
+                        a[i][j].plot_surface(X_new, Y_new, z_plot, cmap = 'viridis')
+                        a[i][j].set_zlim([0,50])
+
+
+
 
 
 

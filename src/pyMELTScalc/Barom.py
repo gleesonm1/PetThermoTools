@@ -4,392 +4,777 @@ import matplotlib.pyplot as plt
 import Thermobar as pt
 from pyMELTScalc.GenFuncs import *
 from pyMELTScalc.Plotting import *
+from pyMELTScalc.Liq import *
 from pyMELTScalc.MELTS import *
 try:
     from pyMELTScalc.Holland import *
 except:
     pass
+import multiprocessing
+from multiprocessing import Queue
+from multiprocessing import Process
+import time
+import sys
+from tqdm.notebook import tqdm, trange
+from scipy import interpolate
+from shapely.geometry import MultiPoint, Point, Polygon
 
-def SatPress(P, Model, bulk, T_initial = None, Phases = None, Fe3 = None, H2O = None, fO2 = None, dt = None, T_step = None, T_cut = None, Plot = None, findRange = None, findMin = None, cores = None):
+def findSaturationPressure(cores = None, comp = None, Model = None, phases = None, P_bar = None, Fe3Fet_Liq = None, H2O_Liq = None, T_initial_C = None, fO2 = None, dt_C = None, T_step_C = None, T_cut_C = None, find_range = None, find_min = None):
     '''
-    Find the location in P (+ H2O + fO2) where there is the minimum misfit between the saturation curves of the listed phases.
+    Determine the conditions of multiple-phase saturation.
     '''
-
-    if T_initial is None:
-        T_initial = 1200
+    # set default values if required
+    if Model is None:
+        Model == "MELTSv1.0.2"
 
     if cores is None:
         cores = 4
 
-    if Phases is None:
-        Phases = ['quartz1', 'plagioclase1', 'k-feldspar1']
+    # if comp is entered as a pandas series, it must first be converted to a dict
+    if type(comp) == pd.core.series.Series:
+        comp = comp.to_dict()
 
-    if dt is None:
-        dt = 25
+    # ensure the bulk composition has the correct headers etc.
+    comp = comp_fix(Model = Model, comp = comp)
 
-    if T_step is None:
-        T_step= 1
+    # create base array to be filled
+    if P_bar is None:
+        P_bar = np.array([-1])
+    elif type(P_bar) != np.ndarray:
+        P_bar = np.array([P_bar])
 
-    if T_cut is None:
-        T_cut = 10.0001
+    if Fe3Fet_Liq is None:
+        Fe3Fet_Liq = np.array([-1])
+    elif type(Fe3Fet_Liq) != np.ndarray:
+        Fe3Fet_Liq = np.array([Fe3Fet_Liq])
+
+    if H2O_Liq is None:
+        H2O_Liq = np.array([-1])
+    elif type(H2O_Liq) != np.ndarray:
+        H2O_Liq = np.array([H2O_Liq])
+
+    base_array = np.zeros((len(H2O_Liq),len(Fe3Fet_Liq),len(P_bar)))
+
+    if P_bar[0] == -1:
+        P_bar = 1000
+    if Fe3Fet_Liq[0] == -1:
+        Fe3Fet_Liq = None
+    if H2O_Liq[0] == -1:
+        H2O_Liq = None
+
+    # set default values for remaining parameters
+    if T_initial_C is None:
+        T_initial_C = 1200
+
+    if dt_C is None:
+        dt_C = 25
+
+    if T_step_C is None:
+        T_step_C = 1
+
+    if T_cut_C is None:
+        T_cut_C = 10
+
+    if phases is None:
+        phases = ['quartz1', 'k-feldspar1', 'plagioclase1']
+
+    # find saturation surface if P and H2O are investigated
+    if P_bar is not None and H2O_Liq is not None:
+        comp_sat = comp.copy()
+        Comp = pd.DataFrame(data = np.zeros((len(P_bar),len(comp_sat))), columns = list(comp_sat.keys()))
+        for i in range(len(P_bar)):
+            Comp.loc[i] = comp
+
+        Comp['H2O'] = np.zeros(len(P_bar)) + 20 # high enought to ensure all calculations are saturated
+
+        T_sat, H2O = findLiq_multi(cores = 20, Model = Model, comp = Comp, T_initial_C = np.zeros(len(P_bar)) + T_initial_C, P_bar = P_bar)
+
+        H2O_sat = H2O[np.where(H2O != 0)].copy()
+        P_sat = P_bar[np.where(H2O != 0)].copy()
+
+        saturation_surface = interpolate.UnivariateSpline(P_sat, H2O_sat, k=3)
+
+    # create main output dictionary
+    Results = {}
+    if len(phases) == 3:
+        List = ['a_sat', 'b_sat', 'c_sat', 'T_Liq', 'H2O_melt', 'Res_abc', 'Res_ab', 'Res_ac', 'Res_bc']
+        for l in List:
+            Results[l] = base_array.copy()
     else:
-        T_cut = T_cut + 0.0001
+        List = ['a_sat', 'b_sat', 'T_Liq', 'H2O_melt', 'Res_ab']
+        for l in List:
+            Results[l] = base_array.copy()
 
-    if Fe3 is None and H2O is None:
-        Results = {}
+    # run calculations if only one initial composition provided
+    if type(comp) == dict:
+        for i in range(np.shape(base_array)[0]):
+            # if H2O specified set H2O on each iteration
+            if H2O_Liq is not None:
+                comp['H2O_Liq'] = H2O_Liq[i]
 
-        if Plot is not None:
-            f = plt.figure(figsize = plt.figaspect(0.5))
-            a0 = f.add_subplot(1,2,1)
-            a1 = f.add_subplot(1,2,2)
+            for j in range(np.shape(base_array)[1]):
+                #if Fe3Fet specified set Fe3Fet on each iteration
+                if Fe3Fet_Liq is not None:
+                    comp['Fe3Fet_Liq'] = Fe3Fet_Liq[j]
 
-        if len(Phases) == 3:
-            a_Sat, b_Sat, c_Sat, T_Liq, H2O_Melt = findSat(P, Model, Phases, bulk, T_initial = T_initial, dt = dt, T_step = T_step, cores = cores)
-        else:
-            a_Sat, b_Sat, T_Liq, H2O_Melt = findSat(P, Model, Phases, bulk, T_initial = T_initial, dt = dt, T_step = T_step, cores = cores)
+                # determine how many processes to run in parallel
+                if len(P_bar) > 1:
+                    A = len(P_bar)//cores
+                    B = len(P_bar) % cores
 
-        if Plot is not None:
-            a0.plot(P[np.where(a_Sat>0)], a_Sat[np.where(a_Sat>0)], '-k', label = 'a_sat')
-            a0.plot(P[np.where(b_Sat>0)], b_Sat[np.where(b_Sat>0)], '-r', label = 'b_sat')
-            if len(Phases) == 3:
-                a0.plot(P[np.where(c_Sat>0)], c_Sat[np.where(c_Sat>0)], '-b', label = 'c_sat')
-
-            a0.legend()
-
-        # calc residuals
-        if len(Phases) == 3:
-            Res = findResiduals(a_Sat, b_Sat, c_Sat = c_Sat)
-        else:
-            Res = findResiduals(a_Sat, b_Sat)
-
-        if Plot is not None:
-            if len(Phases) == 3:
-                a1.plot(P, Res['abc'], '-k', label = 'abc')
-                a1.plot(P, Res['ab'], '-r', label = 'ab')
-                a1.plot(P, Res['ac'], '-b', label = 'ac')
-                a1.plot(P, Res['bc'], '-y', label = 'bc')
-            else:
-                a1.plot(P, Res['ab'], '-r', label = 'ab')
-
-            a1.legend()
-
-        Results = Res.copy()
-        Results['H2O_sat'] = H2O_Melt
-        Results['T_Liq'] = T_Liq
-
-        # return residual results in range or minimum not specified
-        if findRange is None and findMin is None:
-            if Plot is None:
-                return Results
-            else:
-                return Results, f
-
-        if findRange is not None:
-            Results_new = detRange(P, Model, bulk, Results, Phases, T_initial = T_initial, T_cut = T_cut, cores = cores)
-            Results['Range'] = Results_new
-
-            if Plot is None:
-                return Results
-            else:
-                return Results, f
-
-        if findMin is not None:
-            PolyMin = findMinimum(P, Results, Phases, T_cut = T_cut)
-            Results['PolyMin'] = PolyMin
-
-            if Plot is None:
-                return Results
-            else:
-                return Results, f
-
-    if H2O is None and Fe3 is not None:
-        if Plot is not None:
-            f = plt.figure(figsize = plt.figaspect(0.5))
-            a0 = f.add_subplot(1,2,1, projection = '3d')
-            a1 = f.add_subplot(1,2,2, projection = '3d')
-
-        if len(Phases) == 3:
-            Res_abc_mat = np.zeros((len(Fe3), len(P)))
-            Res_ac_mat = np.zeros((len(Fe3), len(P)))
-            Res_bc_mat = np.zeros((len(Fe3), len(P)))
-            c_Sat_mat = np.zeros((len(Fe3), len(P)))
-
-        Res_ab_mat = np.zeros((len(Fe3), len(P)))
-        H2O_mat = np.zeros((len(Fe3), len(P)))
-        T_Liq_mat = np.zeros((len(Fe3), len(P)))
-        a_Sat_mat = np.zeros((len(Fe3), len(P)))
-        b_Sat_mat = np.zeros((len(Fe3), len(P)))
-
-        for i in range(len(Fe3)):
-            Bulk_new = bulk.copy()
-            Bulk_new[3] = Fe3[i]*((159.69/2)/71.844)*bulk[5]
-            Bulk_new[5] = (1-Fe3[i])*bulk[5]
-
-            if len(Phases) == 3:
-                a_Sat, b_Sat, c_Sat, T_Liq, H2O_Melt = findSat(P, Model, Phases, Bulk_new, T_initial = T_initial, dt = dt, T_step = T_step, cores = cores)
-            else:
-                a_Sat, b_Sat, T_Liq, H2O_Melt = findSat(P, Model, Phases, Bulk_new, T_initial = T_initial, dt = dt, T_step = T_step, cores = cores)
-
-            # calc residuals
-            if len(Phases) == 3:
-                Res = findResiduals(a_Sat, b_Sat, c_Sat = c_Sat)
-                Res_abc_mat[i, :] = Res['abc']
-                Res_ac_mat[i, :] = Res['ac']
-                Res_bc_mat[i, :] = Res['bc']
-                c_Sat_mat[i, :] = c_Sat
-            else:
-                Res = findResiduals(a_Sat, b_Sat)
-
-            T_Liq_mat[i, :] = T_Liq
-            H2O_mat[i, :] = H2O_Melt
-            a_Sat_mat[i, :] = a_Sat
-            b_Sat_mat[i, :] = b_Sat
-            Res_ab_mat[i, :] = Res['ab']
-
-        if len(Phases) == 3:
-            Results = {'abc': Res_abc_mat, 'ab': Res_ab_mat, 'ac': Res_ac_mat, 'bc': Res_bc_mat, 'H2O_Sat': H2O_mat, 'T_Liq': T_Liq_mat}
-        else:
-            Results = {'ab': Res_ab_mat, 'H2O_Sat': H2O_mat, 'T_Liq': T_Liq_mat}
-
-        if Plot is not None:
-            X, Y = np.meshgrid(P, Fe3)
-            a0.plot_surface(X[np.where(a_Sat_mat > 0)], Y[np.where(a_Sat_mat > 0)], a_Sat[np.where(a_Sat_mat > 0)], color = 'k', label = 'a_Sat')
-            a0.plot_surface(X[np.where(b_Sat_mat > 0)], Y[np.where(b_Sat_mat > 0)], b_Sat[np.where(b_Sat_mat > 0)], color = 'r', label = 'b_Sat')
-            if len(Phases) == 3:
-                a0.plot_surface(X[np.where(c_Sat_mat > 0)], Y[np.where(c_Sat_mat > 0)], c_Sat[np.where(c_Sat_mat > 0)], color = 'r', label = 'b_Sat')
-
-            a0.legend()
-
-            if len(Phases) == 3:
-                a1.plot_surface(X[np.where(~np.isnan(Res['abc']))],Y[np.where(~np.isnan(Res['abc']))], Res['abc'][np.where(~np.isnan(Res['abc']))], color = 'k', label = 'abc')
-                a1.plot_surface(X[np.where(~np.isnan(Res['ab']))],Y[np.where(~np.isnan(Res['ab']))], Res['ab'][np.where(~np.isnan(Res['ab']))], color = 'r', label = 'ab')
-                a1.plot_surface(X[np.where(~np.isnan(Res['ac']))],Y[np.where(~np.isnan(Res['ac']))], Res['ac'][np.where(~np.isnan(Res['ac']))], color = 'b', label = 'ac')
-                a1.plot_surface(X[np.where(~np.isnan(Res['bc']))],Y[np.where(~np.isnan(Res['bc']))], Res['bc'][np.where(~np.isnan(Res['bc']))], color = 'y', label = 'bc')
-            else:
-                a1.plot_surface(X[np.where(~np.isnan(Res['ab']))],Y[np.where(~np.isnan(Res['ab']))], Res['ab'][np.where(~np.isnan(Res['ab']))], color = 'r', label = 'ab')
-
-            a1.legend()
-
-        # return residual results in range or minimum not specified
-        if findRange is None and findMin is None:
-            if Plot is None:
-                return Results
-            else:
-                return Results, f
-
-        if findRange is not None:
-            Results_new = detRange(P, Model, bulk, Results, Phases, T_initial = T_initial, Fe3 = Fe3, T_cut = T_cut, cores = cores)
-            Results['Range'] = Results_new
-
-            if Plot is None:
-                return Results
-            else:
-                return Results, f
-
-    if H2O is not None and Fe3 is None:
-        if Plot is not None:
-            f = plt.figure(figsize = plt.figaspect(0.5))
-            a0 = f.add_subplot(1,2,1, projection = '3d')
-            a1 = f.add_subplot(1,2,2, projection = '3d')
-
-        if len(Phases) == 3:
-            Res_abc_mat = np.zeros((len(H2O), len(P)))
-            Res_ac_mat = np.zeros((len(H2O), len(P)))
-            Res_bc_mat = np.zeros((len(H2O), len(P)))
-            c_Sat_mat = np.zeros((len(H2O), len(P)))
-
-        Res_ab_mat = np.zeros((len(H2O), len(P)))
-        H2O_mat = np.zeros((len(H2O), len(P)))
-        T_Liq_mat = np.zeros((len(H2O), len(P)))
-        a_Sat_mat = np.zeros((len(H2O), len(P)))
-        b_Sat_mat = np.zeros((len(H2O), len(P)))
-
-
-        for i in range(len(H2O)):
-            Bulk_new = bulk.copy()
-            Bulk_new[14] = H2O[i]
-
-            if len(Phases) == 3:
-                a_Sat, b_Sat, c_Sat, T_Liq, H2O_Melt = findSat(P, Model, Phases, Bulk_new, T_initial = T_initial, dt = dt, T_step = T_step, cores = cores)
-            else:
-                a_Sat, b_Sat, T_Liq, H2O_Melt = findSat(P, Model, Phases, Bulk_new, T_initial = T_initial, dt = dt, T_step = T_step, cores = cores)
-
-            # calc residuals
-            if len(Phases) == 3:
-                Res = findResiduals(a_Sat, b_Sat, c_Sat = c_Sat)
-                Res_abc_mat[i, :] = Res['abc']
-                Res_ac_mat[i, :] = Res['ac']
-                Res_bc_mat[i, :] = Res['bc']
-                c_Sat_mat[i, :] = c_Sat
-            else:
-                Res = findResiduals(a_Sat, b_Sat)
-
-            Res_ab_mat[i, :] = Res['ab']
-            T_Liq_mat[i, :] = T_Liq
-            H2O_mat[i, :] = H2O_Melt
-            a_Sat_mat[i, :] = a_Sat
-            b_Sat_mat[i, :] = b_Sat
-
-        if len(Phases) == 3:
-            Results = {'abc': Res_abc_mat, 'ab': Res_ab_mat, 'ac': Res_ac_mat, 'bc': Res_bc_mat, 'H2O_Sat': H2O_mat, 'T_Liq': T_Liq_mat}
-        else:
-            Results = {'ab': Res_ab_mat, 'H2O_Sat': H2O_mat, 'T_Liq': T_Liq_mat}
-
-        if Plot is not None:
-            X, Y = np.meshgrid(P, H2O)
-            a0.plot_surface(X[np.where(a_Sat_mat > 0)], Y[np.where(a_Sat_mat > 0)], a_Sat[np.where(a_Sat_mat > 0)], color = 'k', label = 'a_Sat')
-            a0.plot_surface(X[np.where(b_Sat_mat > 0)], Y[np.where(b_Sat_mat > 0)], b_Sat[np.where(b_Sat_mat > 0)], color = 'r', label = 'b_Sat')
-            if len(Phases) == 3:
-                a0.plot_surface(X[np.where(c_Sat_mat > 0)], Y[np.where(c_Sat_mat > 0)], c_Sat[np.where(c_Sat_mat > 0)], color = 'r', label = 'b_Sat')
-
-            a0.legend()
-
-            if len(Phases) == 3:
-                a1.plot_surface(X[np.where(~np.isnan(Res['abc']))],Y[np.where(~np.isnan(Res['abc']))], Res['abc'][np.where(~np.isnan(Res['abc']))], color = 'k', label = 'abc')
-                a1.plot_surface(X[np.where(~np.isnan(Res['ab']))],Y[np.where(~np.isnan(Res['ab']))], Res['ab'][np.where(~np.isnan(Res['ab']))], color = 'r', label = 'ab')
-                a1.plot_surface(X[np.where(~np.isnan(Res['ac']))],Y[np.where(~np.isnan(Res['ac']))], Res['ac'][np.where(~np.isnan(Res['ac']))], color = 'b', label = 'ac')
-                a1.plot_surface(X[np.where(~np.isnan(Res['bc']))],Y[np.where(~np.isnan(Res['bc']))], Res['bc'][np.where(~np.isnan(Res['bc']))], color = 'y', label = 'bc')
-            else:
-                a1.plot_surface(X[np.where(~np.isnan(Res['ab']))],Y[np.where(~np.isnan(Res['ab']))], Res['ab'][np.where(~np.isnan(Res['ab']))], color = 'r', label = 'ab')
-
-            a1.legend()
-
-        # return residual results in range or minimum not specified
-        if findRange is None and findMin is None:
-            if Plot is None:
-                return Results
-            else:
-                return Results, f
-
-        if findRange is not None:
-            Results_new = detRange(P, Model, bulk, Results, Phases, T_initial = T_initial, H2O = H2O, T_cut = T_cut, cores = cores)
-            Results['Range'] = Results_new
-
-            if Plot is None:
-                return Results
-            else:
-                return Results, f
-
-    if H2O is not None and Fe3 is not None:
-        if Plot is not None:
-            if len(Phases) == 2:
-                f = plt.figure(figsize = plt.figaspect(0.33))
-                a0 = f.add_subplot(1,3,1, projection = '3d')
-                a1 = f.add_subplot(1,3,2, projection = '3d')
-                a2 = f.add_subplot(1,3,3, projection = '3d')
-            else:
-                f = plt.figure(figsize = plt.figaspect(0.33))
-                a0 = f.add_subplot(1,3,1, projection = '3d')
-                a1 = f.add_subplot(1,3,2, projection = '3d')
-                a2 = f.add_subplot(1,3,3, projection = '3d')
-                a3 = f.add_subplot(2,3,4, projection = '3d')
-                a4 = f.add_subplot(2,3,5, projection = '3d')
-                a5 = f.add_subplot(2,3,6, projection = '3d')
-
-        if len(Phases) == 3:
-            Res_abc_mat = np.zeros((len(H2O), len(Fe3), len(P)))
-            Res_ac_mat = np.zeros((len(H2O), len(Fe3), len(P)))
-            Res_bc_mat = np.zeros((len(H2O), len(Fe3), len(P)))
-
-        Res_ab_mat = np.zeros((len(H2O), len(Fe3), len(P)))
-        T_Liq_3Dmat = np.zeros((len(H2O), len(Fe3), len(P)))
-        H2O_Liq_3Dmat = np.zeros((len(H2O), len(Fe3), len(P)))
-
-        for i in range(len(H2O)):
-            Bulk_new = bulk.copy()
-            Bulk_new[14] = H2O[i]
-
-            if len(Phases) == 3:
-                Res_abc_mat_2D = np.zeros((len(Fe3), len(P)))
-                Res_ac_mat_2D = np.zeros((len(Fe3), len(P)))
-                Res_bc_mat_2D = np.zeros((len(Fe3), len(P)))
-
-            Res_ab_mat_2D = np.zeros((len(Fe3), len(P)))
-            T_Liq_mat_2D = np.zeros((len(Fe3), len(P)))
-            H2O_Liq_mat_2D = np.zeros((len(Fe3), len(P)))
-
-            for j in range(len(Fe3)):
-
-                Bulk_new[3] = Fe3[j]*((159.69/2)/71.844)*bulk[5]
-                Bulk_new[5] = (1-Fe3[j])*bulk[5]
-
-                if len(Phases) == 3:
-                    a_Sat, b_Sat, c_Sat, T_Liq, H2O_Melt = findSat(P, Model, Phases, Bulk_new, T_initial = T_initial, dt = dt, T_step = T_step, cores = cores)
+                if A > 0:
+                    Group = np.zeros(A) + cores
+                    if B > 0:
+                        Group = np.append(Group, B)
                 else:
-                    a_Sat, b_Sat, T_Liq, H2O_Melt = findSat(P, Model, Phases, Bulk_new, T_initial = T_initial, dt = dt, T_step = T_step, cores = cores)
+                    Group = np.array([B])
 
-                # calc residuals
-                if len(Phases) == 3:
-                    Res = findResiduals(a_Sat, b_Sat, c_Sat = c_Sat)
-                    Res_abc_mat_2D[j, :] = Res['abc']
-                    Res_ac_mat_2D[j, :] = Res['ac']
-                    Res_bc_mat_2D[j, :] = Res['bc']
-                else:
-                    Res = findResiduals(a_Sat, b_Sat)
+                # initialise queue
+                qs = []
+                q = Queue()
 
-                Res_ab_mat_2D[j, :] = Res['ab']
-                T_Liq_mat_2D[j, :] = T_Liq
-                H2O_Liq_mat_2D[j, :] = H2O_Melt
+                # run calculations
+                for k in range(len(Group)):
+                    ps = []
 
-            if len(Phases) == 3:
-                Res_abc_mat[i,:,:] = Res_abc_mat_2D
-                Res_ac_mat[i,:,:] = Res_ac_mat_2D
-                Res_bc_mat[i,:,:] = Res_bc_mat_2D
+                    for kk in range(int(cores*k), int(cores*k + Group[k])):
+                        p = Process(target = satTemperature, args = (q, kk),
+                                    kwargs = {'Model': Model, 'comp': comp,
+                                    'T_initial_C': T_initial_C, 'T_step_C': T_step_C,
+                                    'dt_C': dt_C, 'P_bar': P_bar[kk], 'phases': phases,
+                                    'H2O_Liq': H2O_Liq})
 
-            Res_ab_mat[i,:,:] = Res_ab_mat_2D
-            T_Liq_3Dmat[i,:,:] = T_Liq_mat_2D
-            H2O_Liq_3Dmat[i,:,:] = H2O_Liq_mat_2D
+                        ps.append(p)
+                        p.start()
 
-        if len(Phases) == 3:
-            Results = {'abc': Res_abc_mat, 'ab': Res_ab_mat, 'ac': Res_ac_mat, 'bc': Res_bc_mat, 'H2O_Sat': H2O_Liq_3Dmat, 'T_Liq': T_Liq_3Dmat}
-        else:
-            Results = {'ab': Res_ab_mat, 'H2O_Sat': H2O_Liq_3Dmat, 'T_Liq': T_Liq_3Dmat}
+                    for p in ps:
+                        try:
+                            ret = q.get(timeout = 180)
+                        except:
+                            ret = []
 
-        if findRange is None and findMin is None:
-            if Plot is None:
-                return Results
+                        qs.append(ret)
+
+                    TIMEOUT = 5
+                    start = time.time()
+                    for p in ps:
+                        if p.is_alive():
+                            while time.time() - start <= TIMEOUT:
+                                if not p.is_alive():
+                                    p.join()
+                                    p.terminate()
+                                    break
+                                time.sleep(.1)
+                            else:
+                                p.terminate()
+                                p.join(5)
+                        else:
+                            p.join()
+                            p.terminate()
+
+                # extract results
+                for kk in range(len(qs)):
+                    if len(qs[kk]) > 0:
+                        Res, index = qs[kk]
+                        for l in Results:
+                            Results[l][i,j,index] = Res[l]
+
+        # covert any empty values to nan
+        for l in Results:
+            Results[l][np.where(Results[l] == 0.0)] = np.nan
+
+        if find_min is not None:
+            if P_bar is not None and H2O_Liq is not None:
+                Results = findMinimum(Results = Results, P_bar = P_bar, T_cut_C = T_cut_C, H2O_Liq = H2O_Liq, sat_surface = saturation_surface)
             else:
-                return Results, f
+                Results = findMinimum(Results = Results, P_bar = P_bar, T_cut_C = T_cut_C, H2O_Liq = H2O_Liq)
 
-        if findRange is not None:
-            Results_new = detRange(P, Model, bulk, Results, Phases, T_initial = T_initial, Fe3 = Fe3, H2O = H2O, T_cut = T_cut, findRange = findRange, cores = cores)
-            Results['Range'] = Results_new
+        if find_range is not None:
+            Results = detRange(Results = Results, P_bar = P_bar, Fe3Fet_Liq = Fe3Fet_Liq, H2O_Liq = H2O_Liq, T_cut_C = T_cut_C)
 
-            try:
-                print('Max P = ' + str(Results['Range']['abc_max_P']))
-                print('Min P = ' + str(Results['Range']['abc_min_P']))
-            except:
-                print('No Convergence')
+    return Results
 
-            if Plot is None:
-                return Results
-            else:
-                return Results, f
-
-def findMinimum(P, Results, Phases, Fe3 = None, H2O = None, T_cut = None):
+def findMinimum(Results = None, P_bar = None, T_cut_C = None, H2O_Liq = None, Fe3Fet_Liq = None, sat_surface = None):
     '''
     Take the results of SatPress and search for the minimum point using a parabolic fit.
     '''
-    if T_cut is None:
-        T_cut = 5
+    if H2O_Liq is None and Fe3Fet_Liq is None:
+        if 'Res_abc' in list(Results.keys()):
+            Minimum = {'Res_abc', 'Res_ab', 'Res_ac', 'Res_bc'}
+            CurveMin = {}
+            for m in Minimum:
+                if len(Results[m][0,0,:][~np.isnan(Results[m][0,0,:])]) > 2:
+                    y = Results[m][0,0,:][np.where(~np.isnan(Results[m][0,0,:]))]
+                    x = P_bar[np.where(~np.isnan(Results[m][0,0,:]))]
 
-    if H2O is None and Fe3 is None:
-        Res_key = list(Results.keys())[:-2]
-        PolyMin = {}
-        for Res in Res_key:
-            if len(Results[Res][~np.isnan(Results[Res])]) > 2:
-                p, poly = polymin(P, Results[Res])
-                if poly.size == 0:
-                    poly = np.array([np.nan])
+                    y_new = interpolate.UnivariateSpline(x, y, k=5)
+                    P_new = np.linspace(P_bar[np.where(P_bar == np.nanmin(P_bar[np.where(~np.isnan(Results[m][0,0,:]))]))], P_bar[np.where(P_bar == np.nanmax(P_bar[np.where(~np.isnan(Results[m][0,0,:]))]))], 200)
 
-                elif p[0]*poly[0]**2 + p[1]*poly[0] + p[2] > T_cut:
-                    poly = np.array([np.nan])
+                    NewMin = np.nanmin(y_new(P_new))
+                    P_min = P_new[np.where(y_new(P_new) == NewMin)][0]
+                    if NewMin < T_cut_C:
+                        Test = 'Pass'
+                    else:
+                        Test = 'Fail'
+
+                    CurveMin[m] = {'P_min': P_min, 'Res_min': NewMin, 'y_new': y_new(P_new), 'P_new': P_new, 'test': Test}
+                else:
+                    y_new = np.nan
+                    P_new = np.nan
+                    NewMin = np.nan
+                    P_min = np.nan
+                    Test = 'Fail'
+                    CurveMin[m] = {'P_min': P_min, 'Res_min': NewMin, 'y_new': y_new, 'P_new': P_new, 'test': Test}
+
+            Results['CurveMin'] = CurveMin
+        else:
+            m = 'Res_ab'
+            if len(Results[m][0,0,:][~np.isnan(Results[m][0,0,:])]) > 2:
+                y = Results[m][0,0,:][np.where(~np.isnan(Results[m][0,0,:]))]
+                x = P_bar[np.where(~np.isnan(Results[m][0,0,:]))]
+
+                y_new = interpolate.UnivariateSpline(x, y, k=5)
+                P_new = np.linspace(P_bar[np.where(P_bar == np.nanmin(P_bar[np.where(~np.isnan(Results[m][0,0,:]))]))], P_bar[np.where(P_bar == np.nanmax(P_bar[np.where(~np.isnan(Results[m][0,0,:]))]))], 200)
+
+                NewMin = np.nanmin(y_new(P_new))
+                P_min = P_new[np.where(y_new(P_new) == NewMin)][0]
+                if NewMin < T_cut_C:
+                    Test = 'Pass'
+                else:
+                    Test = 'Fail'
             else:
-                poly = np.array([np.nan])
+                y_new = np.nan
+                P_new = np.nan
+                NewMin = np.nan
+                P_min = np.nan
+                Test = 'Fail'
 
-            PolyMin[Res] = poly
+            Results['CurveMin'] = {'Res_ab': {'P_min': P_min, 'Res_min': NewMin, 'y_new': y_new, 'P_new': P_new, 'test': Test}}
 
-        return PolyMin
+    if H2O_Liq is not None and Fe3Fet_Liq is None:
+        if 'Res_abc' in list(Results.keys()):
+            X, Y = np.meshgrid(P_bar, H2O_Liq)
+            Y = Results['H2O_melt'][:,0,:].copy()
+
+            Minimum = {'Res_abc', 'Res_ab', 'Res_ac', 'Res_bc'}
+            CurveMin = {}
+            for m in Minimum:
+                if len(Results[m][:,0,:][~np.isnan(Results[m][:,0,:])]) > 2:
+                    Res = Results[m][:,0,:].copy()
+                    for i in range(len(H2O_Liq)):
+                        Res[i, :][np.where(Results['H2O_melt'][i,0,:] < 0.99*np.nanmax(Results['H2O_melt'][i,0,:]))] = np.nan
+
+                    A = Res.copy()
+                    X, Y = np.meshgrid(P_bar, H2O_Liq)
+                    Y = Results['H2O_melt'][:,0,:]
+
+                    try:
+                        z_new = interpolate.SmoothBivariateSpline(X[np.where(~np.isnan(A) & ~np.isnan(Y))], Y[np.where(~np.isnan(A) & ~np.isnan(Y))], A[np.where(~np.isnan(A) & ~np.isnan(Y))])
+                    except:
+                        z_new = interpolate.SmoothBivariateSpline(X[np.where(~np.isnan(A) & ~np.isnan(Y))], Y[np.where(~np.isnan(A) & ~np.isnan(Y))], A[np.where(~np.isnan(A) & ~np.isnan(Y))], kx = 2, ky = 2)
+
+                    H2O_new = np.linspace(np.nanmin(Y[np.where(~np.isnan(Res))]),
+                                        np.nanmax(Y[np.where(~np.isnan(Res))]), 200)
+                    P_new = np.linspace(np.nanmin(X[np.where(~np.isnan(Res))]),
+                                        np.nanmax(X[np.where(~np.isnan(Res))]), 200)
+
+                    X_new, Y_new = np.meshgrid(P_new, H2O_new)
+                    x = X[~np.isnan(A)].flatten()
+                    y = Y[~np.isnan(A)].flatten()
+
+                    MyPoly = MultiPoint(list(zip(x, y))).convex_hull
+
+                    points = list(zip(X_new.flatten(), Y_new.flatten()))
+                    Include = np.zeros(len(X_new.flatten()))
+                    for i in range(len(points)):
+                        p = Point(points[i])
+                        Include[i] = p.within(MyPoly)
+
+                    YayNay = Include.reshape(X_new.shape)
+                    x_new = X_new[np.where(YayNay == True)].flatten()
+                    y_new = Y_new[np.where(YayNay == True)].flatten()
+                    Res_min = np.nanmin(z_new(x_new, y_new, grid = False))
+                    P_min = x_new[np.where(z_new(x_new, y_new, grid = False) == Res_min)]
+                    H2O_min = y_new[np.where(z_new(x_new, y_new, grid = False) == Res_min)]
+                    if Res_min < T_cut_C:
+                        Test = 'Pass'
+                    else:
+                        Test = 'Fail'
+
+                    CurveMin[m] = {'Res_min': Res_min, 'P_min': P_min[0], 'H2O_min': H2O_min[0], 'z_new': z_new, 'sat_surface': sat_surface, 'test': Test}
+                else:
+                    CurveMin[m] = {'Res_min': np.nan, 'P_min': np.nan, 'H2O_min': np.nan, 'z_new': np.nan, 'test': 'Fail'}
+
+            Results['CurveMin'] = CurveMin
+
+    return Results
+
+def polymin(P_bar = None, Res = None):
+    '''
+    Finds the minimum residual temperature using a 2nd degree polynomial.
+    '''
+    arr = np.sort(Res)
+    Ind = np.where(Res == arr[0])[0][0]
+
+    if P_bar[Ind] == np.nanmax(P_bar):
+        p = np.array([0,1,0])
+        p_min = np.array([P_bar[Ind]])
+    elif P_bar[Ind] == np.nanmin(P_bar):
+        p = np.array([0,1,0])
+        p_min = np.array([P_bar[Ind]])
+    else:
+        p = np.polyfit(P_bar[np.array([Ind-1, Ind, Ind+1])],Res[np.array([Ind-1, Ind, Ind+1])],2)
+
+        x = np.linspace(np.nanmin(P_bar),np.nanmax(P_bar),501)
+        y = p[0]*x**2 + p[1]*x + p[2]
+
+        p_min = x[np.where(y == np.nanmin(y))]
+
+    return p, p_min
+
+def satTemperature(q, index, *, Model = None, comp = None, phases = None, T_initial_C = None, T_step_C = None, dt_C = None, P_bar = None, H2O_Liq = None):
+    '''
+    Crystallisation calculations to be performed in parallel. Calculations may be either isobaric or isochoric.
+
+    Parameters:
+    ----------
+    q: Multiprocessing Queue instance
+        Queue instance to record the output variables
+
+    index: int
+        index of the calculation in the master code (e.g., position within a for loop) to aid indexing results after calculations are complete.
+
+    Model: string
+        "MELTS" or "Holland". Dictates whether MELTS or MAGEMin calculations are performed. Default "MELTS".
+        Version of melts can be specified "MELTSv1.0.2", "MELTSv1.1.0", "MELTSv1.2.0", or "pMELTS". Default "v.1.0.2".
+
+    comp: Dict
+        Initial compositon for calculations.
+
+    T_initial_C: float
+        Initial guess for the liquidus temperature.
+
+    T_step_C: float
+        The temperature drop at each step of the calculation.
+
+    dt_C: float
+        Total temperature drop allowed duringmodel runs.
+
+    P_bar: float
+         Specifies the pressure of calculation (bar).
+
+    Returns:
+    ----------
+    Results: Dict
+        Dict containing a series of floats that represent the saturation temperature and residual temperature for each calculation.
+
+    index: int
+        index of the calculation
+
+    '''
+
+    Results = {}
+    if "MELTS" in Model:
+        Results = phaseSat_MELTS(Model = Model, comp = comp, phases = phases, T_initial_C = T_initial_C, T_step_C = T_step_C, dt_C = dt_C, P_bar = P_bar, H2O_Liq = H2O_Liq)
+        if len(phases) == 3:
+            Res = ['Res_abc', 'Res_ab', 'Res_ac', 'Res_bc']
+            for R in Res:
+                Results[R] = np.nan
+
+            if ~np.isnan(Results['a_sat']) and ~np.isnan(Results['b_sat']) and ~np.isnan(Results['c_sat']):
+                Results['Res_abc'] = np.nanmax(np.array([abs(Results['a_sat'] - Results['b_sat']), abs(Results['a_sat'] - Results['c_sat']), abs(Results['b_sat'] - Results['c_sat'])]))
+            if ~np.isnan(Results['a_sat']) and ~np.isnan(Results['b_sat']):
+                Results['Res_ab'] = abs(Results['a_sat'] - Results['b_sat'])
+            if ~np.isnan(Results['a_sat']) and ~np.isnan(Results['c_sat']):
+                Results['Res_ac'] = abs(Results['a_sat'] - Results['c_sat'])
+            if ~np.isnan(Results['b_sat']) and ~np.isnan(Results['c_sat']):
+                Results['Res_bc'] = abs(Results['b_sat'] - Results['c_sat'])
+        else:
+            Results['Res_ab'] = np.nan
+            if ~np.isnan(Results['a_sat']) and ~np.isnan(Results['b_sat']):
+                Results['Res_ab'] = abs(Results['a_sat'] - Results['b_sat'])
+
+        q.put([Results, index])
+        return
+
+    if Model == "Holland":
+        Results = phaseSat_Holland(comp = comp, phases = phases, T_initial_C = T_initial_C, T_step_C = T_step_C, dt_C = dt_C, P_bar = P_bar, H2O_Liq = H2O_Liq)
+        if len(phases) == 3:
+            Res = ['Res_abc', 'Res_ab', 'Res_ac', 'Res_bc']
+            for R in Res:
+                Results[R] = np.nan
+
+            if Results['a_sat'] != np.nan & Results['b_sat'] != np.nan & Results['c_sat'] != np.nan:
+                Results['Res_abc'] = np.nanmax(np.array([abs(Results['a_sat'] - Results['b_sat']), abs(Results['a_sat'] - Results['c_sat']), abs(Results['b_sat'] - Results['c_sat'])]))
+            if Results['a_sat'] != np.nan & Results['b_sat'] != np.nan:
+                Results['Res_ab'] = abs(Results['a_sat'] - Results['b_sat'])
+            if Results['a_sat'] != np.nan & Results['c_sat'] != np.nan:
+                Results['Res_ac'] = abs(Results['a_sat'] - Results['c_sat'])
+            if Results['b_sat'] != np.nan & Results['c_sat'] != np.nan:
+                Results['Res_bc'] = abs(Results['b_sat'] - Results['c_sat'])
+        else:
+            Results['Res_ab'] = np.nan
+            if Results['a_sat'] != np.nan & Results['b_sat'] != np.nan:
+                Results['Res_ab'] = abs(Results['a_sat'] - Results['b_sat'])
+
+        q.put([Results, index])
+        return
+
+# def SatPress(P, Model, bulk, T_initial = None, Phases = None, Fe3 = None, H2O = None, fO2 = None, dt = None, T_step = None, T_cut = None, Plot = None, findRange = None, findMin = None, cores = None):
+#     '''
+#     Find the location in P (+ H2O + fO2) where there is the minimum misfit between the saturation curves of the listed phases.
+#     '''
+#
+#     if T_initial is None:
+#         T_initial = 1200
+#
+#     if cores is None:
+#         cores = 4
+#
+#     if Phases is None:
+#         Phases = ['quartz1', 'plagioclase1', 'k-feldspar1']
+#
+#     if dt is None:
+#         dt = 25
+#
+#     if T_step is None:
+#         T_step= 1
+#
+#     if T_cut is None:
+#         T_cut = 10.0001
+#     else:
+#         T_cut = T_cut + 0.0001
+#
+#     if Fe3 is None and H2O is None:
+#         Results = {}
+#
+#         if Plot is not None:
+#             f = plt.figure(figsize = plt.figaspect(0.5))
+#             a0 = f.add_subplot(1,2,1)
+#             a1 = f.add_subplot(1,2,2)
+#
+#         if len(Phases) == 3:
+#             a_Sat, b_Sat, c_Sat, T_Liq, H2O_Melt = findSat(P, Model, Phases, bulk, T_initial = T_initial, dt = dt, T_step = T_step, cores = cores)
+#         else:
+#             a_Sat, b_Sat, T_Liq, H2O_Melt = findSat(P, Model, Phases, bulk, T_initial = T_initial, dt = dt, T_step = T_step, cores = cores)
+#
+#         if Plot is not None:
+#             a0.plot(P[np.where(a_Sat>0)], a_Sat[np.where(a_Sat>0)], '-k', label = 'a_sat')
+#             a0.plot(P[np.where(b_Sat>0)], b_Sat[np.where(b_Sat>0)], '-r', label = 'b_sat')
+#             if len(Phases) == 3:
+#                 a0.plot(P[np.where(c_Sat>0)], c_Sat[np.where(c_Sat>0)], '-b', label = 'c_sat')
+#
+#             a0.legend()
+#
+#         # calc residuals
+#         if len(Phases) == 3:
+#             Res = findResiduals(a_Sat, b_Sat, c_Sat = c_Sat)
+#         else:
+#             Res = findResiduals(a_Sat, b_Sat)
+#
+#         if Plot is not None:
+#             if len(Phases) == 3:
+#                 a1.plot(P, Res['abc'], '-k', label = 'abc')
+#                 a1.plot(P, Res['ab'], '-r', label = 'ab')
+#                 a1.plot(P, Res['ac'], '-b', label = 'ac')
+#                 a1.plot(P, Res['bc'], '-y', label = 'bc')
+#             else:
+#                 a1.plot(P, Res['ab'], '-r', label = 'ab')
+#
+#             a1.legend()
+#
+#         Results = Res.copy()
+#         Results['H2O_sat'] = H2O_Melt
+#         Results['T_Liq'] = T_Liq
+#
+#         # return residual results in range or minimum not specified
+#         if findRange is None and findMin is None:
+#             if Plot is None:
+#                 return Results
+#             else:
+#                 return Results, f
+#
+#         if findRange is not None:
+#             Results_new = detRange(P, Model, bulk, Results, Phases, T_initial = T_initial, T_cut = T_cut, cores = cores)
+#             Results['Range'] = Results_new
+#
+#             if Plot is None:
+#                 return Results
+#             else:
+#                 return Results, f
+#
+#         if findMin is not None:
+#             PolyMin = findMinimum(P, Results, Phases, T_cut = T_cut)
+#             Results['PolyMin'] = PolyMin
+#
+#             if Plot is None:
+#                 return Results
+#             else:
+#                 return Results, f
+#
+#     if H2O is None and Fe3 is not None:
+#         if Plot is not None:
+#             f = plt.figure(figsize = plt.figaspect(0.5))
+#             a0 = f.add_subplot(1,2,1, projection = '3d')
+#             a1 = f.add_subplot(1,2,2, projection = '3d')
+#
+#         if len(Phases) == 3:
+#             Res_abc_mat = np.zeros((len(Fe3), len(P)))
+#             Res_ac_mat = np.zeros((len(Fe3), len(P)))
+#             Res_bc_mat = np.zeros((len(Fe3), len(P)))
+#             c_Sat_mat = np.zeros((len(Fe3), len(P)))
+#
+#         Res_ab_mat = np.zeros((len(Fe3), len(P)))
+#         H2O_mat = np.zeros((len(Fe3), len(P)))
+#         T_Liq_mat = np.zeros((len(Fe3), len(P)))
+#         a_Sat_mat = np.zeros((len(Fe3), len(P)))
+#         b_Sat_mat = np.zeros((len(Fe3), len(P)))
+#
+#         for i in range(len(Fe3)):
+#             Bulk_new = bulk.copy()
+#             Bulk_new[3] = Fe3[i]*((159.69/2)/71.844)*bulk[5]
+#             Bulk_new[5] = (1-Fe3[i])*bulk[5]
+#
+#             if len(Phases) == 3:
+#                 a_Sat, b_Sat, c_Sat, T_Liq, H2O_Melt = findSat(P, Model, Phases, Bulk_new, T_initial = T_initial, dt = dt, T_step = T_step, cores = cores)
+#             else:
+#                 a_Sat, b_Sat, T_Liq, H2O_Melt = findSat(P, Model, Phases, Bulk_new, T_initial = T_initial, dt = dt, T_step = T_step, cores = cores)
+#
+#             # calc residuals
+#             if len(Phases) == 3:
+#                 Res = findResiduals(a_Sat, b_Sat, c_Sat = c_Sat)
+#                 Res_abc_mat[i, :] = Res['abc']
+#                 Res_ac_mat[i, :] = Res['ac']
+#                 Res_bc_mat[i, :] = Res['bc']
+#                 c_Sat_mat[i, :] = c_Sat
+#             else:
+#                 Res = findResiduals(a_Sat, b_Sat)
+#
+#             T_Liq_mat[i, :] = T_Liq
+#             H2O_mat[i, :] = H2O_Melt
+#             a_Sat_mat[i, :] = a_Sat
+#             b_Sat_mat[i, :] = b_Sat
+#             Res_ab_mat[i, :] = Res['ab']
+#
+#         if len(Phases) == 3:
+#             Results = {'abc': Res_abc_mat, 'ab': Res_ab_mat, 'ac': Res_ac_mat, 'bc': Res_bc_mat, 'H2O_Sat': H2O_mat, 'T_Liq': T_Liq_mat}
+#         else:
+#             Results = {'ab': Res_ab_mat, 'H2O_Sat': H2O_mat, 'T_Liq': T_Liq_mat}
+#
+#         if Plot is not None:
+#             X, Y = np.meshgrid(P, Fe3)
+#             a0.plot_surface(X[np.where(a_Sat_mat > 0)], Y[np.where(a_Sat_mat > 0)], a_Sat[np.where(a_Sat_mat > 0)], color = 'k', label = 'a_Sat')
+#             a0.plot_surface(X[np.where(b_Sat_mat > 0)], Y[np.where(b_Sat_mat > 0)], b_Sat[np.where(b_Sat_mat > 0)], color = 'r', label = 'b_Sat')
+#             if len(Phases) == 3:
+#                 a0.plot_surface(X[np.where(c_Sat_mat > 0)], Y[np.where(c_Sat_mat > 0)], c_Sat[np.where(c_Sat_mat > 0)], color = 'r', label = 'b_Sat')
+#
+#             a0.legend()
+#
+#             if len(Phases) == 3:
+#                 a1.plot_surface(X[np.where(~np.isnan(Res['abc']))],Y[np.where(~np.isnan(Res['abc']))], Res['abc'][np.where(~np.isnan(Res['abc']))], color = 'k', label = 'abc')
+#                 a1.plot_surface(X[np.where(~np.isnan(Res['ab']))],Y[np.where(~np.isnan(Res['ab']))], Res['ab'][np.where(~np.isnan(Res['ab']))], color = 'r', label = 'ab')
+#                 a1.plot_surface(X[np.where(~np.isnan(Res['ac']))],Y[np.where(~np.isnan(Res['ac']))], Res['ac'][np.where(~np.isnan(Res['ac']))], color = 'b', label = 'ac')
+#                 a1.plot_surface(X[np.where(~np.isnan(Res['bc']))],Y[np.where(~np.isnan(Res['bc']))], Res['bc'][np.where(~np.isnan(Res['bc']))], color = 'y', label = 'bc')
+#             else:
+#                 a1.plot_surface(X[np.where(~np.isnan(Res['ab']))],Y[np.where(~np.isnan(Res['ab']))], Res['ab'][np.where(~np.isnan(Res['ab']))], color = 'r', label = 'ab')
+#
+#             a1.legend()
+#
+#         # return residual results in range or minimum not specified
+#         if findRange is None and findMin is None:
+#             if Plot is None:
+#                 return Results
+#             else:
+#                 return Results, f
+#
+#         if findRange is not None:
+#             Results_new = detRange(P, Model, bulk, Results, Phases, T_initial = T_initial, Fe3 = Fe3, T_cut = T_cut, cores = cores)
+#             Results['Range'] = Results_new
+#
+#             if Plot is None:
+#                 return Results
+#             else:
+#                 return Results, f
+#
+#     if H2O is not None and Fe3 is None:
+#         if Plot is not None:
+#             f = plt.figure(figsize = plt.figaspect(0.5))
+#             a0 = f.add_subplot(1,2,1, projection = '3d')
+#             a1 = f.add_subplot(1,2,2, projection = '3d')
+#
+#         if len(Phases) == 3:
+#             Res_abc_mat = np.zeros((len(H2O), len(P)))
+#             Res_ac_mat = np.zeros((len(H2O), len(P)))
+#             Res_bc_mat = np.zeros((len(H2O), len(P)))
+#             c_Sat_mat = np.zeros((len(H2O), len(P)))
+#
+#         Res_ab_mat = np.zeros((len(H2O), len(P)))
+#         H2O_mat = np.zeros((len(H2O), len(P)))
+#         T_Liq_mat = np.zeros((len(H2O), len(P)))
+#         a_Sat_mat = np.zeros((len(H2O), len(P)))
+#         b_Sat_mat = np.zeros((len(H2O), len(P)))
+#
+#
+#         for i in range(len(H2O)):
+#             Bulk_new = bulk.copy()
+#             Bulk_new[14] = H2O[i]
+#
+#             if len(Phases) == 3:
+#                 a_Sat, b_Sat, c_Sat, T_Liq, H2O_Melt = findSat(P, Model, Phases, Bulk_new, T_initial = T_initial, dt = dt, T_step = T_step, cores = cores)
+#             else:
+#                 a_Sat, b_Sat, T_Liq, H2O_Melt = findSat(P, Model, Phases, Bulk_new, T_initial = T_initial, dt = dt, T_step = T_step, cores = cores)
+#
+#             # calc residuals
+#             if len(Phases) == 3:
+#                 Res = findResiduals(a_Sat, b_Sat, c_Sat = c_Sat)
+#                 Res_abc_mat[i, :] = Res['abc']
+#                 Res_ac_mat[i, :] = Res['ac']
+#                 Res_bc_mat[i, :] = Res['bc']
+#                 c_Sat_mat[i, :] = c_Sat
+#             else:
+#                 Res = findResiduals(a_Sat, b_Sat)
+#
+#             Res_ab_mat[i, :] = Res['ab']
+#             T_Liq_mat[i, :] = T_Liq
+#             H2O_mat[i, :] = H2O_Melt
+#             a_Sat_mat[i, :] = a_Sat
+#             b_Sat_mat[i, :] = b_Sat
+#
+#         if len(Phases) == 3:
+#             Results = {'abc': Res_abc_mat, 'ab': Res_ab_mat, 'ac': Res_ac_mat, 'bc': Res_bc_mat, 'H2O_Sat': H2O_mat, 'T_Liq': T_Liq_mat}
+#         else:
+#             Results = {'ab': Res_ab_mat, 'H2O_Sat': H2O_mat, 'T_Liq': T_Liq_mat}
+#
+#         if Plot is not None:
+#             X, Y = np.meshgrid(P, H2O)
+#             a0.plot_surface(X[np.where(a_Sat_mat > 0)], Y[np.where(a_Sat_mat > 0)], a_Sat[np.where(a_Sat_mat > 0)], color = 'k', label = 'a_Sat')
+#             a0.plot_surface(X[np.where(b_Sat_mat > 0)], Y[np.where(b_Sat_mat > 0)], b_Sat[np.where(b_Sat_mat > 0)], color = 'r', label = 'b_Sat')
+#             if len(Phases) == 3:
+#                 a0.plot_surface(X[np.where(c_Sat_mat > 0)], Y[np.where(c_Sat_mat > 0)], c_Sat[np.where(c_Sat_mat > 0)], color = 'r', label = 'b_Sat')
+#
+#             a0.legend()
+#
+#             if len(Phases) == 3:
+#                 a1.plot_surface(X[np.where(~np.isnan(Res['abc']))],Y[np.where(~np.isnan(Res['abc']))], Res['abc'][np.where(~np.isnan(Res['abc']))], color = 'k', label = 'abc')
+#                 a1.plot_surface(X[np.where(~np.isnan(Res['ab']))],Y[np.where(~np.isnan(Res['ab']))], Res['ab'][np.where(~np.isnan(Res['ab']))], color = 'r', label = 'ab')
+#                 a1.plot_surface(X[np.where(~np.isnan(Res['ac']))],Y[np.where(~np.isnan(Res['ac']))], Res['ac'][np.where(~np.isnan(Res['ac']))], color = 'b', label = 'ac')
+#                 a1.plot_surface(X[np.where(~np.isnan(Res['bc']))],Y[np.where(~np.isnan(Res['bc']))], Res['bc'][np.where(~np.isnan(Res['bc']))], color = 'y', label = 'bc')
+#             else:
+#                 a1.plot_surface(X[np.where(~np.isnan(Res['ab']))],Y[np.where(~np.isnan(Res['ab']))], Res['ab'][np.where(~np.isnan(Res['ab']))], color = 'r', label = 'ab')
+#
+#             a1.legend()
+#
+#         # return residual results in range or minimum not specified
+#         if findRange is None and findMin is None:
+#             if Plot is None:
+#                 return Results
+#             else:
+#                 return Results, f
+#
+#         if findRange is not None:
+#             Results_new = detRange(P, Model, bulk, Results, Phases, T_initial = T_initial, H2O = H2O, T_cut = T_cut, cores = cores)
+#             Results['Range'] = Results_new
+#
+#             if Plot is None:
+#                 return Results
+#             else:
+#                 return Results, f
+#
+#     if H2O is not None and Fe3 is not None:
+#         if Plot is not None:
+#             if len(Phases) == 2:
+#                 f = plt.figure(figsize = plt.figaspect(0.33))
+#                 a0 = f.add_subplot(1,3,1, projection = '3d')
+#                 a1 = f.add_subplot(1,3,2, projection = '3d')
+#                 a2 = f.add_subplot(1,3,3, projection = '3d')
+#             else:
+#                 f = plt.figure(figsize = plt.figaspect(0.33))
+#                 a0 = f.add_subplot(1,3,1, projection = '3d')
+#                 a1 = f.add_subplot(1,3,2, projection = '3d')
+#                 a2 = f.add_subplot(1,3,3, projection = '3d')
+#                 a3 = f.add_subplot(2,3,4, projection = '3d')
+#                 a4 = f.add_subplot(2,3,5, projection = '3d')
+#                 a5 = f.add_subplot(2,3,6, projection = '3d')
+#
+#         if len(Phases) == 3:
+#             Res_abc_mat = np.zeros((len(H2O), len(Fe3), len(P)))
+#             Res_ac_mat = np.zeros((len(H2O), len(Fe3), len(P)))
+#             Res_bc_mat = np.zeros((len(H2O), len(Fe3), len(P)))
+#
+#         Res_ab_mat = np.zeros((len(H2O), len(Fe3), len(P)))
+#         T_Liq_3Dmat = np.zeros((len(H2O), len(Fe3), len(P)))
+#         H2O_Liq_3Dmat = np.zeros((len(H2O), len(Fe3), len(P)))
+#
+#         for i in range(len(H2O)):
+#             Bulk_new = bulk.copy()
+#             Bulk_new[14] = H2O[i]
+#
+#             if len(Phases) == 3:
+#                 Res_abc_mat_2D = np.zeros((len(Fe3), len(P)))
+#                 Res_ac_mat_2D = np.zeros((len(Fe3), len(P)))
+#                 Res_bc_mat_2D = np.zeros((len(Fe3), len(P)))
+#
+#             Res_ab_mat_2D = np.zeros((len(Fe3), len(P)))
+#             T_Liq_mat_2D = np.zeros((len(Fe3), len(P)))
+#             H2O_Liq_mat_2D = np.zeros((len(Fe3), len(P)))
+#
+#             for j in range(len(Fe3)):
+#
+#                 Bulk_new[3] = Fe3[j]*((159.69/2)/71.844)*bulk[5]
+#                 Bulk_new[5] = (1-Fe3[j])*bulk[5]
+#
+#                 if len(Phases) == 3:
+#                     a_Sat, b_Sat, c_Sat, T_Liq, H2O_Melt = findSat(P, Model, Phases, Bulk_new, T_initial = T_initial, dt = dt, T_step = T_step, cores = cores)
+#                 else:
+#                     a_Sat, b_Sat, T_Liq, H2O_Melt = findSat(P, Model, Phases, Bulk_new, T_initial = T_initial, dt = dt, T_step = T_step, cores = cores)
+#
+#                 # calc residuals
+#                 if len(Phases) == 3:
+#                     Res = findResiduals(a_Sat, b_Sat, c_Sat = c_Sat)
+#                     Res_abc_mat_2D[j, :] = Res['abc']
+#                     Res_ac_mat_2D[j, :] = Res['ac']
+#                     Res_bc_mat_2D[j, :] = Res['bc']
+#                 else:
+#                     Res = findResiduals(a_Sat, b_Sat)
+#
+#                 Res_ab_mat_2D[j, :] = Res['ab']
+#                 T_Liq_mat_2D[j, :] = T_Liq
+#                 H2O_Liq_mat_2D[j, :] = H2O_Melt
+#
+#             if len(Phases) == 3:
+#                 Res_abc_mat[i,:,:] = Res_abc_mat_2D
+#                 Res_ac_mat[i,:,:] = Res_ac_mat_2D
+#                 Res_bc_mat[i,:,:] = Res_bc_mat_2D
+#
+#             Res_ab_mat[i,:,:] = Res_ab_mat_2D
+#             T_Liq_3Dmat[i,:,:] = T_Liq_mat_2D
+#             H2O_Liq_3Dmat[i,:,:] = H2O_Liq_mat_2D
+#
+#         if len(Phases) == 3:
+#             Results = {'abc': Res_abc_mat, 'ab': Res_ab_mat, 'ac': Res_ac_mat, 'bc': Res_bc_mat, 'H2O_Sat': H2O_Liq_3Dmat, 'T_Liq': T_Liq_3Dmat}
+#         else:
+#             Results = {'ab': Res_ab_mat, 'H2O_Sat': H2O_Liq_3Dmat, 'T_Liq': T_Liq_3Dmat}
+#
+#         if findRange is None and findMin is None:
+#             if Plot is None:
+#                 return Results
+#             else:
+#                 return Results, f
+#
+#         if findRange is not None:
+#             Results_new = detRange(P, Model, bulk, Results, Phases, T_initial = T_initial, Fe3 = Fe3, H2O = H2O, T_cut = T_cut, findRange = findRange, cores = cores)
+#             Results['Range'] = Results_new
+#
+#             try:
+#                 print('Max P = ' + str(Results['Range']['abc_max_P']))
+#                 print('Min P = ' + str(Results['Range']['abc_min_P']))
+#             except:
+#                 print('No Convergence')
+#
+#             if Plot is None:
+#                 return Results
+#             else:
+#                 return Results, f
 
 def detRange(P, Model, bulk, Results, Phases, T_initial = None, Fe3 = None, H2O = None, T_cut = None, findRange = None, cores = None):
     '''
@@ -795,154 +1180,131 @@ def detRange(P, Model, bulk, Results, Phases, T_initial = None, Fe3 = None, H2O 
         return Results_new
 
 
-def findResiduals(a_Sat, b_Sat, c_Sat = None):
-    '''
-    Determine the temperature offse between the different saturation curves.
-    '''
-    Res = {}
-
-    if c_Sat is not None:
-        Res_abc = np.nanmax(np.array([abs(a_Sat-b_Sat), abs(a_Sat - c_Sat), abs(b_Sat - c_Sat)]), axis = 0)
-        Res_abc[np.where(a_Sat == 0)] = np.nan
-        Res_abc[np.where(b_Sat == 0)] = np.nan
-        Res_abc[np.where(c_Sat == 0)] = np.nan
-
-        Res_ac = abs(a_Sat - c_Sat)
-        Res_ac[np.where(a_Sat == 0)] = np.nan
-        Res_ac[np.where(c_Sat == 0)] = np.nan
-
-        Res_bc = abs(b_Sat - c_Sat)
-        Res_bc[np.where(b_Sat == 0)] = np.nan
-        Res_bc[np.where(c_Sat == 0)] = np.nan
-
-        Res['abc'] = Res_abc
-        Res['ac'] = Res_ac
-        Res['bc'] = Res_bc
-
-    Res_ab = abs(a_Sat - b_Sat)
-    Res_ab[np.where(a_Sat == 0)] = np.nan
-    Res_ab[np.where(b_Sat == 0)] = np.nan
-
-    Res['ab'] = Res_ab
-
-    return Res
-
-def polymin(P, Res):
-    '''
-    Finds the minimum residual temperature using a 2nd degree polynomial.
-    '''
-    arr = np.sort(Res)
-    Ind = np.where(Res == arr[0])[0][0]
-
-    if P[Ind] == np.nanmax(P):
-        p = np.array([0,0,0])
-        p_min = np.array([P[Ind]])
-    elif P[Ind] == np.nanmin(P):
-        p = np.array([0,0,0])
-        p_min = np.array([P[Ind]])
-    else:
-        p = np.polyfit(P[np.array([Ind-1, Ind, Ind+1])],Res[np.array([Ind-1, Ind, Ind+1])],2)
-
-        x = np.linspace(np.nanmin(P),np.nanmax(P),501)
-        y = p[0]*x**2 + p[1]*x + p[2]
-
-        p_min = x[np.where(y == np.nanmin(y))]
-
-    return p, p_min
-
-def findSat(P, Model, Phases, bulk, T_initial = None, dt = None, T_step = None, cores = None):
-    '''
-    Calculation to find saturation temperatures. Can be run in parallel.
-    '''
-    if dt is None:
-        dt = 25
-
-    if T_step is None:
-        T_step = 1
-
-    if T_initial is None:
-        T_initial = 1200
-
-    if cores is None:
-        cores = 20
-
-    a_Sat = np.zeros(len(P))
-    b_Sat = np.zeros(len(P))
-    T_Liq = np.zeros(len(P))
-    H2O_Melt = np.zeros(len(P))
-    P_out = np.zeros(len(P))
-
-    if len(Phases) == 3:
-        c_Sat = np.zeros(len(P))
-
-    A = len(P)//cores
-    B = len(P) % cores
-
-    Group = np.zeros(A) + cores
-    Group = np.append(Group, B)
-
-    qs = []
-    q = Queue()
-
-    for j in range(len(Group)):
-        ps = []
-        if Model == "MELTS":
-            for i in range(int(cores*j), int(cores*j + Group[j])):
-                p = Process(target = satTemperature_MELTS, args = (q, Model, Phases, P[i], T_initial, bulk, dt, T_step))
-                ps.append(p)
-                p.start()
-
-            for p in ps:
-                try:
-                    ret = q.get(timeout = 30)
-                except:
-                    ret = []
-
-                qs.append(ret)
-
-            TIMEOUT = 120
-            start = time.time()
-            for p in ps:
-                if p.is_alive():
-                    while time.time() - start <= TIMEOUT:
-                        if not p.is_alive():
-                            p.join()
-                            p.terminate()
-                            break
-                        time.sleep(.1)
-                    else:
-                        p.terminate()
-                        p.join(5)
-                else:
-                    p.join()
-                    p.terminate()
-
-            time.sleep(.1)
-
-    for i in range(len(qs)):
-        if len(qs[i])>0:
-            if len(Phases) == 3:
-                a_Sat[i], b_Sat[i], c_Sat[i], T_Liq[i], H2O_Melt[i], P_out[i] = qs[i]
-            else:
-                a_Sat[i], b_Sat[i], T_Liq[i], H2O_Melt[i], P_out[i] = qs[i]
-
-    a_Sat_new = np.zeros(len(a_Sat))
-    b_Sat_new = np.zeros(len(a_Sat))
-    T_Liq_new = np.zeros(len(a_Sat))
-    H2O_Melt_new = np.zeros(len(a_Sat))
-    if len(Phases) == 3:
-        c_Sat_new = np.zeros(len(a_Sat))
-
-    for i in range(len(P)):
-        if len(np.where(P_out == P[i])[0]) > 0:
-            a_Sat_new[i] = a_Sat[np.where(P_out == P[i])]
-            b_Sat_new[i] = b_Sat[np.where(P_out == P[i])]
-            T_Liq_new[i] = T_Liq[np.where(P_out == P[i])]
-            H2O_Melt_new[i] = H2O_Melt[np.where(P_out == P[i])]
-            if len(Phases) == 3:
-                c_Sat_new[i] = c_Sat[np.where(P_out == P[i])]
-
-    if len(Phases) == 3:
-        return a_Sat_new, b_Sat_new, c_Sat_new, T_Liq_new, H2O_Melt_new
-    else:
-        return a_Sat_new, b_Sat_new, T_Liq_new, H2O_Melt_new
+# def findResiduals(a_Sat, b_Sat, c_Sat = None):
+#     '''
+#     Determine the temperature offse between the different saturation curves.
+#     '''
+#     Res = {}
+#
+#     if c_Sat is not None:
+#         Res_abc = np.nanmax(np.array([abs(a_Sat-b_Sat), abs(a_Sat - c_Sat), abs(b_Sat - c_Sat)]), axis = 0)
+#         Res_abc[np.where(a_Sat == 0)] = np.nan
+#         Res_abc[np.where(b_Sat == 0)] = np.nan
+#         Res_abc[np.where(c_Sat == 0)] = np.nan
+#
+#         Res_ac = abs(a_Sat - c_Sat)
+#         Res_ac[np.where(a_Sat == 0)] = np.nan
+#         Res_ac[np.where(c_Sat == 0)] = np.nan
+#
+#         Res_bc = abs(b_Sat - c_Sat)
+#         Res_bc[np.where(b_Sat == 0)] = np.nan
+#         Res_bc[np.where(c_Sat == 0)] = np.nan
+#
+#         Res['abc'] = Res_abc
+#         Res['ac'] = Res_ac
+#         Res['bc'] = Res_bc
+#
+#     Res_ab = abs(a_Sat - b_Sat)
+#     Res_ab[np.where(a_Sat == 0)] = np.nan
+#     Res_ab[np.where(b_Sat == 0)] = np.nan
+#
+#     Res['ab'] = Res_ab
+#
+#     return Res
+#
+# def findSat(P, Model, Phases, bulk, T_initial = None, dt = None, T_step = None, cores = None):
+#     '''
+#     Calculation to find saturation temperatures. Can be run in parallel.
+#     '''
+#     if dt is None:
+#         dt = 25
+#
+#     if T_step is None:
+#         T_step = 1
+#
+#     if T_initial is None:
+#         T_initial = 1200
+#
+#     if cores is None:
+#         cores = 20
+#
+#     a_Sat = np.zeros(len(P))
+#     b_Sat = np.zeros(len(P))
+#     T_Liq = np.zeros(len(P))
+#     H2O_Melt = np.zeros(len(P))
+#     P_out = np.zeros(len(P))
+#
+#     if len(Phases) == 3:
+#         c_Sat = np.zeros(len(P))
+#
+#     A = len(P)//cores
+#     B = len(P) % cores
+#
+#     Group = np.zeros(A) + cores
+#     Group = np.append(Group, B)
+#
+#     qs = []
+#     q = Queue()
+#
+#     for j in range(len(Group)):
+#         ps = []
+#         if Model == "MELTS":
+#             for i in range(int(cores*j), int(cores*j + Group[j])):
+#                 p = Process(target = satTemperature_MELTS, args = (q, Model, Phases, P[i], T_initial, bulk, dt, T_step))
+#                 ps.append(p)
+#                 p.start()
+#
+#             for p in ps:
+#                 try:
+#                     ret = q.get(timeout = 30)
+#                 except:
+#                     ret = []
+#
+#                 qs.append(ret)
+#
+#             TIMEOUT = 120
+#             start = time.time()
+#             for p in ps:
+#                 if p.is_alive():
+#                     while time.time() - start <= TIMEOUT:
+#                         if not p.is_alive():
+#                             p.join()
+#                             p.terminate()
+#                             break
+#                         time.sleep(.1)
+#                     else:
+#                         p.terminate()
+#                         p.join(5)
+#                 else:
+#                     p.join()
+#                     p.terminate()
+#
+#             time.sleep(.1)
+#
+#     for i in range(len(qs)):
+#         if len(qs[i])>0:
+#             if len(Phases) == 3:
+#                 a_Sat[i], b_Sat[i], c_Sat[i], T_Liq[i], H2O_Melt[i], P_out[i] = qs[i]
+#             else:
+#                 a_Sat[i], b_Sat[i], T_Liq[i], H2O_Melt[i], P_out[i] = qs[i]
+#
+#     a_Sat_new = np.zeros(len(a_Sat))
+#     b_Sat_new = np.zeros(len(a_Sat))
+#     T_Liq_new = np.zeros(len(a_Sat))
+#     H2O_Melt_new = np.zeros(len(a_Sat))
+#     if len(Phases) == 3:
+#         c_Sat_new = np.zeros(len(a_Sat))
+#
+#     for i in range(len(P)):
+#         if len(np.where(P_out == P[i])[0]) > 0:
+#             a_Sat_new[i] = a_Sat[np.where(P_out == P[i])]
+#             b_Sat_new[i] = b_Sat[np.where(P_out == P[i])]
+#             T_Liq_new[i] = T_Liq[np.where(P_out == P[i])]
+#             H2O_Melt_new[i] = H2O_Melt[np.where(P_out == P[i])]
+#             if len(Phases) == 3:
+#                 c_Sat_new[i] = c_Sat[np.where(P_out == P[i])]
+#
+#     if len(Phases) == 3:
+#         return a_Sat_new, b_Sat_new, c_Sat_new, T_Liq_new, H2O_Melt_new
+#     else:
+#         return a_Sat_new, b_Sat_new, T_Liq_new, H2O_Melt_new

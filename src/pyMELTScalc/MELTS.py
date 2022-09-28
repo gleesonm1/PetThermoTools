@@ -124,166 +124,274 @@ def findLiq_MELTS(P_bar = None, Model = None, T_C_init = None, comp = None, melt
 
     return T_Liq, H2O_Melt
 
-def satTemperature_MELTS(q, Model, phases, P, T_initial, bulk, dt, T_step):
+def phaseSat_MELTS(Model = None, comp = None, phases = None, T_initial_C = None, T_step_C = None, dt_C = None, P_bar = None, H2O_Liq = None):
     '''
-    calculate the saturation temperature for the different phases of interest. Calculations can be performed in parallel.
+    Perform a single crystallisation calculation in MELTS. WARNING! Running this function directly from the command land/jupyter notebook will initiate the MELTS C library in the main python process. Once this has been initiated the MELTS C library cannot be re-loaded and failures during the calculation will likely cause a terminal error to occur.
+
+    Parameters:
+    ----------
+    Model: string
+        Dictates the MELTS model to be used: "MELTSv1.0.2", "MELTSv1.1.0", "MELTSv1.2.0", or "pMELTS". Default "v.1.0.2".
+
+    comp: list or dict
+        Input oxide values required for the calculations.
+
+    phases: list
+        phases of interest
+
+    T_initial_C: float
+        Initial temperature used for liquidus calculations.
+
+    T_step_C: float
+        Temperature step at each point of the model.
+
+    dt_C: float
+        Total temperature change allowed in the model.
+
+    P_bar: float
+        Pressure of the calculation.
+
+    Returns:
+    ----------
+    Results: Dict
+        Dict containing a float for each saturation temperature found and the T_Liq and melt H2O values.
+
     '''
+    Results = {'a_sat': np.nan, 'b_sat': np.nan, 'c_sat': np.nan, 'T_Liq': np.nan, 'H2O_melt': np.nan}
+    if len(phases) == 2:
+        del Results['c_sat']
 
     from meltsdynamic import MELTSdynamic
 
-    melts = MELTSdynamic(1)
+    if Model is None or Model == "MELTSv1.0.2":
+        melts = MELTSdynamic(1)
+    elif Model == "pMELTS":
+        melts = MELTSdynamic(2)
+    elif Model == "MELTSv1.1.0":
+        melts = MELTSdynamic(3)
+    elif Model == "MELTSv1.2.0":
+        melts = MELTSdynamic(4)
 
-    # melts.engine.setBulkComposition(bulk)
-    # melts.engine.pressure = P
-    # melts.engine.temperature = T_initial
+    melts.engine.setSystemProperties("Suppress", "tridymite")
 
-    a_sat = 0
-    b_sat = 0
-    if len(phases) == 3:
-        c_sat = 0
-
-    T_Liq = 0
-    H2O_Melt = 0
-
-    try:
-        T_Liq, H2O_Melt = findLiq_MELTS(P, Model, T_initial, bulk, melts = melts)
-    except:
-        q.put([a_sat, b_sat, T_Liq, H2O_Melt, P])
-        return
-
-    # Liq = ['liquid1','water1', 'fluid1']
-    # try:
-    #     melts.engine.calcEquilibriumState(1,0)
-    # except:
-    #     if len(phases) == 2:
-    #         q.put([a_sat, b_sat, T_Liq, H2O_Melt, P])
-    #         return
-    #     else:
-    #         q.put([a_sat, b_sat, c_sat, T_Liq, H2O_Melt, P])
-    #         return
-    #
-    # PhaseList = melts.engine.solidNames
-    # if PhaseList is None:
-    #     PhaseList = ['liquid1']
-    # else:
-    #     PhaseList = ['liquid1'] + PhaseList
-    #
-    # i = set.intersection(set(Liq),set(PhaseList))
-    # Step = np.array([3,1,0.1])
-    #
-    # for j in range(len(Step)):
-    #     if len(i) == len(PhaseList):
-    #         while len(i) == len(PhaseList):
-    #             melts = melts.addNodeAfter()
-    #             melts.engine.temperature = melts.engine.temperature - Step[j]
-    #             try:
-    #                 melts.engine.calcEquilibriumState(1,0)
-    #             except:
-    #                 if len(phases) == 2:
-    #                     q.put([a_sat, b_sat, T_Liq, H2O_Melt, P])
-    #                     return
-    #                 else:
-    #                     q.put([a_sat, b_sat, c_sat, T_Liq, H2O_Melt, P])
-    #                     return
-    #
-    #             PhaseList = melts.engine.solidNames
-    #             if PhaseList is None:
-    #                 PhaseList = ['liquid1']
-    #             else:
-    #                 PhaseList = ['liquid1'] + PhaseList
-    #             i = set.intersection(set(Liq),set(PhaseList))
-    #
-    #     if len(i) < len(PhaseList):
-    #         while len(i) < len(PhaseList):
-    #             melts = melts.addNodeAfter()
-    #             melts.engine.temperature = melts.engine.temperature + Step[j]
-    #             try:
-    #                 melts.engine.calcEquilibriumState(1,0)
-    #             except:
-    #                 if len(phases) == 2:
-    #                     q.put([a_sat, b_sat, T_Liq, H2O_Melt, P])
-    #                     return
-    #                 else:
-    #                     q.put([a_sat, b_sat, c_sat, T_Liq, H2O_Melt, P])
-    #                     return
-    #
-    #             PhaseList = melts.engine.solidNames
-    #             if PhaseList is None:
-    #                 PhaseList = ['liquid1']
-    #             else:
-    #                 PhaseList = ['liquid1'] + PhaseList
-    #             i = set.intersection(set(Liq),set(PhaseList))
-    #
-    #
-    # T_Liq = melts.engine.temperature
-    # H2O_Melt = melts.engine.getProperty('dispComposition', 'liquid1', 'H2O')
-
-    T_fin = T_Liq - dt
-
-    melts = melts.addNodeAfter()
-    melts.engine.temperature = T_Liq
-    melts.engine.pressure = P
+    bulk = [comp['SiO2_Liq'], comp['TiO2_Liq'], comp['Al2O3_Liq'], comp['Fe3Fet_Liq']*((159.59/2)/71.844)*comp['FeOt_Liq'], 0.0, (1- comp['Fe3Fet_Liq'])*comp['FeOt_Liq'], comp['MnO_Liq'], comp['MgO_Liq'], 0.0, 0.0, comp['CaO_Liq'], comp['Na2O_Liq'], comp['K2O_Liq'], comp['P2O5_Liq'], comp['H2O_Liq'], comp['CO2_Liq'], 0.0, 0.0, 0.0]
+    bulk = list(100*np.array(bulk)/np.sum(bulk))
 
     try:
-        melts.engine.calcEquilibriumState(1,0)
+        Results['T_Liq'], Results['H2O_melt'] = findLiq_MELTS(P_bar = P_bar, comp = bulk, T_C_init = T_initial_C, melts = melts)
     except:
-        if len(phases) == 2:
-            q.put([a_sat, b_sat, T_Liq, H2O_Melt, P])
-            return
-        else:
-            q.put([a_sat, b_sat, c_sat, T_Liq, H2O_Melt, P])
-            return
+        return Results
 
-    j = 0
-    while melts.engine.temperature>T_fin:
-        if j == 0:
-            j = 1
-            melts = melts.addNodeAfter()
-            melts.engine.temperature = T_Liq-0.1
+    if H2O_Liq is not None:
+        if Results['H2O_melt'] < 0.99*bulk[14]:
+            return Results
 
-        else:
-            melts = melts.addNodeAfter()
-            melts.engine.temperature = melts.engine.temperature - T_step
+
+    T = Results['T_Liq']
+    T_final = T - dt_C
+    while T >= T_final:
+        melts = melts.addNodeAfter()
+        melts.engine.setBulkComposition(bulk)
+        melts.engine.pressure = P_bar
+        melts.engine.temperature = T
 
         try:
             melts.engine.calcEquilibriumState(1,0)
         except:
-            if len(phases) == 2:
-                q.put([a_sat, b_sat, T_Liq, H2O_Melt, P])
-                return
-            else:
-                q.put([a_sat, b_sat, c_sat, T_Liq, H2O_Melt, P])
-                return
+            return Results
 
         PhaseList = melts.engine.solidNames
+        print(PhaseList)
+        try:
+            if 'tridymite1' in PhaseList:
+                PhaseList = ['quartz1'] + PhaseList
+            if 'clinopyroxene2' in PhaseList:
+                PhaseList = ['orthopyroxene1'] + PhaseList
 
-        if phases[0] in PhaseList and a_sat == 0:
-            a_sat = melts.engine.temperature
+            if phases[0] in PhaseList and np.isnan(Results['a_sat']):# == 0:
+                Results['a_sat'] = melts.engine.temperature
 
-        if phases[1] in PhaseList and b_sat == 0:
-            b_sat = melts.engine.temperature
+            if phases[1] in PhaseList and np.isnan(Results['b_sat']):# == 0:
+                Results['b_sat'] = melts.engine.temperature
 
-        if len(phases) == 3:
-            if phases[2] == 'orthopyroxene1':
-                if 'orthopyroxene1' in PhaseList or 'clinopyroxene2' in PhaseList and c_sat == 0:
-                    c_sat = melts.engine.temperature
-            else:
-                if phases[2] in PhaseList and c_sat == 0:
-                    c_sat = melts.engine.temperature
+            if len(phases) == 3:
+                if phases[2] in PhaseList and np.isnan(Results['c_sat']):# == 0:
+                    Results['c_sat'] = melts.engine.temperature
 
-            if a_sat and b_sat and c_sat > 0:
-                break
+                if ~np.isnan(Results['a_sat']) and ~np.isnan(Results['b_sat']) and ~np.isnan(Results['c_sat']):# > 0:
+                    break
 
-        if len(phases) == 2:
-            if a_sat and b_sat > 0:
-                break
+            if len(phases) == 2:
+                if ~np.isnan(Results['a_sat']) and ~np.isnan(Results['b_sat']):# > 0:
+                    break
 
-    if len(phases) == 2:
-        q.put([a_sat, b_sat, T_Liq, H2O_Melt, P])
-        return
-    else:
-        q.put([a_sat, b_sat, c_sat, T_Liq, H2O_Melt, P])
-        return
+            T = T - T_step_C
+        except:
+            T = T - T_step_C
+
+
+    return Results
+
+# def satTemperature_MELTS(q, Model, phases, P, T_initial, bulk, dt, T_step):
+#     '''
+#     calculate the saturation temperature for the different phases of interest. Calculations can be performed in parallel.
+#     '''
+#
+#     from meltsdynamic import MELTSdynamic
+#
+#     melts = MELTSdynamic(1)
+#
+#     # melts.engine.setBulkComposition(bulk)
+#     # melts.engine.pressure = P
+#     # melts.engine.temperature = T_initial
+#
+#     a_sat = 0
+#     b_sat = 0
+#     if len(phases) == 3:
+#         c_sat = 0
+#
+#     T_Liq = 0
+#     H2O_Melt = 0
+#
+#     try:
+#         T_Liq, H2O_Melt = findLiq_MELTS(P, Model, T_initial, bulk, melts = melts)
+#     except:
+#         q.put([a_sat, b_sat, T_Liq, H2O_Melt, P])
+#         return
+#
+#     # Liq = ['liquid1','water1', 'fluid1']
+#     # try:
+#     #     melts.engine.calcEquilibriumState(1,0)
+#     # except:
+#     #     if len(phases) == 2:
+#     #         q.put([a_sat, b_sat, T_Liq, H2O_Melt, P])
+#     #         return
+#     #     else:
+#     #         q.put([a_sat, b_sat, c_sat, T_Liq, H2O_Melt, P])
+#     #         return
+#     #
+#     # PhaseList = melts.engine.solidNames
+#     # if PhaseList is None:
+#     #     PhaseList = ['liquid1']
+#     # else:
+#     #     PhaseList = ['liquid1'] + PhaseList
+#     #
+#     # i = set.intersection(set(Liq),set(PhaseList))
+#     # Step = np.array([3,1,0.1])
+#     #
+#     # for j in range(len(Step)):
+#     #     if len(i) == len(PhaseList):
+#     #         while len(i) == len(PhaseList):
+#     #             melts = melts.addNodeAfter()
+#     #             melts.engine.temperature = melts.engine.temperature - Step[j]
+#     #             try:
+#     #                 melts.engine.calcEquilibriumState(1,0)
+#     #             except:
+#     #                 if len(phases) == 2:
+#     #                     q.put([a_sat, b_sat, T_Liq, H2O_Melt, P])
+#     #                     return
+#     #                 else:
+#     #                     q.put([a_sat, b_sat, c_sat, T_Liq, H2O_Melt, P])
+#     #                     return
+#     #
+#     #             PhaseList = melts.engine.solidNames
+#     #             if PhaseList is None:
+#     #                 PhaseList = ['liquid1']
+#     #             else:
+#     #                 PhaseList = ['liquid1'] + PhaseList
+#     #             i = set.intersection(set(Liq),set(PhaseList))
+#     #
+#     #     if len(i) < len(PhaseList):
+#     #         while len(i) < len(PhaseList):
+#     #             melts = melts.addNodeAfter()
+#     #             melts.engine.temperature = melts.engine.temperature + Step[j]
+#     #             try:
+#     #                 melts.engine.calcEquilibriumState(1,0)
+#     #             except:
+#     #                 if len(phases) == 2:
+#     #                     q.put([a_sat, b_sat, T_Liq, H2O_Melt, P])
+#     #                     return
+#     #                 else:
+#     #                     q.put([a_sat, b_sat, c_sat, T_Liq, H2O_Melt, P])
+#     #                     return
+#     #
+#     #             PhaseList = melts.engine.solidNames
+#     #             if PhaseList is None:
+#     #                 PhaseList = ['liquid1']
+#     #             else:
+#     #                 PhaseList = ['liquid1'] + PhaseList
+#     #             i = set.intersection(set(Liq),set(PhaseList))
+#     #
+#     #
+#     # T_Liq = melts.engine.temperature
+#     # H2O_Melt = melts.engine.getProperty('dispComposition', 'liquid1', 'H2O')
+#
+#     T_fin = T_Liq - dt
+#
+#     melts = melts.addNodeAfter()
+#     melts.engine.temperature = T_Liq
+#     melts.engine.pressure = P
+#
+#     try:
+#         melts.engine.calcEquilibriumState(1,0)
+#     except:
+#         if len(phases) == 2:
+#             q.put([a_sat, b_sat, T_Liq, H2O_Melt, P])
+#             return
+#         else:
+#             q.put([a_sat, b_sat, c_sat, T_Liq, H2O_Melt, P])
+#             return
+#
+#     j = 0
+#     while melts.engine.temperature>T_fin:
+#         if j == 0:
+#             j = 1
+#             melts = melts.addNodeAfter()
+#             melts.engine.temperature = T_Liq-0.1
+#
+#         else:
+#             melts = melts.addNodeAfter()
+#             melts.engine.temperature = melts.engine.temperature - T_step
+#
+#         try:
+#             melts.engine.calcEquilibriumState(1,0)
+#         except:
+#             if len(phases) == 2:
+#                 q.put([a_sat, b_sat, T_Liq, H2O_Melt, P])
+#                 return
+#             else:
+#                 q.put([a_sat, b_sat, c_sat, T_Liq, H2O_Melt, P])
+#                 return
+#
+#         PhaseList = melts.engine.solidNames
+#
+#         if phases[0] in PhaseList and a_sat == 0:
+#             a_sat = melts.engine.temperature
+#
+#         if phases[1] in PhaseList and b_sat == 0:
+#             b_sat = melts.engine.temperature
+#
+#         if len(phases) == 3:
+#             if phases[2] == 'orthopyroxene1':
+#                 if 'orthopyroxene1' in PhaseList or 'clinopyroxene2' in PhaseList and c_sat == 0:
+#                     c_sat = melts.engine.temperature
+#             else:
+#                 if phases[2] in PhaseList and c_sat == 0:
+#                     c_sat = melts.engine.temperature
+#
+#             if a_sat and b_sat and c_sat > 0:
+#                 break
+#
+#         if len(phases) == 2:
+#             if a_sat and b_sat > 0:
+#                 break
+#
+#     if len(phases) == 2:
+#         q.put([a_sat, b_sat, T_Liq, H2O_Melt, P])
+#         return
+#     else:
+#         q.put([a_sat, b_sat, c_sat, T_Liq, H2O_Melt, P])
+#         return
 
 def crystallise_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid = None, T_path_C = None, T_start_C = None, T_end_C = None, dt_C = None, P_path_bar = None, P_start_bar = None, P_end_bar = None, dp_bar = None, isochoric = None, find_liquidus = None):
     '''
