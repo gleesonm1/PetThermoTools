@@ -93,7 +93,10 @@ def harker(Results = None, x_axis = None, y_axis = None, phase = None, line_styl
 
     f.tight_layout()
 
-def residualT_plot(Results = None, P_bar = None, phases = None, H2O_Liq = None, Fe3Fet_Liq = None, sat_surface = None):
+def residualT_plot(Results = None, P_bar = None, phases = None, H2O_Liq = None, Fe3Fet_Liq = None, T_cut_C = None):
+    if T_cut_C is None:
+        T_cut_C = 12
+
     if H2O_Liq is None and Fe3Fet_Liq is None:
         if len(Results['CurveMin']) == 4:
             f, a = plt.subplots(2,2, figsize = (10,8), sharex = True, sharey = True)
@@ -164,6 +167,75 @@ def residualT_plot(Results = None, P_bar = None, phases = None, H2O_Liq = None, 
                         A = Results[m[i][j]][:,0,:].copy()
                         X, Y = np.meshgrid(P_bar, H2O_Liq)
                         Y = Results['H2O_melt'][:,0,:].copy()
+
+                        Y_save = Y.copy()
+
+                        a[i][j].scatter(X, Y, A+1, marker = 'o', facecolor = 'red')
+                        a[i][j].scatter(Results['CurveMin'][m[i,j]]['P_min'], Results['CurveMin'][m[i,j]]['H2O_min'], Results['CurveMin'][m[i,j]]['Res_min'], marker = '^', facecolor = 'yellow')
+
+                        A[np.where(A > T_cut_C*2)] = np.nan
+
+                        H2O_new = np.linspace(np.nanmin(Y[np.where(~np.isnan(A))]), np.nanmax(Y[np.where(~np.isnan(A))]), 200)
+                        P_new = np.linspace(np.nanmin(X[np.where(~np.isnan(A))]), np.nanmax(X[np.where(~np.isnan(A))]), 200)
+
+                        X_new, Y_new = np.meshgrid(P_new, H2O_new)
+                        x = X[~np.isnan(A)].flatten()
+                        y = Y[~np.isnan(A)].flatten()
+
+                        MyPoly = MultiPoint(list(zip(x, y))).convex_hull
+
+                        points = list(zip(X_new.flatten(), Y_new.flatten()))
+                        Include = np.zeros(len(X_new.flatten()))
+                        for k in range(len(points)):
+                            p = Point(points[k])
+                            Include[k] = p.within(MyPoly)
+
+                        YayNay = Include.reshape(X_new.shape)
+                        x_new = X_new[np.where(YayNay == True)].flatten()
+                        y_new = Y_new[np.where(YayNay == True)].flatten()
+
+                        z_plot = X_new.copy() * 0
+                        z_plot = z_plot.flatten()
+                        z_plot[np.where(Include == True)] = Results['CurveMin'][m[i][j]]['z_new'](x_new, y_new, grid = False)
+                        z_plot = z_plot.reshape(X_new.shape)
+                        X_new[np.where(YayNay == False)] = np.nan
+                        Y_new[np.where(YayNay == False)] = np.nan
+
+                        a[i][j].plot_surface(X_new, Y_new, z_plot, cmap = 'viridis')
+                        a[i][j].set_zlim([0,50])
+
+    if H2O_Liq is not None and Fe3Fet_Liq is not None:
+        if len(Results['CurveMin']) == 4:
+            f = plt.figure(figsize = (10,8))
+            a1 = f.add_subplot(2,2,1, projection = '3d')
+            a2 = f.add_subplot(2,2,2, projection = '3d')
+            a3 = f.add_subplot(2,2,3, projection = '3d')
+            a4 = f.add_subplot(2,2,4, projection = '3d')
+
+            a = np.array([[a1,a2], [a3, a4]])
+
+            m = np.array([['Res_abc', 'Res_ab'], ['Res_ac', 'Res_bc']])
+            Name = np.array([['Three phase saturation', phases[0] + ' - ' + phases[1]],
+                [phases[0] + ' - ' + phases[2], phases[1] + ' - ' + phases[2]]])
+
+            X, Y = np.meshgrid(P_bar, H2O_Liq)
+            Y = Results['H2O_melt'][:,0,:].copy()
+
+            for i in range(2):
+                for j in range(2):
+                    a[i][j].set_xlabel('P (bars)')
+                    a[i][j].set_ylabel('H$_{2}$O (wt%)')
+                    a[i][j].set_zlabel('Residual T ($\degree$C)')
+                    a[i][j].set_title(Name[i,j])
+
+            for i in range(2):
+                for j in range(2):
+                    if ~np.isnan(Results['CurveMin'][m[i,j]]['P_min']):
+                        loc = np.where(Fe3Fet_Liq == Results['CurveMin'][m[i,j]]['Fe3Fet_Liq'])[0][0]
+                        A = Results[m[i][j]][:,loc,:].copy()
+                        A[np.where(A > T_cut_C)] = np.nan
+                        X, Y = np.meshgrid(P_bar, H2O_Liq)
+                        Y = Results['H2O_melt'][:,loc,:].copy()
 
                         a[i][j].scatter(X, Y, A+1, marker = 'o', facecolor = 'red')
 
