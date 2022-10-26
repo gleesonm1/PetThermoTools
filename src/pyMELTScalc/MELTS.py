@@ -182,7 +182,7 @@ def phaseSat_MELTS(Model = None, comp = None, phases = None, T_initial_C = None,
     except:
         return Results
 
-    if H2O_Liq is not None:
+    if type(H2O_Liq) == np.ndarray:
         if Results['H2O_melt'] < 0.99*bulk[14]:
             return Results
 

@@ -195,7 +195,14 @@ def findSaturationPressure(cores = None, comp = None, Model = None, phases = Non
                 Results = findMinimum(Results = Results, P_bar = P_bar, T_cut_C = T_cut_C, H2O_Liq = H2O_Liq, Fe3Fet_Liq = Fe3Fet_Liq)
 
         if find_range is not None:
-            Results = detRange(Results = Results, P_bar = P_bar, Fe3Fet_Liq = Fe3Fet_Liq, H2O_Liq = H2O_Liq, T_cut_C = T_cut_C)
+            Results['range'] = np.zeros(np.shape(Results[l]))
+            if len(phases) == 3:
+                Results['range'][np.where(Results['Res_abc'] <= T_cut_C)] = True
+                Results['range'][np.where(Results['Res_abc'] > T_cut_C)] = False
+            else:
+                Results['range'][np.where(Results['Res_ab'] <= T_cut_C)] = True
+                Results['range'][np.where(Results['Res_ab'] > T_cut_C)] = False
+            # = detRange(Results = Results, P_bar = P_bar, Fe3Fet_Liq = Fe3Fet_Liq, H2O_Liq = H2O_Liq, T_cut_C = T_cut_C)
 
     return Results
 
