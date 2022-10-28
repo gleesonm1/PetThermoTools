@@ -202,7 +202,6 @@ def findSaturationPressure(cores = None, comp = None, Model = None, phases = Non
             else:
                 Results['range'][np.where(Results['Res_ab'] <= T_cut_C)] = True
                 Results['range'][np.where(Results['Res_ab'] > T_cut_C)] = False
-            # = detRange(Results = Results, P_bar = P_bar, Fe3Fet_Liq = Fe3Fet_Liq, H2O_Liq = H2O_Liq, T_cut_C = T_cut_C)
 
     return Results
 
@@ -219,7 +218,11 @@ def findMinimum(Results = None, P_bar = None, T_cut_C = None, H2O_Liq = None, Fe
                     y = Results[m][0,0,:][np.where(~np.isnan(Results[m][0,0,:]))]
                     x = P_bar[np.where(~np.isnan(Results[m][0,0,:]))]
 
-                    y_new = interpolate.UnivariateSpline(x, y, k=5)
+                    try:
+                        y_new = interpolate.UnivariateSpline(x, y, k = 5)
+                    except:
+                        y_new = interpolate.UnivariateSpline(x, y, k = 3)
+
                     P_new = np.linspace(P_bar[np.where(P_bar == np.nanmin(P_bar[np.where(~np.isnan(Results[m][0,0,:]))]))], P_bar[np.where(P_bar == np.nanmax(P_bar[np.where(~np.isnan(Results[m][0,0,:]))]))], 200)
 
                     NewMin = np.nanmin(y_new(P_new))
