@@ -15,7 +15,7 @@ import time
 import sys
 from tqdm.notebook import tqdm, trange
 
-def multi_iso_crystallise(cores = None, Model = None, comp = None, Frac_solid = None, Frac_fluid = None, T_start_C = None, T_end_C = None, dt_C = None, P_path_bar = None, Fe3Fet_Liq = None, H2O_Liq = None, isochoric = None, find_liquidus = None, Print_suppress = None):
+def multi_iso_crystallise(cores = None, Model = None, comp = None, Frac_solid = None, Frac_fluid = None, T_start_C = None, T_end_C = None, dt_C = None, P_path_bar = None, Fe3Fet_Liq = None, fO2_buffer = None, fO2_offset = None, H2O_Liq = None, isochoric = None, find_liquidus = None, Print_suppress = None):
     '''
     Carry out multiple crystallisation calculations in parallel. Allows isobaric or isochoric calculations to be performed. All temperature inputs/outputs are reported in degrees celcius and pressure is reported in bars.
 
@@ -123,7 +123,8 @@ def multi_iso_crystallise(cores = None, Model = None, comp = None, Frac_solid = 
         p = Process(target = iso_crystallise, args = (q, 1),
                     kwargs = {'Model': Model, 'comp': comp, 'Frac_solid': Frac_solid, 'Frac_fluid': Frac_fluid,
                             'T_start_C': T_start_C, 'T_end_C': T_end_C, 'dt_C': dt_C,
-                            'P_path_bar': P_bar, 'isochoric': isochoric, 'find_liquidus': find_liquidus})
+                            'P_path_bar': P_bar, 'isochoric': isochoric, 'find_liquidus': find_liquidus,
+                            'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset})
 
         p.start()
         try:
@@ -171,17 +172,20 @@ def multi_iso_crystallise(cores = None, Model = None, comp = None, Frac_solid = 
                     p = Process(target = iso_crystallise, args = (q, i),
                                 kwargs = {'Model': Model, 'comp': comp, 'Frac_solid': Frac_solid, 'Frac_fluid': Frac_fluid,
                                         'T_start_C': T_start_C, 'T_end_C': T_end_C, 'dt_C': dt_C,
-                                        'P_path_bar': P_bar[i], 'isochoric': isochoric, 'find_liquidus': find_liquidus})
+                                        'P_path_bar': P_bar[i], 'isochoric': isochoric, 'find_liquidus': find_liquidus,
+                                        'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset})
                 elif type(comp) != dict and type(P_bar) != np.ndarray:
                     p = Process(target = iso_crystallise, args = (q, i),
                                 kwargs = {'Model': Model, 'comp': comp.loc[i].to_dict(), 'Frac_solid': Frac_solid, 'Frac_fluid': Frac_fluid,
                                         'T_start_C': T_start_C, 'T_end_C': T_end_C, 'dt_C': dt_C,
-                                        'P_path_bar': P_bar, 'isochoric': isochoric, 'find_liquidus': find_liquidus})
+                                        'P_path_bar': P_bar, 'isochoric': isochoric, 'find_liquidus': find_liquidus,
+                                        'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset})
                 else:
                     p = Process(target = iso_crystallise, args = (q, i),
                                 kwargs = {'Model': Model, 'comp': comp.loc[i].to_dict(), 'Frac_solid': Frac_solid, 'Frac_fluid': Frac_fluid,
                                         'T_start_C': T_start_C, 'T_end_C': T_end_C, 'dt_C': dt_C,
-                                        'P_path_bar': P_bar[i], 'isochoric': isochoric, 'find_liquidus': find_liquidus})
+                                        'P_path_bar': P_bar[i], 'isochoric': isochoric, 'find_liquidus': find_liquidus,
+                                        'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset})
 
                 ps.append(p)
                 p.start()
@@ -233,7 +237,7 @@ def multi_iso_crystallise(cores = None, Model = None, comp = None, Frac_solid = 
 
 
 
-def iso_crystallise(q, index, *, Model = None, comp = None, Frac_solid = None, Frac_fluid = None, T_start_C = None, T_end_C = None, dt_C = None, P_path_bar = None, isochoric = None, find_liquidus = None):
+def iso_crystallise(q, index, *, Model = None, comp = None, Frac_solid = None, Frac_fluid = None, T_start_C = None, T_end_C = None, dt_C = None, P_path_bar = None, isochoric = None, find_liquidus = None, fO2_buffer = None, fO2_offset = None):
     '''
     Crystallisation calculations to be performed in parallel. Calculations may be either isobaric or isochoric.
 
@@ -288,7 +292,7 @@ def iso_crystallise(q, index, *, Model = None, comp = None, Frac_solid = None, F
 
     Results = {}
     if "MELTS" in Model:
-        Results = crystallise_MELTS(Model = Model, comp = comp, Frac_solid = Frac_solid, Frac_fluid = Frac_fluid, T_start_C = T_start_C, T_end_C = T_end_C, dt_C = dt_C, P_path_bar = P_path_bar, isochoric = isochoric, find_liquidus = find_liquidus)
+        Results = crystallise_MELTS(Model = Model, comp = comp, Frac_solid = Frac_solid, Frac_fluid = Frac_fluid, T_start_C = T_start_C, T_end_C = T_end_C, dt_C = dt_C, P_path_bar = P_path_bar, isochoric = isochoric, find_liquidus = find_liquidus, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset)
         q.put([Results, index])
         return
 

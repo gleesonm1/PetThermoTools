@@ -19,7 +19,7 @@ from tqdm.notebook import tqdm, trange
 from scipy import interpolate
 from shapely.geometry import MultiPoint, Point, Polygon
 
-def findSaturationPressure(cores = None, comp = None, Model = None, phases = None, P_bar = None, Fe3Fet_Liq = None, H2O_Liq = None, T_initial_C = None, fO2 = None, dt_C = None, T_step_C = None, T_cut_C = None, find_range = None, find_min = None):
+def findSaturationPressure(cores = None, comp = None, Model = None, phases = None, P_bar = None, Fe3Fet_Liq = None, H2O_Liq = None, T_initial_C = None, fO2 = None, dt_C = None, T_step_C = None, T_cut_C = None, find_range = None, find_min = None, fO2_buffer = None, fO2_offset = None):
     '''
     Determine the conditions of multiple-phase saturation.
     '''
@@ -145,7 +145,7 @@ def findSaturationPressure(cores = None, comp = None, Model = None, phases = Non
                                     kwargs = {'Model': Model, 'comp': comp,
                                     'T_initial_C': T_initial_C, 'T_step_C': T_step_C,
                                     'dt_C': dt_C, 'P_bar': P_bar[kk], 'phases': phases,
-                                    'H2O_Liq': H2O_Liq})
+                                    'H2O_Liq': H2O_Liq, 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset})
 
                         ps.append(p)
                         p.start()
@@ -409,7 +409,7 @@ def polymin(P_bar = None, Res = None):
 
     return p, p_min
 
-def satTemperature(q, index, *, Model = None, comp = None, phases = None, T_initial_C = None, T_step_C = None, dt_C = None, P_bar = None, H2O_Liq = None):
+def satTemperature(q, index, *, Model = None, comp = None, phases = None, T_initial_C = None, T_step_C = None, dt_C = None, P_bar = None, H2O_Liq = None, fO2_buffer = None, fO2_offset = None):
     '''
     Crystallisation calculations to be performed in parallel. Calculations may be either isobaric or isochoric.
 
@@ -452,7 +452,7 @@ def satTemperature(q, index, *, Model = None, comp = None, phases = None, T_init
 
     Results = {}
     if "MELTS" in Model:
-        Results = phaseSat_MELTS(Model = Model, comp = comp, phases = phases, T_initial_C = T_initial_C, T_step_C = T_step_C, dt_C = dt_C, P_bar = P_bar, H2O_Liq = H2O_Liq)
+        Results = phaseSat_MELTS(Model = Model, comp = comp, phases = phases, T_initial_C = T_initial_C, T_step_C = T_step_C, dt_C = dt_C, P_bar = P_bar, H2O_Liq = H2O_Liq, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset)
         if len(phases) == 3:
             Res = ['Res_abc', 'Res_ab', 'Res_ac', 'Res_bc']
             for R in Res:

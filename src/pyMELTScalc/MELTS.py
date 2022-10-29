@@ -3,7 +3,7 @@ import pandas as pd
 import sys
 import time
 
-def findLiq_MELTS(P_bar = None, Model = None, T_C_init = None, comp = None, melts = None):
+def findLiq_MELTS(P_bar = None, Model = None, T_C_init = None, comp = None, melts = None, fO2_buffer = None, fO2_offset = None):
     '''
     Perform a single find liquidus calculation in MELTS. WARNING! Running this function directly from the command land/jupyter notebook will initiate the MELTS C library in the main python process. Once this has been initiated the MELTS C library cannot be re-loaded and failures during the calculation will likely cause a terminal error to occur.
 
@@ -70,6 +70,12 @@ def findLiq_MELTS(P_bar = None, Model = None, T_C_init = None, comp = None, melt
     melts.engine.pressure = P_bar
     melts.engine.temperature = T_C_init
 
+    if fO2_buffer is not None:
+        if fO2_offset is None:
+            melts.engine.setSystemProperties(["Log fO2 Path: " + fO2_buffer])
+        else:
+            melts.engine.setSystemProperties(["Log fO2 Path: " + fO2_buffer, "Log fO2 Offset: " + str(fO2_offset)])
+
     Liq = ['liquid1','water1', 'fluid1']
     try:
         melts.engine.calcEquilibriumState(1,0)
@@ -124,7 +130,7 @@ def findLiq_MELTS(P_bar = None, Model = None, T_C_init = None, comp = None, melt
 
     return T_Liq, H2O_Melt
 
-def phaseSat_MELTS(Model = None, comp = None, phases = None, T_initial_C = None, T_step_C = None, dt_C = None, P_bar = None, H2O_Liq = None):
+def phaseSat_MELTS(Model = None, comp = None, phases = None, T_initial_C = None, T_step_C = None, dt_C = None, P_bar = None, H2O_Liq = None, fO2_buffer = None, fO2_offset = None):
     '''
     Perform a single crystallisation calculation in MELTS. WARNING! Running this function directly from the command land/jupyter notebook will initiate the MELTS C library in the main python process. Once this has been initiated the MELTS C library cannot be re-loaded and failures during the calculation will likely cause a terminal error to occur.
 
@@ -178,7 +184,7 @@ def phaseSat_MELTS(Model = None, comp = None, phases = None, T_initial_C = None,
     bulk = list(100*np.array(bulk)/np.sum(bulk))
 
     try:
-        Results['T_Liq'], Results['H2O_melt'] = findLiq_MELTS(P_bar = P_bar, comp = bulk, T_C_init = T_initial_C, melts = melts)
+        Results['T_Liq'], Results['H2O_melt'] = findLiq_MELTS(P_bar = P_bar, comp = bulk, T_C_init = T_initial_C, melts = melts, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset)
     except:
         return Results
 
@@ -393,7 +399,7 @@ def phaseSat_MELTS(Model = None, comp = None, phases = None, T_initial_C = None,
 #         q.put([a_sat, b_sat, c_sat, T_Liq, H2O_Melt, P])
 #         return
 
-def crystallise_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid = None, T_path_C = None, T_start_C = None, T_end_C = None, dt_C = None, P_path_bar = None, P_start_bar = None, P_end_bar = None, dp_bar = None, isochoric = None, find_liquidus = None):
+def crystallise_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid = None, T_path_C = None, T_start_C = None, T_end_C = None, dt_C = None, P_path_bar = None, P_start_bar = None, P_end_bar = None, dp_bar = None, isochoric = None, find_liquidus = None, fO2_buffer = None, fO2_offset = None):
     '''
     Perform a single crystallisation calculation in MELTS. WARNING! Running this function directly from the command land/jupyter notebook will initiate the MELTS C library in the main python process. Once this has been initiated the MELTS C library cannot be re-loaded and failures during the calculation will likely cause a terminal error to occur.
 
@@ -475,18 +481,21 @@ def crystallise_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid =
         if P_path_bar is not None:
             try:
                 if type(P_path_bar) == np.ndarray:
-                    T_Liq, H2O_Melt = findLiq_MELTS(P_bar = P_path_bar[0], comp = bulk, melts = melts)
+                    T_Liq, H2O_Melt = findLiq_MELTS(P_bar = P_path_bar[0], comp = bulk, melts = melts, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset)
                 else:
-                    T_Liq, H2O_Melt = findLiq_MELTS(P_bar = P_path_bar, comp = bulk, melts = melts)
+                    T_Liq, H2O_Melt = findLiq_MELTS(P_bar = P_path_bar, comp = bulk, melts = melts, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset)
             except:
                 return Results
         elif P_start_bar is not None:
             try:
-                T_Liq, H2O_Melt = findLiq_MELTS(P_bar = P_start_bar, comp = bulk, melts = melts)
+                T_Liq, H2O_Melt = findLiq_MELTS(P_bar = P_start_bar, comp = bulk, melts = melts, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset)
             except:
                 return Results
 
         T_start_C = T_Liq
+    else:
+        if fO2_buffer is not None:
+            melts.engine.setSystemProperties(["Log fO2 Path: " + fO2_buffer, "Log fO2 Offset: " + str(fO2_offset)])
 
     if T_path_C is None:
         if T_end_C is None and dt is None:
