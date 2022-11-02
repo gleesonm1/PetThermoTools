@@ -45,10 +45,10 @@ def comp_fix(Model = None, comp = None, Fe3Fet_Liq = None, H2O_Liq = None):
         inputed composition for calculations
 
     Fe3Fet_Liq: float or np.ndarray
-        Fe 3+/total ratio. If type(comp) == dict, Fe3Fet_Liq must be a float and will set the Fe redox state in the initial composition. If comp is a pd.DataFrame, a single Fe3Fet_Liq value may be passed (float) and will be used as the Fe redox state for all starting compostions, or an array of Fe3Fet_Liq values, equal to the number of compositions specified in comp can specify a different Fe redox state for each sample. If None, the Fe redox state must be specified in the comp variable.
+        Fe 3+/total ratio. If type(comp) == dict, and type(Fe3Fet_Liq) == np.ndarray a new DataFrame will be constructed with bulk compositions varying only in their Fe3Fet_Liq value. If comp is a pd.DataFrame, a single Fe3Fet_Liq value may be passed (float) and will be used as the Fe redox state for all starting compostions, or an array of Fe3Fet_Liq values, equal to the number of compositions specified in comp can specify a different Fe redox state for each sample. If None, the Fe redox state must be specified in the comp variable or an oxygen fugacity buffer must be chosen.
 
     H2O_Liq: float or np.ndarray
-        H2O content of the initial melt phase. If type(comp) == dict, H2O_Liq must be a float. If comp is a pd.DataFrame, a single H2O_Liq value may be passes (float) and will be used as the initial melt H2O content for all starting compositions. Alternatively, if an array of H2O_Liq values is passed, equal to the number of compositions specified in comp, a different initial melt H2O value will be passed for each sample. If None, H2O_Liq must be specified in the comp variable.
+        H2O content of the initial melt phase. If type(comp) == dict, and type(H2O_Liq) = np.ndarray a new DataFrame will be constructed with bulk compositions varying only in their H2O_Liq value. If comp is a pd.DataFrame, a single H2O_Liq value may be passes (float) and will be used as the initial melt H2O content for all starting compositions. Alternatively, if an array of H2O_Liq values is passed, equal to the number of compositions specified in comp, a different initial melt H2O value will be passed for each sample. If None, H2O_Liq must be specified in the comp variable.
 
     Returns:
     ---------
@@ -61,14 +61,24 @@ def comp_fix(Model = None, comp = None, Fe3Fet_Liq = None, H2O_Liq = None):
     # set the liquid Fe redox state if specified separate to the bulk composition
     if Fe3Fet_Liq is not None:
         if type(comp) == dict:
-            comp['Fe3Fet_Liq'] = Fe3Fet_Liq
+            if type(Fe3Fet_Liq) != np.ndarray:
+                comp['Fe3Fet_Liq'] = Fe3Fet_Liq
+            else:
+                Comp = pd.DataFrame.from_dict([comp]*len(Fe3Fet_Liq))
+                Comp['Fe3Fet_Liq'] = Fe3Fet_Liq
+                comp = Comp.copy()
         else:
             comp['Fe3Fet_Liq'] = np.zeros(len(comp.iloc[:,0])) + Fe3Fet_Liq
 
 
     if H2O_Liq is not None:
         if type(comp) == dict:
-            comp['H2O_Liq'] = H2O_Liq
+            if type(H2O_Liq) != np.ndarray:
+                comp['H2O_Liq'] = H2O_Liq
+            else:
+                Comp = pd.DataFrame.from_dict([comp]*len(H2O_Liq))
+                Comp['H2O_Liq'] = H2O_Liq
+                comp = Comp.copy()
         else:
             comp['H2O_Liq'] = np.zeros(len(comp.iloc[:,0])) + H2O_Liq
 

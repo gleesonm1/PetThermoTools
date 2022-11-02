@@ -1,6 +1,6 @@
 ## pyMELTScalc
 
-Petrological calculations using the MELTS or Holland (MAGEMin) thermodynamic databases.
+Petrological calculations using the MELTS or Holland (MAGEMin) thermodynamic databases (**MAGEMin calculations have been temporarily disabled while issues associated with the speed of MELTS calculations - when the MAGEMin option is available - are solved)**.
 
 # Using MELTS
 As a default, this package uses the MELTS algorithms and the alphaMELTS for Python package, developed by Dr Paula Antoshechkina, to perform the thermodynamic calculations. Therefore, it is neccessary for any user to first download the alphaMELTS for Python package. Luckily, version 1.2.0beta of MELTS for Python is included in this repository and we have extensively checked that this version of MELTS for Python works with out code. Future versions of MELTS for Python might be available via:
@@ -24,8 +24,6 @@ c. Pkg.add(url = "https://github.com/gleesonm1/MAGEMinCalc")
 You will then need to open Python and install the PyJulia packages by running the following lines:
 import julia
 julia.install()
-
-pyMELTScalc can still be used to perform MELTS calculations if julia/MAGEMin are not installed. If this is the case, a warning message will appear when pyMELTScalc is imported to inform the user that MAGEMin calculations cannot be performed.
 
 # Current calculations
 At the moment, only a small selection of calculations are possible in pyMELTScalc, but this is expected to expand rapidly in the future.

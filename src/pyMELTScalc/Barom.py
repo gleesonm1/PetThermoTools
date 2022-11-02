@@ -6,10 +6,10 @@ from pyMELTScalc.GenFuncs import *
 from pyMELTScalc.Plotting import *
 from pyMELTScalc.Liq import *
 from pyMELTScalc.MELTS import *
-try:
-    from pyMELTScalc.Holland import *
-except:
-    pass
+# try:
+#     from pyMELTScalc.Holland import *
+# except:
+#     pass
 import multiprocessing
 from multiprocessing import Queue
 from multiprocessing import Process
@@ -19,16 +19,69 @@ from tqdm.notebook import tqdm, trange
 from scipy import interpolate
 from shapely.geometry import MultiPoint, Point, Polygon
 
-def findSaturationPressure(cores = None, comp = None, Model = None, phases = None, P_bar = None, Fe3Fet_Liq = None, H2O_Liq = None, T_initial_C = None, fO2 = None, dt_C = None, T_step_C = None, T_cut_C = None, find_range = None, find_min = None, fO2_buffer = None, fO2_offset = None):
+def findSaturationPressure(cores = None, Model = None, comp = None, phases = None, P_bar = None, Fe3Fet_Liq = None, H2O_Liq = None, T_initial_C = None, dt_C = None, T_step_C = None, T_cut_C = None, find_range = None, find_min = None, fO2_buffer = None, fO2_offset = None):
     '''
-    Determine the conditions of multiple-phase saturation.
+    Carry out multiple calculations in parallel. Allows isobaric, polybaric and isochoric crystallisation to be performed as well as isothermal, isenthalpic or isentropic decompression. All temperature inputs/outputs are reported in degrees celcius and pressure is reported in bars.
+
+    Parameters:
+    ----------
+    cores: int
+        number of processes to run in parallel. Default will be determined using Multiprocessing.cpu_count().
+
+    Model: string
+        "MELTS" or "Holland". Dictates whether MELTS or MAGEMin calculations are performed. Default "MELTS".
+        Version of melts can be specified "MELTSv1.0.2", "MELTSv1.1.0", "MELTSv1.2.0", or "pMELTS". Default "v.1.0.2".
+
+    comp: Dict or pd.DataFrame
+        Initial compositon for calculations. If type == Dict, the same initial composition will be used in all calculations.
+
+    phases: list
+        length 2 or 3, contains the phases of the co-saturated magma. Default = ['quartz1', 'plagioclase1', 'k-feldspar1'].
+
+    P_bar: np.ndarray
+        Calculation pressure. Length determines the number of calculations to be performed.
+
+    Fe3Fet_Liq: float or np.ndarray
+        Initial Fe 3+/total ratio.
+
+    H2O_Liq: float
+        H2O content of the initial melt phase.
+
+    T_initial_C: float
+        Starting temperature for the liquidus calculations. Default = 1200
+
+    dt_C: float
+        Max temperature drop of the calculations. Default = 25
+
+    T_step_C: float
+        Temperature change at each model step. Default = 1
+
+    T_cut_C: float
+        Temperature offset used to indicate whether the model has succeeded or failed in finding a match. Default = 10.
+
+    find_range: True/False
+        If True a new DataFrame will be included in Results, indicating all cases where the minimum offset is less than T_cut_C.
+
+    find_min: True/False
+        If True, a spline fit will be applied to the data to find the minimum point.
+
+    fO2_buffer: string
+        If the oxygen fugacity of the system is to be buffered during crystallisation/decompression, then an offset to a known buffer must be specified. Here the user can define the known buffer as either "FMQ" or "NNO".
+
+    fO2_offset: float
+        Offset from the buffer spcified in fO2_buffer (log units).
+
+    Returns:
+    ----------
+    Results: Dict
+        Dictionary containing information regarding the saturation temperature of each phase and the residuals between the different phases
     '''
     # set default values if required
     if Model is None:
         Model == "MELTSv1.0.2"
 
     if cores is None:
-        cores = 4
+        cores = multiprocessing.cpu_count()
 
     # if comp is entered as a pandas series, it must first be converted to a dict
     if type(comp) == pd.core.series.Series:
@@ -88,25 +141,6 @@ def findSaturationPressure(cores = None, comp = None, Model = None, phases = Non
         List = ['a_sat', 'b_sat', 'T_Liq', 'H2O_melt', 'Res_ab']
         for l in List:
             Results[l] = base_array.copy()
-
-    # find saturation surface if P and H2O are investigated
-    # if P_bar is not None and H2O_Liq is not None:
-    #     comp_sat = comp.copy()
-    #     Comp = pd.DataFrame(data = np.zeros((len(P_bar),len(comp_sat))), columns = list(comp_sat.keys()))
-    #     for i in range(len(P_bar)):
-    #         Comp.loc[i] = comp
-    #
-    #     Comp['H2O'] = np.zeros(len(P_bar)) + 20 # high enought to ensure all calculations are saturated
-    #
-    #     T_sat, H2O = findLiq_multi(cores = 20, Model = Model, comp = Comp, T_initial_C = np.zeros(len(P_bar)) + T_initial_C, P_bar = P_bar)
-    #
-    #     H2O_sat = H2O[np.where(H2O != 0)].copy()
-    #     P_sat = P_bar[np.where(H2O != 0)].copy()
-    #
-    #     saturation_surface = interpolate.UnivariateSpline(P_sat, H2O_sat, k=3)
-    #     Results['sat_surface'] = saturation_surface
-
-
 
     # run calculations if only one initial composition provided
     if type(comp) == dict:
@@ -452,6 +486,7 @@ def satTemperature(q, index, *, Model = None, comp = None, phases = None, T_init
 
     Results = {}
     if "MELTS" in Model:
+
         Results = phaseSat_MELTS(Model = Model, comp = comp, phases = phases, T_initial_C = T_initial_C, T_step_C = T_step_C, dt_C = dt_C, P_bar = P_bar, H2O_Liq = H2O_Liq, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset)
         if len(phases) == 3:
             Res = ['Res_abc', 'Res_ab', 'Res_ac', 'Res_bc']

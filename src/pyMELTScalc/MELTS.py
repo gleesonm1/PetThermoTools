@@ -238,178 +238,18 @@ def phaseSat_MELTS(Model = None, comp = None, phases = None, T_initial_C = None,
 
     return Results
 
-# def satTemperature_MELTS(q, Model, phases, P, T_initial, bulk, dt, T_step):
-#     '''
-#     calculate the saturation temperature for the different phases of interest. Calculations can be performed in parallel.
-#     '''
-#
-#     from meltsdynamic import MELTSdynamic
-#
-#     melts = MELTSdynamic(1)
-#
-#     # melts.engine.setBulkComposition(bulk)
-#     # melts.engine.pressure = P
-#     # melts.engine.temperature = T_initial
-#
-#     a_sat = 0
-#     b_sat = 0
-#     if len(phases) == 3:
-#         c_sat = 0
-#
-#     T_Liq = 0
-#     H2O_Melt = 0
-#
-#     try:
-#         T_Liq, H2O_Melt = findLiq_MELTS(P, Model, T_initial, bulk, melts = melts)
-#     except:
-#         q.put([a_sat, b_sat, T_Liq, H2O_Melt, P])
-#         return
-#
-#     # Liq = ['liquid1','water1', 'fluid1']
-#     # try:
-#     #     melts.engine.calcEquilibriumState(1,0)
-#     # except:
-#     #     if len(phases) == 2:
-#     #         q.put([a_sat, b_sat, T_Liq, H2O_Melt, P])
-#     #         return
-#     #     else:
-#     #         q.put([a_sat, b_sat, c_sat, T_Liq, H2O_Melt, P])
-#     #         return
-#     #
-#     # PhaseList = melts.engine.solidNames
-#     # if PhaseList is None:
-#     #     PhaseList = ['liquid1']
-#     # else:
-#     #     PhaseList = ['liquid1'] + PhaseList
-#     #
-#     # i = set.intersection(set(Liq),set(PhaseList))
-#     # Step = np.array([3,1,0.1])
-#     #
-#     # for j in range(len(Step)):
-#     #     if len(i) == len(PhaseList):
-#     #         while len(i) == len(PhaseList):
-#     #             melts = melts.addNodeAfter()
-#     #             melts.engine.temperature = melts.engine.temperature - Step[j]
-#     #             try:
-#     #                 melts.engine.calcEquilibriumState(1,0)
-#     #             except:
-#     #                 if len(phases) == 2:
-#     #                     q.put([a_sat, b_sat, T_Liq, H2O_Melt, P])
-#     #                     return
-#     #                 else:
-#     #                     q.put([a_sat, b_sat, c_sat, T_Liq, H2O_Melt, P])
-#     #                     return
-#     #
-#     #             PhaseList = melts.engine.solidNames
-#     #             if PhaseList is None:
-#     #                 PhaseList = ['liquid1']
-#     #             else:
-#     #                 PhaseList = ['liquid1'] + PhaseList
-#     #             i = set.intersection(set(Liq),set(PhaseList))
-#     #
-#     #     if len(i) < len(PhaseList):
-#     #         while len(i) < len(PhaseList):
-#     #             melts = melts.addNodeAfter()
-#     #             melts.engine.temperature = melts.engine.temperature + Step[j]
-#     #             try:
-#     #                 melts.engine.calcEquilibriumState(1,0)
-#     #             except:
-#     #                 if len(phases) == 2:
-#     #                     q.put([a_sat, b_sat, T_Liq, H2O_Melt, P])
-#     #                     return
-#     #                 else:
-#     #                     q.put([a_sat, b_sat, c_sat, T_Liq, H2O_Melt, P])
-#     #                     return
-#     #
-#     #             PhaseList = melts.engine.solidNames
-#     #             if PhaseList is None:
-#     #                 PhaseList = ['liquid1']
-#     #             else:
-#     #                 PhaseList = ['liquid1'] + PhaseList
-#     #             i = set.intersection(set(Liq),set(PhaseList))
-#     #
-#     #
-#     # T_Liq = melts.engine.temperature
-#     # H2O_Melt = melts.engine.getProperty('dispComposition', 'liquid1', 'H2O')
-#
-#     T_fin = T_Liq - dt
-#
-#     melts = melts.addNodeAfter()
-#     melts.engine.temperature = T_Liq
-#     melts.engine.pressure = P
-#
-#     try:
-#         melts.engine.calcEquilibriumState(1,0)
-#     except:
-#         if len(phases) == 2:
-#             q.put([a_sat, b_sat, T_Liq, H2O_Melt, P])
-#             return
-#         else:
-#             q.put([a_sat, b_sat, c_sat, T_Liq, H2O_Melt, P])
-#             return
-#
-#     j = 0
-#     while melts.engine.temperature>T_fin:
-#         if j == 0:
-#             j = 1
-#             melts = melts.addNodeAfter()
-#             melts.engine.temperature = T_Liq-0.1
-#
-#         else:
-#             melts = melts.addNodeAfter()
-#             melts.engine.temperature = melts.engine.temperature - T_step
-#
-#         try:
-#             melts.engine.calcEquilibriumState(1,0)
-#         except:
-#             if len(phases) == 2:
-#                 q.put([a_sat, b_sat, T_Liq, H2O_Melt, P])
-#                 return
-#             else:
-#                 q.put([a_sat, b_sat, c_sat, T_Liq, H2O_Melt, P])
-#                 return
-#
-#         PhaseList = melts.engine.solidNames
-#
-#         if phases[0] in PhaseList and a_sat == 0:
-#             a_sat = melts.engine.temperature
-#
-#         if phases[1] in PhaseList and b_sat == 0:
-#             b_sat = melts.engine.temperature
-#
-#         if len(phases) == 3:
-#             if phases[2] == 'orthopyroxene1':
-#                 if 'orthopyroxene1' in PhaseList or 'clinopyroxene2' in PhaseList and c_sat == 0:
-#                     c_sat = melts.engine.temperature
-#             else:
-#                 if phases[2] in PhaseList and c_sat == 0:
-#                     c_sat = melts.engine.temperature
-#
-#             if a_sat and b_sat and c_sat > 0:
-#                 break
-#
-#         if len(phases) == 2:
-#             if a_sat and b_sat > 0:
-#                 break
-#
-#     if len(phases) == 2:
-#         q.put([a_sat, b_sat, T_Liq, H2O_Melt, P])
-#         return
-#     else:
-#         q.put([a_sat, b_sat, c_sat, T_Liq, H2O_Melt, P])
-#         return
-
-def crystallise_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid = None, T_path_C = None, T_start_C = None, T_end_C = None, dt_C = None, P_path_bar = None, P_start_bar = None, P_end_bar = None, dp_bar = None, isochoric = None, find_liquidus = None, fO2_buffer = None, fO2_offset = None):
+def path_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid = None, T_C = None, T_path_C = None, T_start_C = None, T_end_C = None, dt_C = None, P_bar = None, P_path_bar = None, P_start_bar = None, P_end_bar = None, dp_bar = None, isenthalpic = None, isentropic = None, isochoric = None, find_liquidus = None, fO2_buffer = None, fO2_offset = None):
     '''
-    Perform a single crystallisation calculation in MELTS. WARNING! Running this function directly from the command land/jupyter notebook will initiate the MELTS C library in the main python process. Once this has been initiated the MELTS C library cannot be re-loaded and failures during the calculation will likely cause a terminal error to occur.
+    Perform a single  calculation in MELTS. WARNING! Running this function directly from the command land/jupyter notebook will initiate the MELTS C library in the main python process. Once this has been initiated the MELTS C library cannot be re-loaded and failures during the calculation will likely cause a terminal error to occur.
 
     Parameters:
     ----------
     Model: string
-        Dictates the MELTS model to be used: "MELTSv1.0.2", "MELTSv1.1.0", "MELTSv1.2.0", or "pMELTS". Default "v.1.0.2".
+        "MELTS" or "Holland". Dictates whether MELTS or MAGEMin calculations are performed. Default "MELTS".
+        Version of melts can be specified "MELTSv1.0.2", "MELTSv1.1.0", "MELTSv1.2.0", or "pMELTS". Default "v.1.0.2".
 
-    comp: list or dict
-        Input oxide values required for the calculations.
+    comp: Dict
+        Initial compositon for calculations.
 
     Frac_solid: True/False
         If True, solid phases will be removed from the system at the end of each crystallisation step. Default False.
@@ -417,35 +257,59 @@ def crystallise_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid =
     Frac_fluid: True/False
         If True, fluid phases will be removed from the system at the end of each crystallisation step. Default False.
 
-    T_path_C: float or np.ndarray
-        Initial temperature (if float) or temperature path for the calculation (if np.ndarray)
+    T_C: float
+        Calculation temperature - typically used when calculations are performed at a fixed T (e.g.,isothermal degassing).
+
+    T_path_C: np.ndarray
+        If a specified temperature path is to be used, T_path_C will be used to determine the T at each step of the model. If 2D, this indicates that multiple calculations with different T_path_C arrays are to be performed.
 
     T_start_C: float
-        Initial temperature used for crystallisation calculations.
+        Initial temperature used for path calculations.
 
     T_end_C: float
         Final temperature in crystallisation calculations.
-
+melt
     dt_C: float
         Temperature increment during crystallisation calculations.
 
-    P_path_bar: float or np.ndarray
-        Initial pressure (if float) or pressure path for the calculation (if np.ndarray)
+    P_bar: float
+        Calculation pressure - typically used when calculations are performed at a fixed P (e.g.,isobaric crystallisation).
+
+    P_path_bar: np.ndarray
+        If a specified pressure path is to be used, P_path_bar will be used to determine the P at each step of the model.
 
     P_start_bar: float
-        Initial pressure used for crystallisation calculations.
+        Initial pressure used for path calculations.
 
     P_end_bar: float
-        Final pressure in polybaric crystallisation calculations.
+        Final pressure in crystallisation calculations.
 
     dp_bar: float
-        Pressure increment during polybaric crystallisation calculations.
+        Pressure increment during crystallisation calculations..
+
+    Fe3Fet_Liq: float
+        Fe 3+/total ratio..
+
+    H2O_Liq: float
+        H2O content of the initial  phase.
+
+    isenthalpic: True/False
+        If True, calculations will be performed at a constant enthalpy with T treated as a dependent variable.
+
+    isentropic: True/False
+        If True, calculations will be performed at a constant entropy with T treated as a dependent variable.
 
     isochoric: True/False
         If True, the volume of the system will be held constant instead of the pressure. Default is False.
 
     find_liquidus: True/False
         If True, the calculations will start with a search for the melt liquidus temperature. Default is False.
+
+    fO2_buffer: string
+        If the oxygen fugacity of the system is to be buffered during crystallisation/decompression, then an offset to a known buffer must be specified. Here the user can define the known buffer as either "FMQ" or "NNO".
+
+    fO2_offset: float
+        Offset from the buffer spcified in fO2_buffer (log units).
 
     Returns:
     ----------
@@ -457,6 +321,11 @@ def crystallise_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid =
 
     if comp is None:
         raise Exception("No composition specified")
+
+    if P_bar is not None and P_path_bar is None:
+        P_path_bar = P_bar
+    if T_C is not None and T_start_C is None:
+        T_start_C = T_C
 
     if P_path_bar is None and P_start_bar is None:
         raise Exception("Initial P system must be defined")
@@ -481,21 +350,25 @@ def crystallise_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid =
         if P_path_bar is not None:
             try:
                 if type(P_path_bar) == np.ndarray:
-                    T_Liq, H2O_Melt = findLiq_MELTS(P_bar = P_path_bar[0], comp = bulk, melts = melts, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset)
+                    T_Liq, H2O_Melt = findLiq_MELTS(P_bar = P_path_bar[0], comp = bulk, melts = melts, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, T_C_init = 1400)
                 else:
-                    T_Liq, H2O_Melt = findLiq_MELTS(P_bar = P_path_bar, comp = bulk, melts = melts, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset)
+                    T_Liq, H2O_Melt = findLiq_MELTS(P_bar = P_path_bar, comp = bulk, melts = melts, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, T_C_init = 1400)
             except:
                 return Results
         elif P_start_bar is not None:
             try:
-                T_Liq, H2O_Melt = findLiq_MELTS(P_bar = P_start_bar, comp = bulk, melts = melts, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset)
+                T_Liq, H2O_Melt = findLiq_MELTS(P_bar = P_start_bar, comp = bulk, melts = melts, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, T_C_init = 1400)
             except:
                 return Results
 
         T_start_C = T_Liq
+
     else:
         if fO2_buffer is not None:
-            melts.engine.setSystemProperties(["Log fO2 Path: " + fO2_buffer, "Log fO2 Offset: " + str(fO2_offset)])
+            if fO2_offset is None:
+                melts.engine.setSystemProperties(["Log fO2 Path: " + fO2_buffer])
+            else:
+                melts.engine.setSystemProperties(["Log fO2 Path: " + fO2_buffer, "Log fO2 Offset: " + str(fO2_offset)])
 
     if T_path_C is None:
         if T_end_C is None and dt is None:
@@ -513,14 +386,14 @@ def crystallise_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid =
     elif P_path_bar is not None:
         P = P_path_bar
 
+    if type(T) == np.ndarray and P_end_bar is None and dp_bar is not None:
+        P = np.linspace(P_start_bar, P_start_bar - dp_bar*(len(T)-1), len(T))
+    elif type(P) == np.ndarray and T_end_C is None and dt_C is not None:
+        T = np.linspace(T_start_C, T_start_C - dt_C*(len(P)-1), len(P))
+
     if type(T) == np.ndarray and type(P) == np.ndarray:
         if len(T) != len(P):
             raise Exception("Length of P and T vectors are not the same. Check input parameters")
-
-    if type(T) == np.ndarray and P_end_bar is None and dp_bar is not None:
-        P = np.linspace(P_start_bar, P_start_bar - dp_bar*len(T), len(T))
-    elif type(P) == np.ndarray and T_end_C is None and dt_C is not None:
-        T = np.linspace(T_start_C, T_start_C - dt_C*len(P), len(P))
 
     if find_liquidus is None:
         if type(T) != np.ndarray:
@@ -536,14 +409,15 @@ def crystallise_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid =
     if find_liquidus is not None:
         melts.engine.temperature = T_Liq
 
-        if type(P) == np.ndarray and type(T) == np.ndarray:
-            T_Liq_loc = np.abs(T - T_Liq).argmin()
-            if T[T_Liq_loc]>T_Liq:
-                T = T[T_Liq_loc:]
-                P = P[T_Liq_loc:]
-            else:
-                T = T[T_Liq_loc-1:]
-                P = P[T_Liq_loc-1:]
+        if P_path_bar is not None or T_path_C is not None:
+            if type(P) == np.ndarray and type(T) == np.ndarray:
+                T_Liq_loc = np.abs(T - T_Liq).argmin()
+                if T[T_Liq_loc]>T_Liq:
+                    T = T[T_Liq_loc:]
+                    P = P[T_Liq_loc:]
+                else:
+                    T = T[T_Liq_loc-1:]
+                    P = P[T_Liq_loc-1:]
 
     melts = melts.addNodeAfter()
     melts.engine.setBulkComposition(bulk)
@@ -551,7 +425,7 @@ def crystallise_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid =
     if type(T) == np.ndarray:
         length = len(T)
     else:
-        length =len(P)
+        length = len(P)
 
     Results['Conditions'] = pd.DataFrame(data = np.zeros((length, 5)), columns = ['temperature', 'pressure', 'h', 's', 'v'])
     Results['liquid1'] = pd.DataFrame(data = np.zeros((length, 14)), columns = ['SiO2', 'TiO2', 'Al2O3', 'Fe2O3', 'Cr2O3', 'FeO', 'MnO', 'MgO', 'CaO', 'Na2O', 'K2O', 'P2O5', 'H2O', 'CO2'])
@@ -563,39 +437,49 @@ def crystallise_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid =
         if type(P) == np.ndarray:
             melts.engine.pressure = P[i]
 
-        try:
-            melts.engine.calcEquilibriumState(1,0)
-        except:
-            return Results
+        print(melts.engine.pressure)
+
+        if isenthalpic is not None:
+            if i == 0:
+                melts.engine.setSystemProperties("Mode", "Isenthalpic")
+                melts.engine.calcEquilibriumState(1,0)
+                melts.engine.setSystemProperties("Mode", "Isenthalpic")
+
+        if isentropic is not None:
+            if i == 0:
+                melts.engine.setSystemProperties("Mode", "Isentropic")
+                melts.engine.calcEquilibriumState(1,0)
+                melts.engine.setSystemProperties("Mode", "Isentropic")
 
         if isochoric is not None:
             if i == 0:
-                v = melts.engine.getProperty('v', 'bulk')
-            else:
-                v_new = melts.engine.getProperty('v', 'bulk')
-                step = np.array([5, 2, 0.1])
-                for j in range(step):
-                    if v_new < v:
-                        while v_new < v:
-                            melts = melts.addNodeAfter()
-                            melts.engine.pressure = melts.engine.pressure - step[j]
-                            try:
-                                melts.engine.calcEquilibriumState(1,0)
-                            except:
-                                return Results
+                melts.engine.setSystemProperties("Mode", "Isochoric")
+                melts.engine.calcEquilibriumState(1,0)
+                melts.engine.setSystemProperties("Mode", "Isochoric")
 
-                            v_new = melts.engine.getProperty('v', 'bulk')
+        if isochoric is None and isenthalpic is None and isentropic is None:
+            try:
+                melts.engine.calcEquilibriumState(1,0)
+            except:
+                return Results
 
-                    if v_new > v:
-                        while v_new > v:
-                            melts = melts.addNodeAfter()
-                            melts.engine.pressure = melts.engine.pressure + step[j]
-                            try:
-                                melts.engine.calcEquilibriumState(1,0)
-                            except:
-                                return Results
+        if isenthalpic is not None:
+            try:
+                melts.engine.calcEquilibriumState(2,0)
+            except:
+                return Results
 
-                            v_new = melts.engine.getProperty('v', 'bulk')
+        if isentropic is not None:
+            try:
+                melts.engine.calcEquilibriumState(3,0)
+            except:
+                return Results
+
+        if isochoric is not None:
+            try:
+                melts.engine.calcEquilibriumState(4,0)
+            except:
+                return Results
 
         for R in Results['Conditions']:
             if R == 'temperature':
@@ -631,6 +515,8 @@ def crystallise_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid =
         if Frac_solid is not None and Frac_fluid is not None:
             try:
                 melts.engine.setBulkComposition(bulk)
+                if isenthalpic is not None or isentropic is not None:
+                    melts.engine.calcEquilibriumState(1,0)
             except:
                 return Results
 

@@ -72,24 +72,52 @@ def harker(Results = None, x_axis = None, y_axis = None, phase = None, line_styl
         y_axis = y_axis.reshape(len(y_axis)//3, 3)
 
     f, a = plt.subplots(np.shape(y_axis)[0], np.shape(y_axis)[1], figsize = (3.5 * np.shape(y_axis)[1], 3.5 * np.shape(y_axis)[0]))
-    if type(phase) == str:
-        for i in range(np.shape(y_axis)[0]):
-            for j in range(np.shape(y_axis)[1]):
-                if y_axis[i,j] != "None":
-                    if data is not None:
-                        a[i][j].plot(data.loc[:,data.columns.str.contains(x_axis)], data.loc[:,data.columns.str.contains(y_axis[i,j])], d_marker, markerfacecolor = d_color, markeredgecolor = 'k', markersize = 4)
+    if 'All' in list(Results.keys()):
+        if type(phase) == str:
+            for i in range(np.shape(y_axis)[0]):
+                for j in range(np.shape(y_axis)[1]):
+                    if y_axis[i,j] != "None":
+                        if data is not None:
+                            a[i][j].plot(data.loc[:,data.columns.str.contains(x_axis)], data.loc[:,data.columns.str.contains(y_axis[i,j])], d_marker, markerfacecolor = d_color, markeredgecolor = 'k', markersize = 4)
 
-                    a[i][j].plot(Results['All'][x_axis + Names[phase]], Results['All'][y_axis[i,j] + Names[phase]], line_style, linewidth = 2, color = line_color)
-                    a[i][j].set_ylabel(y_axis[i][j] + " wt%")
-                    if i != np.shape(y_axis)[0] - 1:
-                        if i == np.shape(y_axis)[0] - 2:
-                            if y_axis[i+1,j] == "None":
-                                a[i][j].set_xlabel(x_axis + " wt%")
+                        a[i][j].plot(Results['All'][x_axis + Names[phase]], Results['All'][y_axis[i,j] + Names[phase]], line_style, linewidth = 2, color = line_color)
+                        a[i][j].set_ylabel(y_axis[i][j] + " wt%")
+                        if i != np.shape(y_axis)[0] - 1:
+                            if i == np.shape(y_axis)[0] - 2:
+                                if y_axis[i+1,j] == "None":
+                                    a[i][j].set_xlabel(x_axis + " wt%")
+                        else:
+                            a[i][j].set_xlabel(x_axis + " wt%")
+
                     else:
-                        a[i][j].set_xlabel(x_axis + " wt%")
+                        a[i][j].axis('off')
 
-                else:
-                    a[i][j].axis('off')
+    else:
+        if type(phase) == str:
+            for i in range(np.shape(y_axis)[0]):
+                for j in range(np.shape(y_axis)[1]):
+                    if y_axis[i,j] != "None":
+                        if data is not None:
+                            a[i][j].plot(data.loc[:,data.columns.str.contains(x_axis)], data.loc[:,data.columns.str.contains(y_axis[i,j])], d_marker, markerfacecolor = d_color, markeredgecolor = 'k', markersize = 4)
+
+                        a[i][j].set_ylabel(y_axis[i][j] + " wt%")
+                        if i != np.shape(y_axis)[0] - 1:
+                            if i == np.shape(y_axis)[0] - 2:
+                                if y_axis[i+1,j] == "None":
+                                    a[i][j].set_xlabel(x_axis + " wt%")
+                        else:
+                            a[i][j].set_xlabel(x_axis + " wt%")
+
+                    else:
+                        a[i][j].axis('off')
+
+        for r in Results:
+            Res = Results[r].copy()
+            if type(phase) == str:
+                for i in range(np.shape(y_axis)[0]):
+                    for j in range(np.shape(y_axis)[1]):
+                        if y_axis[i,j] != "None":
+                            a[i][j].plot(Res['All'][x_axis + Names[phase]], Res['All'][y_axis[i,j] + Names[phase]], line_style, linewidth = 2)
 
     f.tight_layout()
 
