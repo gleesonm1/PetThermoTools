@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 import julia
 import time
 from julia import MAGEMinCalc

@@ -60,11 +60,8 @@ def findLiq_multi(cores = None, Model = None, comp = None, T_initial_C = None, P
     if Model is None:
         Model = "MELTSv1.0.2"
 
-    # if Model == "Holland":
-    #     try:
-    #         from pyMELTScalc.Holland import findLiq_holland
-    #     except:
-    #         pass
+    if Model == "Holland":
+        import pyMAGEMINcalc as MM
 
     # if comp is entered as a pandas series, it must first be converted to a dict
     if type(comp) == pd.core.series.Series:
@@ -93,31 +90,15 @@ def findLiq_multi(cores = None, Model = None, comp = None, T_initial_C = None, P
     if T_initial_C is None:
         if type(comp) != dict or type(P_bar) == np.ndarray:
             if type(comp) != dict:
-                T_initial_C = np.zeros(len(comp['SiO2_Liq'].values)) + 1300
+                T_initial_C = np.zeros(len(comp['SiO2_Liq'].values)) + 1300.0
             else:
-                T_initial_C = np.zeros(len(P_bar)) + 1300
+                T_initial_C = np.zeros(len(P_bar)) + 1300.0
         else:
-            T_initial_C = np.array([1300])
+            T_initial_C = np.array([1300.0])
 
 
     if cores is None:
         cores = multiprocessing.cpu_count()
-
-    # if type(P_bar) == np.ndarray:
-    #     A = len(P_bar)//cores
-    #     B = len(P_bar) % cores
-    # elif type(comp) != dict:
-    #     A = len(comp['SiO2_Liq'])//cores
-    #     B = len(comp['SiO2_Liq']) % cores
-    # else:
-    #     A = 0
-    #     B = 1
-    #
-    # if A > 0:
-    #     Group = np.zeros(A) + cores
-    #     Group = np.append(Group, B)
-    # else:
-    #     Group = np.array([B])
 
     if type(P_bar) == np.ndarray:
         A = len(P_bar)//cores
@@ -252,11 +233,12 @@ def findLiq(q, index,*, Model = None, P_bar = None, T_initial_C = None, comp = N
             return
 
     if Model == "Holland":
-        try:
-            T_Liq = findLiq_holland(P_bar = P_bar, T_C_init = T_initial_C, comp = comp)
-            q.put([T_Liq, H2O_Melt, index, T_in])
-            return
-        except:
-            q.put([T_Liq, H2O_Melt, index, T_in])
-            return
+        import pyMAGEMINcalc as MM
+        #try:
+        T_Liq = MM.findLiq(P_bar = P_bar, T_C_init = T_initial_C, comp = comp, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset)
+        q.put([T_Liq, H2O_Melt, index, T_in])
+        return
+        #except:
+        #    q.put([T_Liq, H2O_Melt, index, T_in])
+        #    return
 

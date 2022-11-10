@@ -285,13 +285,7 @@ melt
         Final pressure in crystallisation calculations.
 
     dp_bar: float
-        Pressure increment during crystallisation calculations..
-
-    Fe3Fet_Liq: float
-        Fe 3+/total ratio..
-
-    H2O_Liq: float
-        H2O content of the initial  phase.
+        Pressure increment during crystallisation calculations.
 
     isenthalpic: True/False
         If True, calculations will be performed at a constant enthalpy with T treated as a dependent variable.

@@ -301,7 +301,8 @@ def multi_path(cores = None, Model = None, comp = None, Frac_solid = None, Frac_
                 Res, index = qs[i]
                 Results['index = ' + str(index)] = Res
 
-        Results = stich(Results, multi = True, Model = Model)
+        if "MELTS" in Model:
+            Results = stich(Results, multi = True, Model = Model)
 
         return Results
 
@@ -403,7 +404,8 @@ def path(q, index, *, Model = None, comp = None, Frac_solid = None, Frac_fluid =
         return
 
     if Model == "Holland":
-        Results = path_holland(comp = comp, Frac_solid = Frac_solid, Frac_fluid = Frac_fluid, T_start_C = T_start_C, T_end_C = T_end_C, dt_C = dt_C, P_path_bar = P_path_bar, isochoric = isochoric, find_liquidus = find_liquidus)
+        import pyMAGEMINcalc as MM
+        Results = MM.path(comp = comp, Frac_solid = Frac_solid, Frac_fluid = Frac_fluid, T_C = T_C, T_path_C = T_path_C, T_start_C = T_start_C, T_end_C = T_end_C, dt_C = dt_C, P_bar = P_bar, P_path_bar = P_path_bar, P_start_bar = P_start_bar, P_end_bar = P_end_bar, dp_bar = dp_bar, find_liquidus = find_liquidus, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset)
         q.put([Results, index])
         return
 
