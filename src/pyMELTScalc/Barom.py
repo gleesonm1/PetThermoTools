@@ -169,6 +169,57 @@ def findSaturationPressure(cores = None, Model = None, comp = None, phases = Non
                 # initialise queue
                 qs = []
                 q = Queue()
+                # ps = []
+                #
+                # k = 0
+                # num = 0
+                # # count = 0
+                # Start = time.time()
+                # while k < len(P_bar):
+                #     if num < cores:
+                #         p = Process(target = satTemperature, args = (q, k),
+                #                     kwargs = {'Model': Model, 'comp': comp,
+                #                     'T_initial_C': T_initial_C, 'T_step_C': T_step_C,
+                #                     'dt_C': dt_C, 'P_bar': P_bar[k], 'phases': phases,
+                #                     'H2O_Liq': H2O_Liq, 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset})
+                #
+                #         ps.append(p)
+                #         p.start()
+                #         k = k + 1
+                #         num = num + 1
+                #
+                #     time.sleep(.1)
+                #     # count_old = count
+                #     # count = 0
+                #     for p in ps:
+                #         if not p.is_alive():
+                #             p.join()
+                #             p.terminate()
+                #
+                #             ret = q.get()
+                #             qs.append(ret)
+                #
+                #             p.kill()
+                #             ps.remove(p)
+                #             num = num - 1
+                #
+                #     # if (count - count_old) > 0:
+                #     #     num = num - (count - count_old)
+                #
+                #     # if Start - time.time() > 60 * len(P_bar):
+                #     #     for p in ps:
+                #     #         p.terminate()
+                #     #         p.join(5)
+                #     #         num = num - 1
+                #
+                # for p in ps:
+                #     try:
+                #         ret = q.get(timeout = 20)
+                #     except:
+                #         ret = []
+                #
+                #     qs.append(ret)
+
 
                 # run calculations
                 for k in range(len(Group)):
@@ -209,7 +260,7 @@ def findSaturationPressure(cores = None, Model = None, comp = None, phases = Non
                             p.join()
                             p.terminate()
 
-                # extract results
+                # # extract results
                 for kk in range(len(qs)):
                     if len(qs[kk]) > 0:
                         Res, index = qs[kk]
@@ -487,7 +538,13 @@ def satTemperature(q, index, *, Model = None, comp = None, phases = None, T_init
     Results = {}
     if "MELTS" in Model:
 
-        Results = phaseSat_MELTS(Model = Model, comp = comp, phases = phases, T_initial_C = T_initial_C, T_step_C = T_step_C, dt_C = dt_C, P_bar = P_bar, H2O_Liq = H2O_Liq, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset)
+        try:
+            Results = phaseSat_MELTS(Model = Model, comp = comp, phases = phases, T_initial_C = T_initial_C, T_step_C = T_step_C, dt_C = dt_C, P_bar = P_bar, H2O_Liq = H2O_Liq, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset)
+        except:
+            Results = {'a_sat': np.nan, 'b_sat': np.nan, 'c_sat': np.nan, 'T_Liq': np.nan, 'H2O_melt': np.nan}
+            if len(phases) == 2:
+                del Results['c_sat']
+
         if len(phases) == 3:
             Res = ['Res_abc', 'Res_ab', 'Res_ac', 'Res_bc']
             for R in Res:

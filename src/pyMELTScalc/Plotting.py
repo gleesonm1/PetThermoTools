@@ -121,6 +121,36 @@ def harker(Results = None, x_axis = None, y_axis = None, phase = None, line_styl
 
     f.tight_layout()
 
+def plot_surfaces(Results = None, P_bar = None, phases = None, H2O_Liq = None):
+    if H2O_Liq is None:
+        f, a = plt.subplots(1,1, figsize = (5,4))
+        a.set_xlabel('P (bars)')
+        a.set_ylabel('T ($\degree$C)')
+        for i in range(len(phases)):
+            if i == 0:
+                a.plot(P_bar, Results['a_sat'][0,0,:], '-r', linewidth = 2, label = phases[i])
+            if i == 1:
+                a.plot(P_bar, Results['b_sat'][0,0,:], '-b', linewidth = 2, label = phases[i])
+            if i == 2:
+                a.plot(P_bar, Results['c_sat'][0,0,:], '-k', linewidth = 2, label = phases[i])
+
+        a.legend()
+
+    if H2O_Liq is not None:
+        X, Y = np.meshgrid(P_bar, H2O_Liq)
+        Y = Results['H2O_melt'][:,0,:].copy()
+
+        f = plt.figure(figsize = (5,4))
+        a = f.add_subplot(1,1,1, projection = '3d')
+        for i in range(len(phases)):
+            if i == 0:
+                a.plot_surface(X, Y, Results['a_sat'][:,0,:], color = 'r', label = phases[i])
+            if i == 1:
+                a.plot_surface(X, Y, Results['b_sat'][:,0,:], color = 'b', label = phases[i])
+            if i == 2:
+                a.plot_surface(X, Y, Results['c_sat'][:,0,:], color = 'k', label = phases[i])
+
+
 def residualT_plot(Results = None, P_bar = None, phases = None, H2O_Liq = None, Fe3Fet_Liq = None, T_cut_C = None):
     if T_cut_C is None:
         T_cut_C = 12

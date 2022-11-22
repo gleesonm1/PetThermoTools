@@ -66,9 +66,12 @@ def findLiq_MELTS(P_bar = None, Model = None, T_C_init = None, comp = None, melt
         elif Model == "MELTSv1.2.0":
             melts = MELTSdynamic(4)
 
-    melts.engine.setBulkComposition(bulk)
-    melts.engine.pressure = P_bar
-    melts.engine.temperature = T_C_init
+    try:
+        melts.engine.setBulkComposition(bulk)
+        melts.engine.pressure = P_bar
+        melts.engine.temperature = T_C_init
+    except:
+        return T_Liq, H2O_Melt
 
     if fO2_buffer is not None:
         if fO2_offset is None:
@@ -94,9 +97,9 @@ def findLiq_MELTS(P_bar = None, Model = None, T_C_init = None, comp = None, melt
     for j in range(len(Step)):
         if len(i) == len(PhaseList):
             while len(i) == len(PhaseList):
-                melts = melts.addNodeAfter()
-                melts.engine.temperature = melts.engine.temperature - Step[j]
                 try:
+                    melts = melts.addNodeAfter()
+                    melts.engine.temperature = melts.engine.temperature - Step[j]
                     melts.engine.calcEquilibriumState(1,0)
                 except:
                     return T_Liq, H2O_Melt
@@ -110,9 +113,9 @@ def findLiq_MELTS(P_bar = None, Model = None, T_C_init = None, comp = None, melt
 
         if len(i) < len(PhaseList):
             while len(i) < len(PhaseList):
-                melts = melts.addNodeAfter()
-                melts.engine.temperature = melts.engine.temperature + Step[j]
                 try:
+                    melts = melts.addNodeAfter()
+                    melts.engine.temperature = melts.engine.temperature + Step[j]
                     melts.engine.calcEquilibriumState(1,0)
                 except:
                     return T_Liq, H2O_Melt
@@ -139,7 +142,7 @@ def phaseSat_MELTS(Model = None, comp = None, phases = None, T_initial_C = None,
     Model: string
         Dictates the MELTS model to be used: "MELTSv1.0.2", "MELTSv1.1.0", "MELTSv1.2.0", or "pMELTS". Default "v.1.0.2".
 
-    comp: list or dict
+    comp: dict
         Input oxide values required for the calculations.
 
     phases: list
@@ -195,45 +198,50 @@ def phaseSat_MELTS(Model = None, comp = None, phases = None, T_initial_C = None,
 
     T = Results['T_Liq']
     T_final = T - dt_C
-    while T >= T_final:
-        melts = melts.addNodeAfter()
-        melts.engine.setBulkComposition(bulk)
-        melts.engine.pressure = P_bar
-        melts.engine.temperature = T
 
-        try:
-            melts.engine.calcEquilibriumState(1,0)
-        except:
-            return Results
+    if T>0:
+        while T >= T_final:
+            try:
+                melts = melts.addNodeAfter()
+                melts.engine.setBulkComposition(bulk)
+                melts.engine.pressure = P_bar
+                melts.engine.temperature = T
+            except:
+                return Results
 
-        PhaseList = melts.engine.solidNames
-        print(PhaseList)
-        try:
-            if 'tridymite1' in PhaseList:
-                PhaseList = ['quartz1'] + PhaseList
-            if 'clinopyroxene2' in PhaseList:
-                PhaseList = ['orthopyroxene1'] + PhaseList
+            try:
+                melts.engine.calcEquilibriumState(1,0)
+            except:
+                return Results
 
-            if phases[0] in PhaseList and np.isnan(Results['a_sat']):# == 0:
-                Results['a_sat'] = melts.engine.temperature
+            try:
+                PhaseList = melts.engine.solidNames
+                print(PhaseList)
+                if 'tridymite1' in PhaseList:
+                    PhaseList = ['quartz1'] + PhaseList
+                if 'clinopyroxene2' in PhaseList:
+                    PhaseList = ['orthopyroxene1'] + PhaseList
 
-            if phases[1] in PhaseList and np.isnan(Results['b_sat']):# == 0:
-                Results['b_sat'] = melts.engine.temperature
+                if phases[0] in PhaseList and np.isnan(Results['a_sat']):# == 0:
+                    Results['a_sat'] = melts.engine.temperature
 
-            if len(phases) == 3:
-                if phases[2] in PhaseList and np.isnan(Results['c_sat']):# == 0:
-                    Results['c_sat'] = melts.engine.temperature
+                if phases[1] in PhaseList and np.isnan(Results['b_sat']):# == 0:
+                    Results['b_sat'] = melts.engine.temperature
 
-                if ~np.isnan(Results['a_sat']) and ~np.isnan(Results['b_sat']) and ~np.isnan(Results['c_sat']):# > 0:
-                    break
+                if len(phases) == 3:
+                    if phases[2] in PhaseList and np.isnan(Results['c_sat']):# == 0:
+                        Results['c_sat'] = melts.engine.temperature
 
-            if len(phases) == 2:
-                if ~np.isnan(Results['a_sat']) and ~np.isnan(Results['b_sat']):# > 0:
-                    break
+                    if ~np.isnan(Results['a_sat']) and ~np.isnan(Results['b_sat']) and ~np.isnan(Results['c_sat']):# > 0:
+                        break
 
-            T = T - T_step_C
-        except:
-            T = T - T_step_C
+                if len(phases) == 2:
+                    if ~np.isnan(Results['a_sat']) and ~np.isnan(Results['b_sat']):# > 0:
+                        break
+
+                T = T - T_step_C
+            except:
+                T = T - T_step_C
 
 
     return Results
@@ -433,6 +441,12 @@ melt
 
         print(melts.engine.pressure)
 
+        if Frac_solid is not None:
+            melts.engine.setSystemProperties("Mode", "Fractionate Solids")
+
+        if Frac_fluid is not None:
+            melts.engine.setSystemProperties("Mode", "Fractionate Fluids")
+
         if isenthalpic is not None:
             if i == 0:
                 melts.engine.setSystemProperties("Mode", "Isenthalpic")
@@ -453,7 +467,10 @@ melt
 
         if isochoric is None and isenthalpic is None and isentropic is None:
             try:
-                melts.engine.calcEquilibriumState(1,0)
+                if Frac_solid is not None or Frac_fluid is not None:
+                    melts.engine.calcEquilibriumState(1,1)
+                else:
+                    melts.engine.calcEquilibriumState(1,0)
             except:
                 return Results
 
@@ -500,19 +517,19 @@ melt
                 for pr in Results[phase + '_prop']:
                     Results[phase + '_prop'][pr].loc[i] = melts.engine.getProperty(pr, phase)
 
-        if Frac_solid is not None and Frac_fluid is not None:
-            bulk = np.array(melts.engine.getProperty('dispComposition', 'liquid1'))
-            bulk = list(melts.engine.getProperty('mass', 'liquid1')*bulk/np.sum(bulk))
+        # if Frac_solid is not None and Frac_fluid is not None:
+        #     bulk = np.array(melts.engine.getProperty('dispComposition', 'liquid1'))
+        #     bulk = list(melts.engine.getProperty('mass', 'liquid1')*bulk/np.sum(bulk))
 
         melts = melts.addNodeAfter()
 
-        if Frac_solid is not None and Frac_fluid is not None:
-            try:
-                melts.engine.setBulkComposition(bulk)
-                if isenthalpic is not None or isentropic is not None:
-                    melts.engine.calcEquilibriumState(1,0)
-            except:
-                return Results
+        # if Frac_solid is not None and Frac_fluid is not None:
+        #     try:
+        #         melts.engine.setBulkComposition(bulk)
+        #         if isenthalpic is not None or isentropic is not None:
+        #             melts.engine.calcEquilibriumState(1,0)
+        #     except:
+        #         return Results
 
     return Results
 
