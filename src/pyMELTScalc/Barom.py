@@ -235,15 +235,15 @@ def findSaturationPressure(cores = None, Model = None, comp = None, phases = Non
                         ps.append(p)
                         p.start()
 
-                    for p in ps:
-                        try:
-                            ret = q.get(timeout = 180)
-                        except:
-                            ret = []
+                    # for p in ps:
+                    #     try:
+                    #         ret = q.get(timeout = 180)
+                    #     except:
+                    #         ret = []
+                    #
+                    #     qs.append(ret)
 
-                        qs.append(ret)
-
-                    TIMEOUT = 5
+                    TIMEOUT = 600
                     start = time.time()
                     for p in ps:
                         if p.is_alive():
@@ -259,6 +259,14 @@ def findSaturationPressure(cores = None, Model = None, comp = None, phases = Non
                         else:
                             p.join()
                             p.terminate()
+
+                    for p in ps:
+                        try:
+                            ret = q.get(timeout = 5)
+                        except:
+                            ret = []
+
+                        qs.append(ret)
 
                 # # extract results
                 for kk in range(len(qs)):
