@@ -12,7 +12,7 @@ from multiprocessing import Queue
 from multiprocessing import Process
 from tqdm.notebook import tqdm, trange
 
-def findLiq_multi(cores = None, Model = None, comp = None, T_initial_C = None, P_bar = None, Fe3Fet_Liq = None, H2O_Liq = None, fO2_buffer = None, fO2_offset = None):
+def findLiq_multi(cores = None, Model = None, comp = None, T_initial_C = None, P_bar = None, Fe3Fet_Liq = None, H2O_Liq = None, fO2_buffer = None, fO2_offset = None, CO2_return = None):
     '''
     Carry out multiple findLiq calculations in parallel.
 
@@ -124,14 +124,14 @@ def findLiq_multi(cores = None, Model = None, comp = None, T_initial_C = None, P
         for i in range(int(cores*j), int(cores*j + Group[j])):
             if type(comp) == dict:
                 if type(P_bar) == np.ndarray:
-                    p = Process(target = findLiq, args = (q, i), kwargs = {'Model': Model, 'P_bar': P_bar[i], 'T_initial_C': T_initial_C[i], 'comp': comp, 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset})
+                    p = Process(target = findLiq, args = (q, i), kwargs = {'Model': Model, 'P_bar': P_bar[i], 'T_initial_C': T_initial_C[i], 'comp': comp, 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset, 'CO2_return': CO2_return})
                 else:
-                    p = Process(target = findLiq, args = (q, i), kwargs = {'Model': Model, 'P_bar': P_bar, 'T_initial_C': T_initial_C[i], 'comp': comp, 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset})
+                    p = Process(target = findLiq, args = (q, i), kwargs = {'Model': Model, 'P_bar': P_bar, 'T_initial_C': T_initial_C[i], 'comp': comp, 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset, 'CO2_return': CO2_return})
             else:
                 if type(P_bar) == np.ndarray:
-                    p = Process(target = findLiq, args = (q, i), kwargs = {'Model': Model, 'P_bar': P_bar[i], 'T_initial_C': T_initial_C[i], 'comp': comp.loc[i].to_dict(), 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset})
+                    p = Process(target = findLiq, args = (q, i), kwargs = {'Model': Model, 'P_bar': P_bar[i], 'T_initial_C': T_initial_C[i], 'comp': comp.loc[i].to_dict(), 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset, 'CO2_return': CO2_return})
                 else:
-                    p = Process(target = findLiq, args = (q, i), kwargs = {'Model': Model, 'P_bar': P_bar, 'T_initial_C': T_initial_C[i], 'comp': comp.loc[i].to_dict(), 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset})
+                    p = Process(target = findLiq, args = (q, i), kwargs = {'Model': Model, 'P_bar': P_bar, 'T_initial_C': T_initial_C[i], 'comp': comp.loc[i].to_dict(), 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset, 'CO2_return': CO2_return})
 
             ps.append(p)
             p.start()
@@ -179,7 +179,7 @@ def findLiq_multi(cores = None, Model = None, comp = None, T_initial_C = None, P
     return T_Liq_C, H2O
 
 
-def findLiq(q, index,*, Model = None, P_bar = None, T_initial_C = None, comp = None, fO2_buffer = None, fO2_offset = None):
+def findLiq(q, index,*, Model = None, P_bar = None, T_initial_C = None, comp = None, fO2_buffer = None, fO2_offset = None, CO2_return = None):
     '''
     Searches for the liquidus of a melt at the pressure specified. Multiple instances of findLiq are typically initiated in parallel.
 
@@ -225,7 +225,7 @@ def findLiq(q, index,*, Model = None, P_bar = None, T_initial_C = None, comp = N
 
     if "MELTS" in Model:
         try:
-            T_Liq, H2O_Melt = findLiq_MELTS(P_bar = P_bar, Model = Model, T_C_init = T_initial_C, comp = comp, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset)
+            T_Liq, H2O_Melt = findLiq_MELTS(P_bar = P_bar, Model = Model, T_C_init = T_initial_C, comp = comp, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, CO2_return = CO2_return)
             q.put([T_Liq, H2O_Melt, index, T_in])
             return
         except:
