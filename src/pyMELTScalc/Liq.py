@@ -75,16 +75,19 @@ def findLiq_multi(cores = None, Model = None, comp = None, T_initial_C = None, P
             T_Liq = np.zeros(len(comp['SiO2_Liq'].values))
             T_in = np.zeros(len(comp['SiO2_Liq'].values))
             H2O_melt = np.zeros(len(comp['SiO2_Liq'].values))
+            CO2_melt = np.zeros(len(comp['SiO2_Liq'].values))
             index = np.zeros(len(comp['SiO2_Liq'].values)) - 1
         else:
             T_Liq = np.zeros(len(P_bar))
             T_in = np.zeros(len(P_bar))
             H2O_melt = np.zeros(len(P_bar))
+            CO2_melt = np.zeros(len(P_bar))
             index = np.zeros(len(P_bar)) - 1
     else:
         T_Liq = 0
         T_in = 0
         H2O_melt = 0
+        CO2_melt = 0
         index = 0
 
     if T_initial_C is None:
@@ -164,19 +167,24 @@ def findLiq_multi(cores = None, Model = None, comp = None, T_initial_C = None, P
     if type(comp) != dict or type(P_bar) == np.ndarray:
         for i in range(len(qs)):
             if len(qs[i])>0:
-                T_Liq[i], H2O_melt[i], index[i], T_in[i] = qs[i]
+                T_Liq[i], H2O_melt[i], CO2_melt[i], index[i], T_in[i] = qs[i]
 
         H2O = np.zeros(len(T_Liq))
+        CO2 = np.zeros(len(T_Liq))
         T_Liq_C = np.zeros(len(T_Liq))
 
         for i in range(len(index)):
             if len(T_Liq[index == i]) > 0:
                 T_Liq_C[i] = T_Liq[index == i]
                 H2O[i] = H2O_melt[index == i]
+                CO2[i] = CO2_melt[index == i]
     else:
-        T_Liq_C, H2O, index, T_in = qs[0]
+        T_Liq_C, H2O, CO2, index, T_in = qs[0]
 
-    return T_Liq_C, H2O
+    if CO2_return is not None:
+        return T_Liq_C, H2O, CO2
+    else:
+        return T_Liq_C, H2O
 
 
 def findLiq(q, index,*, Model = None, P_bar = None, T_initial_C = None, comp = None, fO2_buffer = None, fO2_offset = None, CO2_return = None):
@@ -222,21 +230,26 @@ def findLiq(q, index,*, Model = None, P_bar = None, T_initial_C = None, comp = N
     T_Liq = 0
     T_in = T_initial_C
     H2O_Melt = 0
+    CO2_Melt = 0
 
     if "MELTS" in Model:
         try:
-            T_Liq, H2O_Melt = findLiq_MELTS(P_bar = P_bar, Model = Model, T_C_init = T_initial_C, comp = comp, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, CO2_return = CO2_return)
-            q.put([T_Liq, H2O_Melt, index, T_in])
+            if CO2_return is not None:
+                T_Liq, H2O_Melt, CO2_Melt = findLiq_MELTS(P_bar = P_bar, Model = Model, T_C_init = T_initial_C, comp = comp, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, CO2_return = CO2_return)
+            else:
+                T_Liq, H2O_Melt = findLiq_MELTS(P_bar = P_bar, Model = Model, T_C_init = T_initial_C, comp = comp, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset)
+
+            q.put([T_Liq, H2O_Melt, CO2_Melt, index, T_in])
             return
         except:
-            q.put([T_Liq, H2O_Melt, index, T_in])
+            q.put([T_Liq, H2O_Melt, CO2_Melt, index, T_in])
             return
 
     if Model == "Holland":
         import pyMAGEMINcalc as MM
         #try:
         T_Liq = MM.findLiq(P_bar = P_bar, T_C_init = T_initial_C, comp = comp, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset)
-        q.put([T_Liq, H2O_Melt, index, T_in])
+        q.put([T_Liq, H2O_Melt, CO2_Melt, index, T_in])
         return
         #except:
         #    q.put([T_Liq, H2O_Melt, index, T_in])
