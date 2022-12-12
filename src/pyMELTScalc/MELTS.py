@@ -3,7 +3,32 @@ import pandas as pd
 import sys
 import time
 
-def findLiq_MELTS(P_bar = None, Model = None, T_C_init = None, comp = None, melts = None, fO2_buffer = None, fO2_offset = None):
+def fluidsat_MELTS(P_bar = None, Model = None, T_C = None, comp = None, melts = None, fO2_buffer = None, fO2_offset = None, H2O_activity = None):
+    H2O_Liq = 10
+    CO2_Liq = 0
+    comp['H2O_Liq'] = H2O_Liq
+    comp['CO2_Liq'] = CO2_Liq
+
+    T_Liq, H2O_melt = findLiq_MELTS(P_bar = P_bar, Model = Model, T_C_init = T_C, comp = comp, melts = melts, fO2_buffer = None, fO2_offset = None)
+
+    comp['H2O_Liq'] = 0
+    Sum_comp = np.sum(np.array(list(comp.values())))
+    H2O = H2O_melt*Sum_comp/(100-H2O_melt)
+
+    comp['H2O_Liq'] = H2O*H2O_activity
+
+    T_Liq, H2O_melt = findLiq_MELTS(P_bar = P_bar, Model = Model, T_C_init = T_Liq, comp = comp, melts = melts, fO2_buffer = None, fO2_offset = None, Step = np.array([1, 0.1]))
+
+    while "fluid1" not in melts.engine.solidNames:
+        comp['CO2_Liq'] = comp['CO2_Liq'] + 0.001
+        T_Liq, H2O_melt = findLiq_MELTS(P_bar = P_bar, Model = Model, T_C_init = T_Liq, comp = comp, melts = melts, fO2_buffer = None, fO2_offset = None, Step = np.array([1, 0.1]))
+
+    CO2 = comp['CO2_Liq']
+
+    return T_Liq, H2O, CO2
+
+
+def findLiq_MELTS(P_bar = None, Model = None, T_C_init = None, comp = None, melts = None, fO2_buffer = None, fO2_offset = None, Step = None, CO2_return = None):
     '''
     Perform a single find liquidus calculation in MELTS. WARNING! Running this function directly from the command land/jupyter notebook will initiate the MELTS C library in the main python process. Once this has been initiated the MELTS C library cannot be re-loaded and failures during the calculation will likely cause a terminal error to occur.
 
@@ -92,7 +117,9 @@ def findLiq_MELTS(P_bar = None, Model = None, T_C_init = None, comp = None, melt
         PhaseList = ['liquid1'] + PhaseList
 
     i = set.intersection(set(Liq),set(PhaseList))
-    Step = np.array([3,1,0.1])
+
+    if Step is None:
+        Step = np.array([3,1,0.1])
 
     for j in range(len(Step)):
         if len(i) == len(PhaseList):
@@ -131,7 +158,12 @@ def findLiq_MELTS(P_bar = None, Model = None, T_C_init = None, comp = None, melt
     T_Liq = melts.engine.temperature
     H2O_Melt = melts.engine.getProperty('dispComposition', 'liquid1', 'H2O')
 
-    return T_Liq, H2O_Melt
+    if CO2_return is not None:
+        CO2_Melt = melts.engine.getProperty('dispComposition', 'liquid1', 'CO2')
+        return T_Liq, H2O_Melt, CO2_Melt
+    else:
+        return T_Liq, H2O_Melt
+
 
 def phaseSat_MELTS(Model = None, comp = None, phases = None, T_initial_C = None, T_step_C = None, dt_C = None, P_bar = None, H2O_Liq = None, fO2_buffer = None, fO2_offset = None):
     '''
@@ -349,6 +381,7 @@ melt
     bulk = list(100*np.array(bulk)/np.sum(bulk))
 
     if find_liquidus is not None:
+        # if fluid_sat is None:
         if P_path_bar is not None:
             try:
                 if type(P_path_bar) == np.ndarray:
@@ -364,6 +397,28 @@ melt
                 return Results
 
         T_start_C = T_Liq
+
+        # else:
+        #     if P_path_bar is not None:
+        #         #try:
+        #         if type(P_path_bar) == np.ndarray:
+        #             T_Liq, H2O, CO2 = fluidsat_MELTS(P_bar = P_path_bar[0], comp = comp, melts = melts, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, T_C = 1400, H2O_activity = comp['H2O_Liq'])
+        #         else:
+        #             T_Liq, H2O, CO2 = fluidsat_MELTS(P_bar = P_path_bar, comp = comp, melts = melts, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, T_C = 1400, H2O_activity = comp['H2O_Liq'])
+        #         #except:
+        #         #    return Results
+        #     elif P_start_bar is not None:
+        #         #try:
+        #         T_Liq, H2O, CO2 = fluidsat_MELTS(P_bar = P_start_bar, comp = comp, melts = melts, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, T_C = 1400, H2O_activity = comp['H2O_Liq'])
+        #         #except:
+        #         #    return Results
+        #
+        #     T_start_C = T_Liq
+        #     comp['H2O_Liq'] = H2O
+        #     comp['CO2_Liq'] = CO2
+        #
+        #     bulk = [comp['SiO2_Liq'], comp['TiO2_Liq'], comp['Al2O3_Liq'], comp['Fe3Fet_Liq']*((159.59/2)/71.844)*comp['FeOt_Liq'], 0.0, (1- comp['Fe3Fet_Liq'])*comp['FeOt_Liq'], comp['MnO_Liq'], comp['MgO_Liq'], 0.0, 0.0, comp['CaO_Liq'], comp['Na2O_Liq'], comp['K2O_Liq'], comp['P2O5_Liq'], comp['H2O_Liq'], comp['CO2_Liq'], 0.0, 0.0, 0.0]
+        #     bulk = list(100*np.array(bulk)/np.sum(bulk))
 
     else:
         if fO2_buffer is not None:
