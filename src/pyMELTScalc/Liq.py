@@ -12,7 +12,135 @@ from multiprocessing import Queue
 from multiprocessing import Process
 from tqdm.notebook import tqdm, trange
 
-def findLiq_multi(cores = None, Model = None, comp = None, T_initial_C = None, P_bar = None, Fe3Fet_Liq = None, H2O_Liq = None, fO2_buffer = None, fO2_offset = None, CO2_return = None):
+def findCO2_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P_bar = None, Fe3Fet_Liq = None, H2O_Liq = None, fO2_buffer = None, fO2_offset = None):
+
+    comp = bulk.copy()
+
+    if Model is None:
+        Model = "MELTSv1.0.2"
+
+    if Model == "Holland":
+        import pyMAGEMINcalc as MM
+
+    # if comp is entered as a pandas series, it must first be converted to a dict
+    if type(comp) == pd.core.series.Series:
+        comp = comp.to_dict()
+
+    # ensure the bulk composition has the correct headers etc.
+    comp = comp_fix(Model = Model, comp = comp, Fe3Fet_Liq = Fe3Fet_Liq, H2O_Liq = H2O_Liq)
+
+    if type(comp) != dict or type(P_bar) == np.ndarray:
+        if type(comp) != dict:
+            T_Liq_C = np.zeros(len(comp['SiO2_Liq'].values))
+            H2O_melt = np.zeros(len(comp['SiO2_Liq'].values))
+            CO2_melt = np.zeros(len(comp['SiO2_Liq'].values))
+            index = np.zeros(len(comp['SiO2_Liq'].values)) - 1
+        else:
+            T_Liq_C = np.zeros(len(P_bar))
+            H2O_melt = np.zeros(len(P_bar))
+            CO2_melt = np.zeros(len(P_bar))
+            index = np.zeros(len(P_bar)) - 1
+    else:
+        T_Liq_C = 0
+        H2O_melt = 0
+        CO2_melt = 0
+        index = 0
+
+    if T_initial_C is None:
+        if type(comp) != dict or type(P_bar) == np.ndarray:
+            if type(comp) != dict:
+                T_initial_C = np.zeros(len(comp['SiO2_Liq'].values)) + 1300.0
+            else:
+                T_initial_C = np.zeros(len(P_bar)) + 1300.0
+        else:
+            T_initial_C = np.array([1300.0])
+
+
+    if cores is None:
+        cores = multiprocessing.cpu_count()
+
+    if type(P_bar) == np.ndarray:
+        A = len(P_bar)//cores
+        B = len(P_bar) % cores
+    elif type(P_bar) != np.ndarray and type(comp) == dict:
+        A = 0
+        B = 1
+    else:
+        A = len(comp['SiO2_Liq'])//cores
+        B = len(comp['SiO2_Liq']) % cores
+
+    if A > 0:
+        Group = np.zeros(A) + cores
+        if B > 0:
+            Group = np.append(Group, B)
+    else:
+        Group = np.array([B])
+
+    qs = []
+    q = Queue()
+
+    for j in tqdm(range(len(Group))):
+        ps = []
+        for i in range(int(cores*j), int(cores*j + Group[j])):
+            if type(comp) == dict:
+                if type(P_bar) == np.ndarray:
+                    p = Process(target = findCO2, args = (q, i), kwargs = {'Model': Model, 'P_bar': P_bar[i], 'T_initial_C': T_initial_C[i], 'comp': comp, 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset})
+                else:
+                    p = Process(target = findCO2, args = (q, i), kwargs = {'Model': Model, 'P_bar': P_bar, 'T_initial_C': T_initial_C[i], 'comp': comp, 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset})
+            else:
+                if type(P_bar) == np.ndarray:
+                    p = Process(target = findCO2, args = (q, i), kwargs = {'Model': Model, 'P_bar': P_bar[i], 'T_initial_C': T_initial_C[i], 'comp': comp.loc[i].to_dict(), 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset})
+                else:
+                    p = Process(target = findCO2, args = (q, i), kwargs = {'Model': Model, 'P_bar': P_bar, 'T_initial_C': T_initial_C[i], 'comp': comp.loc[i].to_dict(), 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset})
+
+            ps.append(p)
+            p.start()
+
+        for p in ps:
+            try:
+                ret = q.get(timeout = 90)
+            except:
+                ret = []
+
+            qs.append(ret)
+
+        TIMEOUT = 5
+        start = time.time()
+        for p in ps:
+            if p.is_alive():
+                while time.time() - start <= TIMEOUT:
+                    if not p.is_alive():
+                        p.join()
+                        p.terminate()
+                        break
+                    time.sleep(.1)
+                else:
+                    p.terminate()
+                    p.join(5)
+            else:
+                p.join()
+                p.terminate()
+
+    if type(comp) != dict or type(P_bar) == np.ndarray:
+        for i in range(len(qs)):
+            if len(qs[i])>0:
+                T_Liq_C[i], H2O_melt[i], CO2_melt[i], index[i] = qs[i]
+
+        T_Liq = np.zeros(len(T_Liq_C))
+        H2O = np.zeros(len(T_Liq_C))
+        CO2 = np.zeros(len(T_Liq_C))
+
+        for i in range(len(index)):
+            if len(CO2[index == i]) > 0:
+                T_Liq[i] = T_Liq_C[index == i]
+                H2O[i] = H2O_melt[index == i]
+                CO2[i] = CO2_melt[index == i]
+    else:
+        T_Liq, H2O, CO2, index = qs[0]
+
+    return T_Liq, H2O, CO2
+
+def findLiq_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P_bar = None, Fe3Fet_Liq = None, H2O_Liq = None, fO2_buffer = None, fO2_offset = None, CO2_return = None):
     '''
     Carry out multiple findLiq calculations in parallel.
 
@@ -25,7 +153,7 @@ def findLiq_multi(cores = None, Model = None, comp = None, T_initial_C = None, P
         "MELTS" or "Holland". Dictates whether MELTS or MAGEMin calculations are performed. Default "MELTS".
         Version of melts can be specified "MELTSv1.0.2", "MELTSv1.1.0", "MELTSv1.2.0", or "pMELTS". Default "v.1.0.2".
 
-    comp: pd.DataFrame
+    bulk: pd.DataFrame
         Matrix containing all oxide values required for the calculations.
 
     T_initial_C: float or np.ndarray
@@ -57,6 +185,8 @@ def findLiq_multi(cores = None, Model = None, comp = None, T_initial_C = None, P
     H2O: np.ndarray
         Array of melt H2O contents at the liquidus.
     '''
+    comp = bulk.copy()
+
     if Model is None:
         Model = "MELTSv1.0.2"
 
@@ -185,6 +315,20 @@ def findLiq_multi(cores = None, Model = None, comp = None, T_initial_C = None, P
         return T_Liq_C, H2O, CO2
     else:
         return T_Liq_C, H2O
+
+def findCO2(q, index, *, Model = None, P_bar = None, T_initial_C = None, comp = None, fO2_buffer = None, fO2_offset = None):
+    T_Liq = 0
+    H2O_Melt = 0
+    CO2_Melt = 0
+
+    if "MELTS" in Model:
+        #try:
+        T_Liq, H2O_Melt, CO2_Melt = findCO2_MELTS(P_bar = P_bar, Model = Model, T_C = T_initial_C, comp = comp, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset)
+        q.put([T_Liq, H2O_Melt, CO2_Melt, index])
+        return
+        #except:
+        #    q.put([T_Liq, H2O_Melt, CO2_Melt, index])
+        #    return
 
 
 def findLiq(q, index,*, Model = None, P_bar = None, T_initial_C = None, comp = None, fO2_buffer = None, fO2_offset = None, CO2_return = None):

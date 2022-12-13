@@ -3,29 +3,167 @@ import pandas as pd
 import sys
 import time
 
-def fluidsat_MELTS(P_bar = None, Model = None, T_C = None, comp = None, melts = None, fO2_buffer = None, fO2_offset = None, H2O_activity = None):
-    H2O_Liq = 10
-    CO2_Liq = 0
-    comp['H2O_Liq'] = H2O_Liq
-    comp['CO2_Liq'] = CO2_Liq
+def findCO2_MELTS(P_bar = None, Model = None, T_C = None, comp = None, melts = None, fO2_buffer = None, fO2_offset = None, Step = None):
 
-    T_Liq, H2O_melt = findLiq_MELTS(P_bar = P_bar, Model = Model, T_C_init = T_C, comp = comp, melts = melts, fO2_buffer = None, fO2_offset = None)
+    if comp is None:
+        raise Exception("No composition specified")
+    else:
+        if type(comp) == list:
+            bulk = comp
+        else:
+            bulk = [comp['SiO2_Liq'], comp['TiO2_Liq'], comp['Al2O3_Liq'], comp['Fe3Fet_Liq']*((159.59/2)/71.844)*comp['FeOt_Liq'], 0.0, (1 - comp['Fe3Fet_Liq'])*comp['FeOt_Liq'], comp['MnO_Liq'], comp['MgO_Liq'], 0.0, 0.0, comp['CaO_Liq'], comp['Na2O_Liq'], comp['K2O_Liq'], comp['P2O5_Liq'], comp['H2O_Liq'], 0.0, 0.0, 0.0, 0.0]
 
-    comp['H2O_Liq'] = 0
-    Sum_comp = np.sum(np.array(list(comp.values())))
-    H2O = H2O_melt*Sum_comp/(100-H2O_melt)
+    from meltsdynamic import MELTSdynamic
 
-    comp['H2O_Liq'] = H2O*H2O_activity
+    if melts is None:
+        if Model is None or Model == "MELTSv1.0.2":
+            melts = MELTSdynamic(1)
+        elif Model == "pMELTS":
+            melts = MELTSdynamic(2)
+        elif Model == "MELTSv1.1.0":
+            melts = MELTSdynamic(3)
+        elif Model == "MELTSv1.2.0":
+            melts = MELTSdynamic(4)
 
-    T_Liq, H2O_melt = findLiq_MELTS(P_bar = P_bar, Model = Model, T_C_init = T_Liq, comp = comp, melts = melts, fO2_buffer = None, fO2_offset = None, Step = np.array([1, 0.1]))
+    T_Liq = 0
+    H2O = 0
+    CO2 = 0
 
-    while "fluid1" not in melts.engine.solidNames:
-        comp['CO2_Liq'] = comp['CO2_Liq'] + 0.001
-        T_Liq, H2O_melt = findLiq_MELTS(P_bar = P_bar, Model = Model, T_C_init = T_Liq, comp = comp, melts = melts, fO2_buffer = None, fO2_offset = None, Step = np.array([1, 0.1]))
+    try:
+        melts.engine.setBulkComposition(bulk)
+        melts.engine.pressure = P_bar
+        melts.engine.temperature = T_C
+    except:
+        return T_Liq, H2O, CO2
 
-    CO2 = comp['CO2_Liq']
+    if fO2_buffer is not None:
+        if fO2_offset is None:
+            melts.engine.setSystemProperties(["Log fO2 Path: " + fO2_buffer])
+        else:
+            melts.engine.setSystemProperties(["Log fO2 Path: " + fO2_buffer, "Log fO2 Offset: " + str(fO2_offset)])
+
+    Liq = ['liquid1','water1', 'fluid1']
+    try:
+        melts.engine.calcEquilibriumState(1,0)
+    except:
+        return T_Liq, H2O, CO2
+
+    PhaseList = melts.engine.solidNames
+    if PhaseList is None:
+        PhaseList = ['liquid1']
+    else:
+        PhaseList = ['liquid1'] + PhaseList
+
+    i = set.intersection(set(Liq),set(PhaseList))
+
+    if Step is None:
+        Step = np.array([3,1,0.1])
+
+
+    for j in range(len(Step)):
+        if len(i) == len(PhaseList):
+            while len(i) == len(PhaseList):
+                try:
+                    melts = melts.addNodeAfter()
+                    melts.engine.temperature = melts.engine.temperature - Step[j]
+                    melts.engine.calcEquilibriumState(1,0)
+                except:
+                    return T_Liq, H2O, CO2
+
+                PhaseList = melts.engine.solidNames
+                if PhaseList is None:
+                    PhaseList = ['liquid1']
+                else:
+                    PhaseList = ['liquid1'] + PhaseList
+                i = set.intersection(set(Liq),set(PhaseList))
+
+        if len(i) < len(PhaseList):
+            while len(i) < len(PhaseList):
+                try:
+                    melts = melts.addNodeAfter()
+                    melts.engine.temperature = melts.engine.temperature + Step[j]
+                    melts.engine.calcEquilibriumState(1,0)
+                except:
+                    return T_Liq, H2O, CO2
+
+                PhaseList = melts.engine.solidNames
+                if PhaseList is None:
+                    PhaseList = ['liquid1']
+                else:
+                    PhaseList = ['liquid1'] + PhaseList
+                i = set.intersection(set(Liq),set(PhaseList))
+
+
+    if "fluid1" not in PhaseList:
+        CO2_step = np.array([0.1, 0.02, 0.005])
+        for j in range(len(CO2_step)):
+            while "fluid1" not in PhaseList:
+                bulk[15] = bulk[15] + CO2_step[j]
+                melts.engine.setBulkComposition(bulk)
+                if len(i) == len(PhaseList):
+                    while len(i) == len(PhaseList):
+                        try:
+                            melts = melts.addNodeAfter()
+                            melts.engine.temperature = melts.engine.temperature - 0.1
+                            melts.engine.calcEquilibriumState(1,0)
+                        except:
+                            return T_Liq, H2O, CO2
+
+                        PhaseList = melts.engine.solidNames
+                        if PhaseList is None:
+                            PhaseList = ['liquid1']
+                        else:
+                            PhaseList = ['liquid1'] + PhaseList
+                        i = set.intersection(set(Liq),set(PhaseList))
+
+                if len(i) < len(PhaseList):
+                    while len(i) < len(PhaseList):
+                        try:
+                            melts = melts.addNodeAfter()
+                            melts.engine.temperature = melts.engine.temperature + 0.1
+                            melts.engine.calcEquilibriumState(1,0)
+                        except:
+                            return T_Liq, H2O, CO2
+
+                        PhaseList = melts.engine.solidNames
+                        if PhaseList is None:
+                            PhaseList = ['liquid1']
+                        else:
+                            PhaseList = ['liquid1'] + PhaseList
+                        i = set.intersection(set(Liq),set(PhaseList))
+
+            if j != len(CO2_step) - 1:
+                bulk[15] = bulk[15] - CO2_step[j]
+
+    T_Liq = melts.engine.getProperty('temperature')
+    H2O = melts.engine.getProperty('dispComposition', 'liquid1', 'H2O')
+    CO2 = melts.engine.getProperty('dispComposition', 'liquid1', 'CO2')
 
     return T_Liq, H2O, CO2
+
+
+    # H2O_Liq = 10
+    # CO2_Liq = 0
+    # comp['H2O_Liq'] = H2O_Liq
+    # comp['CO2_Liq'] = CO2_Liq
+    #
+    # T_Liq, H2O_melt = findLiq_MELTS(P_bar = P_bar, Model = Model, T_C_init = T_C, comp = comp, melts = melts, fO2_buffer = None, fO2_offset = None)
+    #
+    # comp['H2O_Liq'] = 0
+    # Sum_comp = np.sum(np.array(list(comp.values())))
+    # H2O = H2O_melt*Sum_comp/(100-H2O_melt)
+    #
+    # comp['H2O_Liq'] = H2O*H2O_activity
+    #
+    # T_Liq, H2O_melt = findLiq_MELTS(P_bar = P_bar, Model = Model, T_C_init = T_Liq, comp = comp, melts = melts, fO2_buffer = None, fO2_offset = None, Step = np.array([1, 0.1]))
+    #
+    # while "fluid1" not in melts.engine.solidNames:
+    #     comp['CO2_Liq'] = comp['CO2_Liq'] + 0.001
+    #     T_Liq, H2O_melt = findLiq_MELTS(P_bar = P_bar, Model = Model, T_C_init = T_Liq, comp = comp, melts = melts, fO2_buffer = None, fO2_offset = None, Step = np.array([1, 0.1]))
+    #
+    # CO2 = comp['CO2_Liq']
+    #
+    # return T_Liq, H2O, CO2
 
 
 def findLiq_MELTS(P_bar = None, Model = None, T_C_init = None, comp = None, melts = None, fO2_buffer = None, fO2_offset = None, Step = None, CO2_return = None):
