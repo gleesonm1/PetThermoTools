@@ -76,6 +76,7 @@ def findSaturationPressure(cores = None, Model = None, comp = None, phases = Non
     Results: Dict
         Dictionary containing information regarding the saturation temperature of each phase and the residuals between the different phases
     '''
+
     # set default values if required
     if Model is None:
         Model == "MELTSv1.0.2"
@@ -235,18 +236,26 @@ def findSaturationPressure(cores = None, Model = None, comp = None, phases = Non
                         ps.append(p)
                         p.start()
 
-                    # for p in ps:
-                    #     try:
-                    #         ret = q.get(timeout = 180)
-                    #     except:
-                    #         ret = []
-                    #
-                    #     qs.append(ret)
+                    for p in ps:
+                        try:
+                            ret = q.get(timeout = 180)
+                        except:
+                            ret = []
 
-                    TIMEOUT = 600
+                        qs.append(ret)
+
+                    TIMEOUT = 20
                     start = time.time()
+                    # # finished = 0
+                    # fin = np.zeros(len(ps))
+                    #
+                    #
+                    # while time.time() - start <= TIMEOUT:
+                    #     finished = 0
+                    #     i = -1
                     for p in ps:
                         if p.is_alive():
+                            time.sleep(.1)
                             while time.time() - start <= TIMEOUT:
                                 if not p.is_alive():
                                     p.join()
@@ -257,8 +266,21 @@ def findSaturationPressure(cores = None, Model = None, comp = None, phases = Non
                                 p.terminate()
                                 p.join(5)
                         else:
+                        #     if fin[i] == 0:
                             p.join()
                             p.terminate()
+                        #         fin[i] = 1
+
+                                #finished = finished + 1
+                        # if np.sum(fin) == cores:
+                        #     break
+
+                    # if finished < cores:
+                    #     for p in ps:
+                    #         if  p.is_alive():
+                    #             p.terminate()
+                    #             p.join(5)
+                    #             p.kill()
 
                     for p in ps:
                         try:

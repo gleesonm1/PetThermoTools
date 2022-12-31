@@ -150,6 +150,8 @@ def plot_surfaces(Results = None, P_bar = None, phases = None, H2O_Liq = None):
             if i == 2:
                 a.plot_surface(X, Y, Results['c_sat'][:,0,:], color = 'k', label = phases[i])
 
+    return f, a
+
 
 def residualT_plot(Results = None, P_bar = None, phases = None, H2O_Liq = None, Fe3Fet_Liq = None, T_cut_C = None):
     if T_cut_C is None:
