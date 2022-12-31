@@ -282,13 +282,13 @@ def findSaturationPressure(cores = None, Model = None, comp = None, phases = Non
                     #             p.join(5)
                     #             p.kill()
 
-                    for p in ps:
-                        try:
-                            ret = q.get(timeout = 5)
-                        except:
-                            ret = []
-
-                        qs.append(ret)
+                    # for p in ps:
+                    #     try:
+                    #         ret = q.get(timeout = 5)
+                    #     except:
+                    #         ret = []
+                    #
+                    #     qs.append(ret)
 
                 # # extract results
                 for kk in range(len(qs)):
