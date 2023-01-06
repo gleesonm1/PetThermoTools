@@ -24,6 +24,8 @@ from pyMELTScalc.Liq import *
 from pyMELTScalc.Crystallise import *
 # This contains the functions required to perform path calculations
 from pyMELTScalc.Path import *
+# This contains the functions required to perform volatile saturation calculations
+from pyMELTScalc.Saturation import *
 # This contains the functions used to call MELTS calculations
 from pyMELTScalc.MELTS import *
 # This contains the functions used to perform calculations using the Holland et al. 2018 thermodynamic dataset - currently disabled
