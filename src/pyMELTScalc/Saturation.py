@@ -92,14 +92,14 @@ def findSatPressure(cores = None, Model = None, bulk = None, T_C_init = None, P_
 
         L = np.sum(Group)
         if type(P_bar_init) == float or type(P_bar_init) == int:
-            P_bar_init = np.zeros(L) + P_bar_init
+            P_bar_init = np.zeros(int(L)) + intP_bar_init
         if type(T_C_init) == float or type(T_C_init) == int:
-            T_C_init = np.zeros(L) + T_C_init
+            T_C_init = np.zeros(int(L)) + T_C_init
         if fO2_offset is None:
             fO2_offset = [None] * int(L)
         else:
             if type(fO2_offset) == float or type(fO2_offset) == int:
-                fO2_offset = np.zeros(L) + fO2_offset
+                fO2_offset = np.zeros(int(L)) + fO2_offset
 
         for j in tqdm(range(len(Group))):
             ps = []
