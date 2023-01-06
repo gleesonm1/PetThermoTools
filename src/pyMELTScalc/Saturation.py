@@ -11,6 +11,29 @@ import sys
 from tqdm.notebook import tqdm, trange
 
 def findSatPressure(cores = None, Model = None, bulk = None, T_C_init = None, P_bar_init = None, Fe3Fet_Liq = None, H2O_Liq = None, fO2_buffer = None, fO2_offset = None):
+    """
+    Calculates the saturation pressure of a specified composition in the liquid or melt phase. The function will return the saturation pressure of the liquid or melt as a pandas dataframe. If the saturation pressure cannot be calculated, the function will return an empty dataframe.
+
+    Parameters:
+    cores (int): The number of CPU cores to use for parallel processing. If left as None, all available CPU cores will be used.
+    Model (str): The geochemical model to be used. Options include "MELTSv1.2.0" (default) or "MELTSv1.1.0".
+    bulk (dict or pandas.core.frame.DataFrame): A dictionary or pandas dataframe containing the starting composition of the liquid or melt. Elements should be specified in weight percent.
+    T_C_init (float, int, or np.ndarray): The starting temperature for the calculation in degrees Celsius. If left as None, the default value of 1200 C will be used.
+    P_bar_init (float, int, or np.ndarray): The starting pressure for the calculation in bar. If left as None, the default value of 10000 bar will be used.
+    Fe3Fet_Liq (float): The initial concentration of ferric iron in the liquid or melt in weight percent. If left as None, the value will be taken from the bulk composition.
+    H2O_Liq (float): The initial concentration of water in the liquid or melt in weight percent. If left as None, the value will be taken from the bulk composition.
+    fO2_buffer (float): The  oxygen fugacity buffer to be used in the calculation. If left as None, no buffer will be applied
+    fO2_offset (float, int, or np.ndarray): The oxygen fugacity offset (log units) from the specified buffer to be applied to the calculation. If left as None, no offset will be applied. If a list is provided, each offset will be applied to the corresponding element in the bulk composition.
+
+    Returns:
+    Res (dict or pandas.core.frame.DataFrame): A dict or dataframe containing the chemical composition of the melt phase and the saturation pressure and temperature of the melt.
+
+    Examples:
+
+    Calculate the saturation pressure and temperature of a basaltic liquid, with initial conditions set at 1200 C and 10000 bar using all available CPU cores and the MELTSv1.2.0 model.
+    >>> findSatPressure(bulk = {'SiO2_Liq': 50, 'TiO2_Liq': 1, 'Al2O3_Liq': 15, 'FeOt_Liq': 10, 'MnO_Liq': 0.5, 'MgO_Liq': 8, 'CaO_Liq': 10, 'Na2O_Liq': 2, 'K2O_Liq': 1, 'P2O5_Liq': 0.5, 'H2O_Liq': 0.5, 'Fe3Fet_Liq': 0.15}, T_C_init = 1200, P_bar_init = 10000)
+
+    """
 
     # set default values if required
     if Model is None:
@@ -137,17 +160,34 @@ def findSatPressure(cores = None, Model = None, bulk = None, T_C_init = None, P_
                     p.join()
                     p.terminate()
 
-        Res = pd.DataFrame(data = np.zeros((L,15)), columns = ['SiO2_Liq', 'TiO2_Liq', 'Al2O3_Liq', 'FeOt_Liq', 'MnO_Liq', 'MgO_Liq', 'CaO_Liq', 'Na2O_Liq', 'K2O_Liq', 'P2O5_Liq', 'H2O_Liq', 'CO2_Liq', 'Fe3Fet_Liq', 'P_bar', 'T_Liq'])
+        Res = pd.DataFrame(data = np.zeros((int(L),15)), columns = ['SiO2_Liq', 'TiO2_Liq', 'Al2O3_Liq', 'FeOt_Liq', 'MnO_Liq', 'MgO_Liq', 'CaO_Liq', 'Na2O_Liq', 'K2O_Liq', 'P2O5_Liq', 'H2O_Liq', 'CO2_Liq', 'Fe3Fet_Liq', 'P_bar', 'T_Liq'])
         for i in range(len(qs)):
             if len(qs[i]) > 0:
                 Results, index = qs[i]
-                Res.loc[i] = Results
+                Res.loc[index] = Results
 
         return Res
 
 
 
 def satP(q, index, *, Model = None, comp = None, T_C_init = None, P_bar_init = None, fO2_buffer = None, fO2_offset = None):
+    """Find the saturation pressure for a given composition and temperature.
+
+    This function calculates the volatile saturation pressure for a given composition using the MELTS models. The results are returned in the form of a tuple and added to the specified queue.
+
+    Args:
+        q (Queue): The queue to which the results should be added.
+        index (int): The index of the calculation.
+        Model (str, optional): The model to use for the calculation. Must include "MELTS".
+        comp (dict): A dictionary of oxide names and their concentration (in wt%) in the composition.
+        T_C_init (float, optional): The initial temperature in degrees Celsius.
+        P_bar_init (float, optional): The initial pressure in bar.
+        fO2_buffer (float, optional): The fO2 buffer.
+        fO2_offset (float, optional): The fO2 offset.
+
+    Returns:
+        None
+    """
 
     if "MELTS" in Model:
         Results = findSatPressure_MELTS(Model = Model, T_C_init = T_C_init, P_bar_init = P_bar_init, comp = comp, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset)
