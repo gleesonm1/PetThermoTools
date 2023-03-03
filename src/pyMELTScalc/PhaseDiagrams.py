@@ -231,23 +231,46 @@ def phaseDiagram_eq(cores = None, Model = None, bulk = None, T_C = None, P_bar =
 
     for i in Results.keys():
         if c == 0:
-            Combined = Results[i]['All'].copy()
+            if "MELTS" in Model:
+                Combined = Results[i]['All'].copy()
+            else:
+                Combined = Results[i].copy()
             c = 1
         else:
-            Combined = pd.concat([Combined, Results[i]['All']], axis = 0, ignore_index = True)
+            if "MELTS" in Model:
+                Combined = pd.concat([Combined, Results[i]['All']], axis = 0, ignore_index = True)
+            else:
+                try:
+                    Combined = pd.concat([Combined, Results[i]], axis = 0, ignore_index = True)
+                except:
+                    continue
+
+    if len(Combined['T_C']) < len(T_flat):
+        flat = np.round(np.array([T.flatten(), P.flatten()]).T,2)
+        Res_flat = np.round(np.array([Combined['T_C'].values, Combined['P_bar'].values]).T,2)
+        new_flat = flat[np.where((flat[:, None] == Res_flat).all(-1).any(-1) == False)]
+
+        Combined['T_C'] = np.round(Combined['T_C'].values, 2)
+        Combined['P_bar'] = np.round(Combined['P_bar'].values, 2)
+
+        for i in range(len(new_flat)):
+            df = pd.DataFrame(columns = ['T_C', 'P_bar'])
+            df.loc[0] = new_flat[i]
+
+            Combined = pd.concat([Combined, df], axis = 0, ignore_index = True)
 
     return Combined
 
 
 def equilibrate(q, index,*, Model = None, P_bar = None, T_C = None, comp = None, fO2_buffer = None, fO2_offset = None):
 
-    Results = equilibrate_MELTS(Model = Model, P_bar = P_bar, T_C = T_C, comp = comp, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset)
-    Phases = {}
-    # for pp in PhaseList:
-    #     Phases[pp] = pd.DataFrame(columns = ['T_C', 'P_bar', 'SiO2', 'TiO2', 'Al2O3', 'FeOt', 'Cr2O3', 'MnO', 'MgO', 'CaO', 'Na2O', 'K2O', 'P2O5', 'H2O', 'CO2', 'mass', 'rho'], data = np.array([T_C, P_bar, PhaseComp[pp][0], PhaseComp[pp][1], PhaseComp[pp][2], (71.844/(159.69/2))*PhaseComp[pp][3]+PhaseComp[pp][5], PhaseComp[pp][4], PhaseComp[pp][6], PhaseComp[pp][7], PhaseComp[pp][10], PhaseComp[pp][11], PhaseComp[pp][12], PhaseComp[pp][13], PhaseComp[pp][14], PhaseComp[pp][15], PhaseProp[pp]['mass'], PhaseProp[pp]['rho']]).reshape(1,17))
+    if "MELTS" in Model:
+        Results = equilibrate_MELTS(Model = Model, P_bar = P_bar, T_C = T_C, comp = comp, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset)
+        q.put([Results, index])
+        return
 
-    q.put([Results, index])
-    return
-    # except:
-    #     q.put([PhaseList, PhaseComp, PhaseProp, index])
-    #     return
+    if "Holland" in Model:
+        import pyMAGEMINcalc as MM
+        Results = MM.equilibrate(Model = Model, P_bar = P_bar, T_C = T_C, comp = comp, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset)
+        q.put([Results, index])
+        return
