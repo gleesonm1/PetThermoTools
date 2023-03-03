@@ -17,13 +17,18 @@ First, you will need to open Python and install the PyJulia packages by running 
 import julia
 julia.install()
 
-Then, the MAGEMinCalc functions can be installed via
+Then, the MAGEMinCalc functions can be installed via:
+
 1. Install Julia (https://julialang.org/downloads/).
-2. Run Julia and add the MAGEMinCalc package via the following commands:
+
+2. Open Python and install Julia via:
+a."pip install Julia"
+b. import julia
+c. julia.install()
+
+3. Run Julia and add the MAGEMinCalc package via the following commands:
 a. import Pkg
-
 b. using Pkg
-
 c. Pkg.add(url = "https://github.com/gleesonm1/MAGEMinCalc")
 
 Finally, the pyMAGEMINcalc package can be installed in a Jupyter terminal via:
