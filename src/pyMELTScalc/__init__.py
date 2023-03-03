@@ -20,6 +20,8 @@ from pyMELTScalc.Plotting import *
 from pyMELTScalc.Barom import *
 # This contains the functions required to find liquidis
 from pyMELTScalc.Liq import *
+# Code to create phase diagrams
+from pyMELTScalc.PhaseDiagrams import *
 # Functions to carry out specific crystallisation calculations. Simply calls the code in pyMELTScalc.Path
 from pyMELTScalc.Crystallise import *
 # This contains the functions required to perform path calculations

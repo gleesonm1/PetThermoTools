@@ -3,10 +3,6 @@ import pandas as pd
 from pyMELTScalc.GenFuncs import *
 from pyMELTScalc.Plotting import *
 from pyMELTScalc.MELTS import *
-# try:
-#     from pyMELTScalc.Holland import *
-# except:
-#     pass
 import multiprocessing
 from multiprocessing import Queue
 from multiprocessing import Process

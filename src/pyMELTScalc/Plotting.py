@@ -78,7 +78,7 @@ def harker(Results = None, x_axis = None, y_axis = None, phase = None, line_styl
                 for j in range(np.shape(y_axis)[1]):
                     if y_axis[i,j] != "None":
                         if data is not None:
-                            a[i][j].plot(data.loc[:,data.columns.str.contains(x_axis)], data.loc[:,data.columns.str.contains(y_axis[i,j])], d_marker, markerfacecolor = d_color, markeredgecolor = 'k', markersize = 4)
+                            a[i][j].plot(data.loc[:,data.columns.str.contains(x_axis)].values, data.loc[:,data.columns.str.contains(y_axis[i,j])].values, d_marker, markerfacecolor = d_color, markeredgecolor = 'k', markersize = 4)
 
                         a[i][j].plot(Results['All'][x_axis + Names[phase]], Results['All'][y_axis[i,j] + Names[phase]], line_style, linewidth = 2, color = line_color)
                         a[i][j].set_ylabel(y_axis[i][j] + " wt%")

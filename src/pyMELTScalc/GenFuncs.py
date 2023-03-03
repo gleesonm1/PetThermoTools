@@ -203,10 +203,10 @@ def stich_work(Results = None, Order = None):
         Results_Volume[n] = Results[n + '_prop']['v']
         Results_rho[n] = Results[n + '_prop']['rho']
 
-    if Results_Mass.sum(axis=1)[0] != Results_Mass.sum(axis=1)[1]:
-        for n in SN:
-            if n != 'liquid1':
-                Results_Mass[n + '_sum'] = Results_Mass[n].cumsum()
+    # if Results_Mass.sum(axis=1)[0] != Results_Mass.sum(axis=1)[1]:
+    #     for n in SN:
+    #         if n != 'liquid1':
+    #             Results_Mass[n + '_sum'] = Results_Mass[n].cumsum()
 
     Results_All = Results['Conditions'].copy()
     for R in Results:

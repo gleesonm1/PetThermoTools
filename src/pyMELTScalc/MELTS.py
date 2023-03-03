@@ -3,6 +3,95 @@ import pandas as pd
 import sys
 import time
 
+def equilibrate_MELTS(Model = None, P_bar = None, T_C = None, comp = None, fO2_buffer = None, fO2_offset = None):
+    Results = {}
+
+    if comp is None:
+        raise Exception("No composition specified")
+    else:
+        if type(comp) == list:
+            bulk = comp.copy()
+        else:
+            bulk = [comp['SiO2_Liq'], comp['TiO2_Liq'], comp['Al2O3_Liq'], comp['Fe3Fet_Liq']*((159.59/2)/71.844)*comp['FeOt_Liq'], 0.0, (1 - comp['Fe3Fet_Liq'])*comp['FeOt_Liq'], comp['MnO_Liq'], comp['MgO_Liq'], 0.0, 0.0, comp['CaO_Liq'], comp['Na2O_Liq'], comp['K2O_Liq'], comp['P2O5_Liq'], comp['H2O_Liq'], comp['CO2_Liq'], 0.0, 0.0, 0.0]
+
+    from meltsdynamic import MELTSdynamic
+    if Model is None or Model == "MELTSv1.0.2":
+        melts = MELTSdynamic(1)
+    elif Model == "pMELTS":
+        melts = MELTSdynamic(2)
+    elif Model == "MELTSv1.1.0":
+        melts = MELTSdynamic(3)
+    elif Model == "MELTSv1.2.0":
+        melts = MELTSdynamic(4)
+
+    melts.engine.setBulkComposition(bulk)
+    melts.engine.pressure = P_bar
+    melts.engine.temperature = T_C
+
+    length = 1
+
+    if fO2_buffer is not None:
+        if fO2_offset is None:
+            melts.engine.setSystemProperties(["Log fO2 Path: " + fO2_buffer])
+        else:
+            melts.engine.setSystemProperties(["Log fO2 Path: " + fO2_buffer, "Log fO2 Offset: " + str(fO2_offset)])
+
+    # PhaseList = [None]
+    # PhaseComp = {}
+    # PhaseProp = {}
+    # Props = ['mass', 'rho']
+
+    Results['Conditions'] = pd.DataFrame(data = np.zeros((length, 7)), columns = ['temperature', 'pressure', 'g', 'h', 's', 'v', 'dvdp'])
+    # Results['liquid1'] = pd.DataFrame(data = np.zeros((length+1, 14)), columns = ['SiO2', 'TiO2', 'Al2O3', 'Fe2O3', 'Cr2O3', 'FeO', 'MnO', 'MgO', 'CaO', 'Na2O', 'K2O', 'P2O5', 'H2O', 'CO2'])
+    # Results['liquid1_prop'] = pd.DataFrame(data = np.zeros((length+1, 4)), columns = ['h', 'mass', 'v', 'rho'])
+
+    try:
+        melts.engine.calcEquilibriumState(1,0)
+    except:
+        return PhaseList, PhaseComp, PhaseProp
+
+    SolidPhase = melts.engine.solidNames
+    # if np.isnan(melts.engine.getProperty('mass', 'liquid1')):
+    #     PhaseList = SolidPhase
+    # elif len(SolidPhase) > 0:
+    #     PhaseList = ['liquid1'] + SolidPhase
+    # else:
+    #     PhaseList = ['Liquid1']
+    if SolidPhase is not None:
+        PhaseList = ['liquid1'] + SolidPhase
+    else:
+        PhaseList = ['liquid1']
+
+    print(PhaseList)
+
+    for R in Results['Conditions']:
+        if R == 'temperature':
+            Results['Conditions'][R].loc[0] = melts.engine.temperature
+        elif R == 'pressure':
+            Results['Conditions'][R].loc[0] = melts.engine.pressure
+        else:
+            Results['Conditions'][R].loc[0] = melts.engine.getProperty(R, 'bulk')
+
+    for phase in PhaseList:
+        if phase not in list(Results.keys()):
+            Results[phase] = pd.DataFrame(data = np.zeros((length, 14)), columns = ['SiO2', 'TiO2', 'Al2O3', 'Fe2O3', 'Cr2O3', 'FeO', 'MnO', 'MgO', 'CaO', 'Na2O', 'K2O', 'P2O5', 'H2O', 'CO2'])
+            Results[phase + '_prop'] = pd.DataFrame(data = np.zeros((length, 5)), columns = ['g','h', 'mass', 'v', 'rho'])
+
+        for el in Results[phase]:
+            Results[phase][el].loc[0] = melts.engine.getProperty('dispComposition', phase, el)
+
+        for pr in Results[phase + '_prop']:
+            Results[phase + '_prop'][pr].loc[0] = melts.engine.getProperty(pr, phase)
+
+    # if PhaseList is not None:
+    #     for p in PhaseList:
+    #         PhaseComp[p] = melts.engine.getProperty('dispComposition', p)
+    #         PhaseProp[p] = {}
+    #         for i in Props:
+    #             PhaseProp[p][i] = melts.engine.getProperty(i, p)
+
+    return Results
+
 def findCO2_MELTS(P_bar = None, Model = None, T_C = None, comp = None, melts = None, fO2_buffer = None, fO2_offset = None, Step = None):
 
     if comp is None:
@@ -292,8 +381,6 @@ def findLiq_MELTS(P_bar = None, Model = None, T_C_init = None, comp = None, melt
                 else:
                     PhaseList = ['liquid1'] + PhaseList
                 i = set.intersection(set(Liq),set(PhaseList))
-
-        print(melts.engine.solidNames)
 
 
     T_Liq = melts.engine.temperature
@@ -610,7 +697,7 @@ melt
     else:
         length = len(P)
 
-    Results['Conditions'] = pd.DataFrame(data = np.zeros((length, 5)), columns = ['temperature', 'pressure', 'h', 's', 'v'])
+    Results['Conditions'] = pd.DataFrame(data = np.zeros((length, 6)), columns = ['temperature', 'pressure', 'h', 's', 'v', 'dvdp'])
     Results['liquid1'] = pd.DataFrame(data = np.zeros((length, 14)), columns = ['SiO2', 'TiO2', 'Al2O3', 'Fe2O3', 'Cr2O3', 'FeO', 'MnO', 'MgO', 'CaO', 'Na2O', 'K2O', 'P2O5', 'H2O', 'CO2'])
     Results['liquid1_prop'] = pd.DataFrame(data = np.zeros((length, 4)), columns = ['h', 'mass', 'v', 'rho'])
 
@@ -619,8 +706,6 @@ melt
             melts.engine.temperature = T[i]
         if type(P) == np.ndarray:
             melts.engine.pressure = P[i]
-
-        print(melts.engine.pressure)
 
         if Frac_solid is not None:
             melts.engine.setSystemProperties("Mode", "Fractionate Solids")
@@ -654,24 +739,28 @@ melt
                     melts.engine.calcEquilibriumState(1,0)
             except:
                 return Results
+                break
 
         if isenthalpic is not None:
             try:
                 melts.engine.calcEquilibriumState(2,0)
             except:
                 return Results
+                break
 
         if isentropic is not None:
             try:
                 melts.engine.calcEquilibriumState(3,0)
             except:
                 return Results
+                break
 
         if isochoric is not None:
             try:
                 melts.engine.calcEquilibriumState(4,0)
             except:
                 return Results
+                break
 
         for R in Results['Conditions']:
             if R == 'temperature':
@@ -685,6 +774,7 @@ melt
             PhaseList = ['liquid1'] + melts.engine.solidNames
         except:
             return Results
+            break
 
         for phase in PhaseList:
             if phase not in list(Results.keys()):
@@ -771,6 +861,7 @@ def findSatPressure_MELTS(Model = None, T_C_init = None, P_bar_init = None, comp
                 if T_Liq == 0.0:
                     out = {'SiO2_Liq': 0.0, 'TiO2_Liq': 0.0, 'Al2O3_Liq': 0.0, 'FeOt_Liq': 0.0, 'MnO_Liq': 0.0, 'MgO_Liq': 0.0, 'CaO_Liq': 0.0, 'Na2O_Liq': 0.0, 'K2O_Liq': 0.0, 'P2O5_Liq': 0.0, 'H2O_Liq': 0.0, 'CO2_Liq': 0.0, 'Fe3Fet_Liq': 0.0, 'P_bar': 0.0, 'T_Liq': 0.0}
                     return out
+                    break
 
                 PhaseList = melts.engine.solidNames
                 if PhaseList is None:
@@ -790,6 +881,7 @@ def findSatPressure_MELTS(Model = None, T_C_init = None, P_bar_init = None, comp
                 if T_Liq == 0.0:
                     out = {'SiO2_Liq': 0.0, 'TiO2_Liq': 0.0, 'Al2O3_Liq': 0.0, 'FeOt_Liq': 0.0, 'MnO_Liq': 0.0, 'MgO_Liq': 0.0, 'CaO_Liq': 0.0, 'Na2O_Liq': 0.0, 'K2O_Liq': 0.0, 'P2O5_Liq': 0.0, 'H2O_Liq': 0.0, 'CO2_Liq': 0.0, 'Fe3Fet_Liq': 0.0, 'P_bar': 0.0, 'T_Liq': 0.0}
                     return out
+                    break
 
                 PhaseList = melts.engine.solidNames
                 if PhaseList is None:
