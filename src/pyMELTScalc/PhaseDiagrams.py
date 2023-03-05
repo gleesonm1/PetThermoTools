@@ -9,6 +9,7 @@ from multiprocessing import Queue
 from multiprocessing import Process
 from tqdm.notebook import tqdm, trange
 import pickle
+import psutil
 
 def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar = None, T_min_C = None, T_max_C = None, T_num = None, P_min_bar = None, P_max_bar = None, P_num = None, Fe3Fet_Liq = None, H2O_Liq = None, fO2_buffer = None, fO2_offset = None, i_max = 25):
 
@@ -256,8 +257,12 @@ def phaseDiagram_eq(cores = None, Model = None, bulk = None, T_C = None, P_bar =
                         continue
 
     if Model == "Holland":
+        number_max = round(psutil.virtual_memory()[1]/(8000000000/50))
+        if number_max > 50:
+            number_max = 50 + round(0.9*(number_max - 50))
+
         Combined = pd.DataFrame()
-        if len(T_flat) < 50:
+        if len(T_flat) < number_max:
             c = 0
             for i in tqdm(range(len(T_flat))):
                 try:
@@ -266,7 +271,7 @@ def phaseDiagram_eq(cores = None, Model = None, bulk = None, T_C = None, P_bar =
                 except:
                     pass
         else:
-            s = len(T_flat)//50
+            s = len(T_flat)//number_max
             A = s//cores
             B = s % cores
 
@@ -287,8 +292,8 @@ def phaseDiagram_eq(cores = None, Model = None, bulk = None, T_C = None, P_bar =
             for j in tqdm(range(len(Group))):
                 ps = []
                 for i in range(int(cores*j), int(cores*j + Group[j])):
-                    T2 = T_flat[i*50:i*50+50]
-                    P2 = P_flat[i*50:i*50+50]
+                    T2 = T_flat[i*number_max:i*number_max+number_max]
+                    P2 = P_flat[i*number_max:i*number_max+number_max]
                     p = Process(target = equilibrate, args = (q,i), kwargs = {'Model': Model, 'comp': comp, 'T_C': T2, 'P_bar': P2, 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset})
 
                     ps.append(p)
