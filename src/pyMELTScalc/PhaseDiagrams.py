@@ -141,7 +141,7 @@ def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar
     return Combined
 
 
-def phaseDiagram_eq(cores = None, Model = None, bulk = None, T_C = None, P_bar = None, T_min_C = None, T_max_C = None, T_num = None, P_min_bar = None, P_max_bar = None, P_num = None, Fe3Fet_Liq = None, H2O_Liq = None, fO2_buffer = None, fO2_offset = None):
+def phaseDiagram_eq(cores = None, Model = None, bulk = None, T_C = None, P_bar = None, T_min_C = None, T_max_C = None, T_num = None, P_min_bar = None, P_max_bar = None, P_num = None, Fe3Fet_Liq = None, H2O_Liq = None, fO2_buffer = None, fO2_offset = None, number_max = 50):
 
     comp = bulk.copy()
 
@@ -257,10 +257,6 @@ def phaseDiagram_eq(cores = None, Model = None, bulk = None, T_C = None, P_bar =
                         continue
 
     if Model == "Holland":
-        number_max = round((4/cores)*psutil.virtual_memory()[1]/(8000000000/50))
-        if number_max > 50:
-            number_max = 50 + round(0.9*(number_max - 50))
-
         Combined = pd.DataFrame()
         if len(T_flat) < number_max:
             c = 0
