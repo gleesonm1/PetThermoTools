@@ -257,7 +257,7 @@ def phaseDiagram_eq(cores = None, Model = None, bulk = None, T_C = None, P_bar =
                         continue
 
     if Model == "Holland":
-        number_max = round(psutil.virtual_memory()[1]/(8000000000/50))
+        number_max = round((4/cores)*psutil.virtual_memory()[1]/(8000000000/50))
         if number_max > 50:
             number_max = 50 + round(0.9*(number_max - 50))
 
