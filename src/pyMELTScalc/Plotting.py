@@ -328,8 +328,151 @@ def residualT_plot(Results = None, P_bar = None, phases = None, H2O_Liq = None, 
                         a[i][j].plot_surface(X_new, Y_new, z_plot, cmap = 'viridis')
                         a[i][j].set_zlim([0,50])
 
+def plot_phaseDiagram(Model = "Holland", Combined = None, P_units = "bar", T_units = "C", lines = None, T_C = None, P_bar = None):
+    # step 1 identify phase groups
+    Results = Combined.copy()
 
+    if Model == "Holland":
+        Phases = list(Results.keys())[2:]
 
+    if T_C is None:
+        T_C = np.unique(Results['T_C'])
+    if P_bar is None:
+        P_bar = np.unique(Results['P_bar'])
+
+    A = [None]*len(Results['T_C'])
+    for i in range(len(Results['T_C'])):
+        for p in Phases:
+            if Results[p].loc[i] == "Y":
+                if A[i] is None:
+                    A[i] = p
+                else:
+                    A[i] = A[i] + ' ' + p
+
+        if A[i] is None:
+            A[i] = "None"
+
+    Results['Phase'] = A
+
+    Results = Results.sort_values(['T_C', 'P_bar'], ascending=[True, True])
+
+    B = np.zeros(len(Results['Phase']))
+    C = np.sort(np.unique(A))
+    for i in range(len(C)):
+        B[np.where(Results['Phase'] == C[i])] = i
+
+    Results['PhaseNo.'] = B
+    Results['PhaseNo.'][Results['Phase'] == "None"] = np.nan
+
+    PT_Results = {}
+    PT_Results['T_C'] = Results['T_C'].values.reshape((len(T_C),len(P_bar)))
+    PT_Results['P_bar'] = Results['P_bar'].values.reshape((len(T_C),len(P_bar)))
+    PT_Results['Phase'] = Results['Phase'].values.reshape((len(T_C),len(P_bar)))
+    PT_Results['PhaseNo.'] = Results['PhaseNo.'].values.reshape((len(T_C),len(P_bar)))
+
+    if T_units == "K":
+        PT_Results['T_C'] = PT_Results['T_C'] + 273.15
+
+    if P_units == "MPa":
+        PT_Results['P_bar'] = PT_Results['P_bar']/10
+    elif P_units == "kbar":
+        PT_Results['P_bar'] = PT_Results['P_bar']/1000
+    elif P_units == "GPa":
+        PT_Results['P_bar'] = PT_Results['P_bar']/10000
+
+    f, a = plt.subplots(1,2, figsize = (10,6), gridspec_kw = {'width_ratios': [8,2]})
+    a[1].axis("off")
+    z1 = a[0].pcolormesh(PT_Results['T_C'],
+                    PT_Results['P_bar'],
+                    PT_Results['PhaseNo.'], cmap = "Reds", zorder = 2, shading = 'auto')
+
+    if T_units == "K":
+        a[0].set_xlabel('Temperature ($\degree$K)')
+    else:
+        a[0].set_xlabel('Temperature ($\degree$C)')
+
+    if P_units == "MPa":
+        a[0].set_ylabel('Pressure (MPa)')
+    elif P_units == "kbar":
+        a[0].set_ylabel('Pressure (kbar)')
+    elif P_units == "GPa":
+        a[0].set_ylabel('Pressure (GPa)')
+    else:
+        a[0].set_ylabel('Pressure (bar)')
+
+    j = len(np.unique(np.unique(Results['Phase'])))
+    cmap = plt.get_cmap('Reds')
+    cmap = cmap(np.linspace(1,0,len(np.unique(np.unique(Results['Phase'])))+1))
+    for i in np.unique(np.unique(Results['Phase'])):
+        if len(Results['PhaseNo.'].values[np.where(Results['Phase'].values == i)]) > 1200:
+            T_print = np.nanmean(Results['T_C'][Results['Phase'] == i])
+            P_print = np.nanmean(Results['P_bar'][Results['Phase'] == i])
+
+            p = np.polyfit(Results['T_C'][Results['Phase'] == i], Results['P_bar'][Results['Phase'] == i], 1)
+
+            a[0].text(T_print, P_print, i,
+                    horizontalalignment='center',
+                    verticalalignment='center',
+                fontsize = 8,
+                    rotation = p[0])
+
+        a[1].plot(0,j, 'sk', markerfacecolor = cmap[j][0:3], ms = 10)
+        a[1].text(1, j-0.2, i, fontsize = 10)
+        j = j-1
+
+    a[1].set_xlim([-0.2, 4])
+
+    if lines is not None:
+        A = np.zeros((len(T_C)+len(T_C)-1,len(P_bar)+len(P_bar)-1))
+        T_mid = np.zeros((len(T_C)+len(T_C)-1,len(P_bar)+len(P_bar)-1))
+        P_mid = np.zeros((len(T_C)+len(T_C)-1,len(P_bar)+len(P_bar)-1))
+        tol = 1e-9
+        for i in range(np.shape(A[0])[0]):
+            for j in range(np.shape(A[1])[0]):
+                if i % 2 == 0:
+                    if j % 2 == 0:
+                        T_mid[i,j] = Results['T_C'][int(i/2),int(j/2)]
+                        P_mid[i,j] = Results['P_bar'][int(i/2), int(j/2)]
+                    elif j % 2 != 0:
+                        T_mid[i,j] = np.nanmean(np.array([PT_Results['T_C'][int(i/2),int(j/2-0.5)],
+                                                        PT_Results['T_C'][int(i/2),int(j/2+0.5)]]))
+                        P_mid[i,j] = np.nanmean(np.array([PT_Results['P_bar'][int(i/2),int(j/2-0.5)],
+                                                        PT_Results['P_bar'][int(i/2),int(j/2+0.5)]]))
+                        identical = np.allclose(PT_Results['PhaseNo.'][int(i/2),int(j/2-0.5)],
+                                                PT_Results['PhaseNo.'][int(i/2),int(j/2+0.5)], rtol=tol, atol=tol)
+
+                        if identical == False:
+                            A[i,j] = 1
+
+                elif i % 2 != 0:
+                    if j % 2 == 0:
+                        T_mid[i,j] = np.nanmean(np.array([PT_Results['T_C'][int(i/2-0.5),int(j/2)],
+                                                        PT_Results['T_C'][int(i/2+0.5),int(j/2)]]))
+                        P_mid[i,j] = np.nanmean(np.array([PT_Results['P_bar'][int(i/2-0.5),int(j/2)],
+                                                        PT_Results['P_bar'][int(i/2+0.5),int(j/2)]]))
+                        identical = np.allclose(PT_Results['PhaseNo.'][int(i/2-0.5),int(j/2)],
+                                                PT_Results['PhaseNo.'][int(i/2+0.5),int(j/2)], rtol=tol, atol=tol)
+
+                        if identical == False:
+                            A[i,j] = 1
+
+                    elif j % 2 != 0:
+                        T_mid[i,j] = np.nanmean(np.array([PT_Results['T_C'][int(i/2-0.5),int(j/2-0.5)],
+                                                        PT_Results['T_C'][int(i/2-0.5),int(j/2+0.5)],
+                                                        PT_Results['T_C'][int(i/2+0.5),int(j/2-0.5)],
+                                                        PT_Results['T_C'][int(i/2+0.5),int(j/2+0.5)]]))
+                        P_mid[i,j] = np.nanmean(np.array([PT_Results['P_bar'][int(i/2-0.5),int(j/2-0.5)],
+                                                        PT_Results['P_bar'][int(i/2-0.5),int(j/2+0.5)],
+                                                        PT_Results['P_bar'][int(i/2+0.5),int(j/2-0.5)],
+                                                        PT_Results['P_bar'][int(i/2+0.5),int(j/2+0.5)]]))
+                        identical = np.allclose(PT_Results['PhaseNo.'][int(i/2-0.5),int(j/2-0.5)], PT_Results['PhaseNo.'][int(i/2+0.5),int(j/2-0.5)], rtol=tol, atol=tol) \
+                                    and np.allclose(PT_Results['PhaseNo.'][int(i/2-0.5),int(j/2-0.5)], PT_Results['PhaseNo.'][int(i/2-0.5),int(j/2+0.5)], rtol=tol, atol=tol) \
+                                    and np.allclose(PT_Results['PhaseNo.'][int(i/2-0.5),int(j/2-0.5)], PT_Results['PhaseNo.'][int(i/2+0.5),int(j/2+0.5)], rtol=tol, atol=tol)
+
+                        if identical == False:
+                            A[i,j] = 1
+
+        a[0].contour(T_mid, P_mid/10, A, colors = 'k', linewidths = 0.5)
 
 
 

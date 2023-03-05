@@ -20,6 +20,12 @@ def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar
     if Model is None:
         Model = "MELTSv1.0.2"
 
+    if Model == "Holland":
+        import pyMAGEMINcalc as MM
+        import julia
+        import time
+        from julia import MAGEMinCalc
+
     # if comp is entered as a pandas series, it must first be converted to a dict
     if type(comp) == pd.core.series.Series:
         comp = comp.to_dict()
@@ -144,6 +150,9 @@ def phaseDiagram_eq(cores = None, Model = None, bulk = None, T_C = None, P_bar =
     if Model is None:
         Model = "MELTSv1.0.2"
 
+    if Model == "Holland":
+        import pyMAGEMINcalc as MM
+
     # if comp is entered as a pandas series, it must first be converted to a dict
     if type(comp) == pd.core.series.Series:
         comp = comp.to_dict()
@@ -162,88 +171,145 @@ def phaseDiagram_eq(cores = None, Model = None, bulk = None, T_C = None, P_bar =
     T_flat = np.round(T.flatten(),2)
     P_flat = np.round(P.flatten(),2)
 
-    A = len(P_flat)//cores
-    B = len(P_flat) % cores
-    if A > 0:
-        Group = np.zeros(A) + cores
-        if B > 0:
-            Group = np.append(Group, B)
-    else:
-        Group = np.array([B])
-
-    qs = []
-    q = Queue()
-    c = 0
-    #Combined = pd.DataFrame(columns = ['T_C', 'P_bar'], data = np.zeros((1,2)))
-    for j in tqdm(range(len(Group))):
-        ps = []
-        for i in range(int(cores*j), int(cores*j + Group[j])):
-            p = Process(target = equilibrate, args = (q,i), kwargs = {'Model': Model, 'comp': comp, 'T_C': T_flat[i], 'P_bar': P_flat[i], 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset})
-
-            ps.append(p)
-            p.start()
-
-        TIMEOUT = 30 #+ #0.5*len(T_flat)
-        start = time.time()
-        for p in ps:
-            if TIMEOUT  - (time.time() - start) > 5:
-                try:
-                    ret = q.get(timeout = TIMEOUT - (time.time() - start))
-                except:
-                    ret = []
-
-            else:
-                try:
-                    ret = q.get(timeout = 5)
-                except:
-                    ret = []
-
-            qs.append(ret)
-
-        # TIMEOUT = 5 #+ #0.5*len(T_flat)
-        # start = time.time()
-        # for p in ps:
-        #     if p.is_alive():
-        #         while time.time() - start <= TIMEOUT:
-        #             if not p.is_alive():
-        #                 p.terminate()
-        #                 p.join()
-        #                 break
-        #             time.sleep(.1)
-        #         else:
-        #             p.terminate()
-        #             p.join()
-        #     else:
-        #         p.terminate()
-        #         p.join()
-
-        for p in ps:
-            p.kill()
-
-    Results = {}
-    for i in range(len(qs)):
-        if len(qs[i]) > 0:
-            Res, index = qs[i]
-            Results['index = ' + str(index)] = Res
-
     if "MELTS" in Model:
-        Results = stich(Results, multi = True, Model = Model)
-
-    for i in Results.keys():
-        if c == 0:
-            if "MELTS" in Model:
-                Combined = Results[i]['All'].copy()
-            else:
-                Combined = Results[i].copy()
-            c = 1
+        A = len(P_flat)//cores
+        B = len(P_flat) % cores
+        if A > 0:
+            Group = np.zeros(A) + cores
+            if B > 0:
+                Group = np.append(Group, B)
         else:
-            if "MELTS" in Model:
-                Combined = pd.concat([Combined, Results[i]['All']], axis = 0, ignore_index = True)
+            Group = np.array([B])
+
+        qs = []
+        q = Queue()
+        c = 0
+        #Combined = pd.DataFrame(columns = ['T_C', 'P_bar'], data = np.zeros((1,2)))
+        for j in tqdm(range(len(Group))):
+            ps = []
+            for i in range(int(cores*j), int(cores*j + Group[j])):
+                p = Process(target = equilibrate, args = (q,i), kwargs = {'Model': Model, 'comp': comp, 'T_C': T_flat[i], 'P_bar': P_flat[i], 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset})
+
+                ps.append(p)
+                p.start()
+
+            TIMEOUT = 60 #+ #0.5*len(T_flat)
+            start = time.time()
+            for p in ps:
+                if TIMEOUT  - (time.time() - start) > 5:
+                    try:
+                        ret = q.get(timeout = TIMEOUT - (time.time() - start))
+                    except:
+                        ret = []
+
+                else:
+                    try:
+                        ret = q.get(timeout = 5)
+                    except:
+                        ret = []
+
+                qs.append(ret)
+
+            # TIMEOUT = 5 #+ #0.5*len(T_flat)
+            # start = time.time()
+            # for p in ps:
+            #     if p.is_alive():
+            #         while time.time() - start <= TIMEOUT:
+            #             if not p.is_alive():
+            #                 p.terminate()
+            #                 p.join()
+            #                 break
+            #             time.sleep(.1)
+            #         else:
+            #             p.terminate()
+            #             p.join()
+            #     else:
+            #         p.terminate()
+            #         p.join()
+
+            for p in ps:
+                p.kill()
+
+        Results = {}
+        for i in range(len(qs)):
+            if len(qs[i]) > 0:
+                Res, index = qs[i]
+                Results['index = ' + str(index)] = Res
+
+        if "MELTS" in Model:
+            Results = stich(Results, multi = True, Model = Model)
+
+        for i in Results.keys():
+            if c == 0:
+                if "MELTS" in Model:
+                    Combined = Results[i]['All'].copy()
+                else:
+                    Combined = Results[i].copy()
+                c = 1
             else:
+                if "MELTS" in Model:
+                    Combined = pd.concat([Combined, Results[i]['All']], axis = 0, ignore_index = True)
+                else:
+                    try:
+                        Combined = pd.concat([Combined, Results[i]], axis = 0, ignore_index = True)
+                    except:
+                        continue
+
+    if Model == "Holland":
+        Combined = pd.DataFrame()
+        if len(T_flat) < 50:
+            c = 0
+            for i in tqdm(range(len(T_flat))):
                 try:
-                    Combined = pd.concat([Combined, Results[i]], axis = 0, ignore_index = True)
+                    Results = MM.equilibrate(Model = Model, P_bar = P_flat[i], T_C = T_flat[i], comp = comp, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset)
+                    Combined = pd.concat([Combined, Results], axis = 0, ignore_index = True)
                 except:
-                    continue
+                    pass
+        else:
+            s = len(T_flat)//50
+            A = s//cores
+            B = s % cores
+
+            # A = s//cores
+            # B = s % cores
+            if A > 0:
+                Group = np.zeros(A) + cores
+            if B > 0:
+                if A > 0:
+                    Group = np.append(Group, B)
+                else:
+                    Group = np.array([B])
+            # else:
+            #     Group = np.array([B])
+
+            qs = []
+            q = Queue()
+            for j in tqdm(range(len(Group))):
+                ps = []
+                for i in range(int(cores*j), int(cores*j + Group[j])):
+                    T2 = T_flat[i*50:i*50+50]
+                    P2 = P_flat[i*50:i*50+50]
+                    p = Process(target = equilibrate, args = (q,i), kwargs = {'Model': Model, 'comp': comp, 'T_C': T2, 'P_bar': P2, 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset})
+
+                    ps.append(p)
+                    p.start()
+
+                for p in ps:
+                    try:
+                        ret = q.get()
+                    except:
+                        ret = []
+
+                    qs.append(ret)
+
+                for p in ps:
+                    p.kill()
+
+            for i in range(len(qs)):
+                if len(qs[i]) > 0:
+                    Res, index = qs[i]
+                    Combined = pd.concat([Combined, Res], axis = 0, ignore_index = True)
+
 
     if len(Combined['T_C']) < len(T_flat):
         flat = np.round(np.array([T.flatten(), P.flatten()]).T,2)
@@ -271,6 +337,15 @@ def equilibrate(q, index,*, Model = None, P_bar = None, T_C = None, comp = None,
 
     if "Holland" in Model:
         import pyMAGEMINcalc as MM
-        Results = MM.equilibrate(Model = Model, P_bar = P_bar, T_C = T_C, comp = comp, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset)
-        q.put([Results, index])
+        from tqdm.notebook import tqdm, trange
+        Combined = pd.DataFrame()
+        for i in range(len(T_C)):
+            try:
+                Results = MM.equilibrate(Model = Model, P_bar = P_bar[i], T_C = T_C[i], comp = comp, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset)
+                Combined = pd.concat([Combined, Results], axis = 0, ignore_index = True)
+            except:
+                pass
+
+        # Results = MM.equilibrate(Model = Model, P_bar = P_bar, T_C = T_C, comp = comp, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset)
+        q.put([Combined, index])
         return
