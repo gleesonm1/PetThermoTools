@@ -138,6 +138,22 @@ def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar
         else:
             break
 
+    if len(Combined['T_C']) < len(T_flat):
+        flat = np.round(np.array([T.flatten(), P.flatten()]).T,2)
+        Res_flat = np.round(np.array([Combined['T_C'].values, Combined['P_bar'].values]).T,2)
+        new_flat = flat[np.where((flat[:, None] == Res_flat).all(-1).any(-1) == False)]
+
+        for i in range(len(new_flat)):
+            df = pd.DataFrame(columns = ['T_C', 'P_bar'])
+            df.loc[0] = new_flat[i]
+
+            Combined = pd.concat([Combined, df], axis = 0, ignore_index = True)
+
+    Combined['T_C'] = np.round(Combined['T_C'], 2)
+    Combined['P_bar'] = np.round(Combined['P_bar'], 2)
+    Combined = Combined.sort_values(['T_C', 'P_bar'])
+    Combined = Combined.reset_index(drop = True)
+
     return Combined
 
 

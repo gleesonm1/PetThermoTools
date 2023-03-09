@@ -2,7 +2,6 @@ import numpy as np
 import pandas as pd
 from shapely.geometry import MultiPoint, Point, Polygon
 import matplotlib.pyplot as plt
-import mplcursors
 from pyMELTScalc.GenFuncs import *
 
 def harker(Results = None, x_axis = None, y_axis = None, phase = None, line_style = None, line_color = None, data = None, d_color = None, d_marker = None):
@@ -386,14 +385,6 @@ def plot_phaseDiagram(Model = "Holland", Combined = None, P_units = "bar", T_uni
     z1 = a[0].pcolormesh(PT_Results['T_C'],
                     PT_Results['P_bar'],
                     PT_Results['PhaseNo.'], cmap = "Reds", zorder = 2, shading = 'auto')
-
-    def label_function(sel):
-        i, j = sel.target.index
-        label = labels[i][j]
-        return f'{label}: {z[i,j]:.2f}'
-
-    # Set the cursor to display the label and value
-    mplcursors.cursor(z1).connect('add', lambda sel: sel.annotation.set_text(label_function(sel)))
 
 
     if T_units == "K":
