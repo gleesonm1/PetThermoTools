@@ -10,6 +10,7 @@ from multiprocessing import Process
 from tqdm.notebook import tqdm, trange
 import pickle
 import psutil
+import time
 
 def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar = None, T_min_C = None, T_max_C = None, T_num = None, P_min_bar = None, P_max_bar = None, P_num = None, Fe3Fet_Liq = None, H2O_Liq = None, fO2_buffer = None, fO2_offset = None, i_max = 25):
 
@@ -24,7 +25,6 @@ def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar
     if Model == "Holland":
         import pyMAGEMINcalc as MM
         import julia
-        import time
         from julia import MAGEMinCalc
 
     # if comp is entered as a pandas series, it must first be converted to a dict
@@ -197,7 +197,7 @@ def phaseDiagram_eq(cores = None, Model = None, bulk = None, T_C = None, P_bar =
             TIMEOUT = 60 #+ #0.5*len(T_flat)
             start = time.time()
             for p in ps:
-                if TIMEOUT  - (time.time() - start) > 5:
+                if TIMEOUT  - (time.time() - start) > 10:
                     try:
                         ret = q.get(timeout = TIMEOUT - (time.time() - start))
                     except:
@@ -205,28 +205,11 @@ def phaseDiagram_eq(cores = None, Model = None, bulk = None, T_C = None, P_bar =
 
                 else:
                     try:
-                        ret = q.get(timeout = 5)
+                        ret = q.get(timeout = 10)
                     except:
                         ret = []
 
                 qs.append(ret)
-
-            # TIMEOUT = 5 #+ #0.5*len(T_flat)
-            # start = time.time()
-            # for p in ps:
-            #     if p.is_alive():
-            #         while time.time() - start <= TIMEOUT:
-            #             if not p.is_alive():
-            #                 p.terminate()
-            #                 p.join()
-            #                 break
-            #             time.sleep(.1)
-            #         else:
-            #             p.terminate()
-            #             p.join()
-            #     else:
-            #         p.terminate()
-            #         p.join()
 
             for p in ps:
                 p.kill()
@@ -317,8 +300,8 @@ def phaseDiagram_eq(cores = None, Model = None, bulk = None, T_C = None, P_bar =
         Res_flat = np.round(np.array([Combined['T_C'].values, Combined['P_bar'].values]).T,2)
         new_flat = flat[np.where((flat[:, None] == Res_flat).all(-1).any(-1) == False)]
 
-        Combined['T_C'] = np.round(Combined['T_C'].values, 2)
-        Combined['P_bar'] = np.round(Combined['P_bar'].values, 2)
+        # Combined['T_C'] = np.round(Combined['T_C'].values, 2)
+        # Combined['P_bar'] = np.round(Combined['P_bar'].values, 2)
 
         for i in range(len(new_flat)):
             df = pd.DataFrame(columns = ['T_C', 'P_bar'])
