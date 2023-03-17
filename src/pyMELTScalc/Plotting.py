@@ -334,6 +334,8 @@ def plot_phaseDiagram(Model = "Holland", Combined = None, P_units = "bar", T_uni
 
     if Model == "Holland":
         Phases = list(Results.keys())[2:]
+    else:
+        Phases = list(Results.columns[Results.columns.str.contains('mass')])
 
     if T_C is None:
         T_C = np.unique(Results['T_C'])
@@ -343,11 +345,18 @@ def plot_phaseDiagram(Model = "Holland", Combined = None, P_units = "bar", T_uni
     A = [None]*len(Results['T_C'])
     for i in range(len(Results['T_C'])):
         for p in Phases:
-            if Results[p].loc[i] == "Y":
-                if A[i] is None:
-                    A[i] = p
-                else:
-                    A[i] = A[i] + ' ' + p
+            if Model =="Holland":
+                if Results[p].loc[i] == "Y":
+                    if A[i] is None:
+                        A[i] = p
+                    else:
+                        A[i] = A[i] + ' ' + p
+            else:
+                if (~np.isnan(Results[p].loc[i])) & (Results[p].loc[i] > 0.0):
+                    if A[i] is None:
+                        A[i] = p[5:]
+                    else:
+                        A[i] = A[i] + ' ' + p[5:]
 
         if A[i] is None:
             A[i] = "None"
@@ -385,7 +394,6 @@ def plot_phaseDiagram(Model = "Holland", Combined = None, P_units = "bar", T_uni
     z1 = a[0].pcolormesh(PT_Results['T_C'],
                     PT_Results['P_bar'],
                     PT_Results['PhaseNo.'], cmap = "Reds", zorder = 2, shading = 'auto')
-
 
     if T_units == "K":
         a[0].set_xlabel('Temperature ($\degree$K)')

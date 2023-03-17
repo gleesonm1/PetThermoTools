@@ -59,9 +59,10 @@ def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar
     c = 0
     j = 0
     while len(T_flat)>1:
-        print('Attempt ' + str(j))
         if j > i_max:
             break
+
+        print('Attempt ' + str(j))
 
         qs = []
         q = Queue()
@@ -138,11 +139,11 @@ def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar
         else:
             break
 
-    if len(Combined['T_C']) < len(T_flat):
-        flat = np.round(np.array([T.flatten(), P.flatten()]).T,2)
-        Res_flat = np.round(np.array([Combined['T_C'].values, Combined['P_bar'].values]).T,2)
-        new_flat = flat[np.where((flat[:, None] == Res_flat).all(-1).any(-1) == False)]
+    flat = np.round(np.array([T.flatten(), P.flatten()]).T,2)
+    Res_flat = np.round(np.array([Combined['T_C'].values, Combined['P_bar'].values]).T,2)
+    new_flat = flat[np.where((flat[:, None] == Res_flat).all(-1).any(-1) == False)]
 
+    if np.shape(new_flat)[0] > 0.0:
         for i in range(len(new_flat)):
             df = pd.DataFrame(columns = ['T_C', 'P_bar'])
             df.loc[0] = new_flat[i]
