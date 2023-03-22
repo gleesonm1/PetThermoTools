@@ -697,7 +697,7 @@ melt
     else:
         length = len(P)
 
-    Results['Conditions'] = pd.DataFrame(data = np.zeros((length, 6)), columns = ['temperature', 'pressure', 'h', 's', 'v', 'dvdp'])
+    Results['Conditions'] = pd.DataFrame(data = np.zeros((length, 7)), columns = ['temperature', 'pressure', 'h', 's', 'v', 'dvdp', 'logfO2'])
     Results['liquid1'] = pd.DataFrame(data = np.zeros((length, 14)), columns = ['SiO2', 'TiO2', 'Al2O3', 'Fe2O3', 'Cr2O3', 'FeO', 'MnO', 'MgO', 'CaO', 'Na2O', 'K2O', 'P2O5', 'H2O', 'CO2'])
     Results['liquid1_prop'] = pd.DataFrame(data = np.zeros((length, 4)), columns = ['h', 'mass', 'v', 'rho'])
 
@@ -767,6 +767,8 @@ melt
                 Results['Conditions'][R].loc[i] = melts.engine.temperature
             elif R == 'pressure':
                 Results['Conditions'][R].loc[i] = melts.engine.pressure
+            elif R == 'logfO2':
+                Results['Conditions'][R].loc[i] = melts.engine.getProperty(R)
             else:
                 Results['Conditions'][R].loc[i] = melts.engine.getProperty(R, 'bulk')
 
