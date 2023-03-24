@@ -48,7 +48,7 @@ def equilibrate_MELTS(Model = None, P_bar = None, T_C = None, comp = None, fO2_b
     try:
         melts.engine.calcEquilibriumState(1,0)
     except:
-        return PhaseList, PhaseComp, PhaseProp
+        return Results
 
     SolidPhase = melts.engine.solidNames
     # if np.isnan(melts.engine.getProperty('mass', 'liquid1')):
@@ -637,7 +637,7 @@ melt
                 melts.engine.setSystemProperties(["Log fO2 Path: " + fO2_buffer, "Log fO2 Offset: " + str(fO2_offset)])
 
     if T_path_C is None:
-        if T_end_C is None and dt is None:
+        if T_end_C is None and dt_C is None:
             T = T_start_C
         elif T_end_C is not None and dt_C is not None:
             T = np.linspace(T_start_C, T_end_C, 1+round((T_start_C-T_end_C)/dt_C))
