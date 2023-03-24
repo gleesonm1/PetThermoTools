@@ -154,6 +154,7 @@ def plot_surfaces(Results = None, P_bar = None, phases = None, H2O_Liq = None):
 
 
 def residualT_plot(Results = None, P_bar = None, phases = None, H2O_Liq = None, Fe3Fet_Liq = None, T_cut_C = None):
+    
     if T_cut_C is None:
         T_cut_C = 12
 
@@ -329,7 +330,32 @@ def residualT_plot(Results = None, P_bar = None, phases = None, H2O_Liq = None, 
                         a[i][j].set_zlim([0,50])
 
 def plot_phaseDiagram(Model = "Holland", Combined = None, P_units = "bar", T_units = "C", lines = None, T_C = None, P_bar = None):
-    # step 1 identify phase groups
+    '''
+    This function plots the phase diagrams based on the results obtained from thermodynamic models. 
+    The data should be organized in a pandas dataframe that contains two
+    columns correspond to temperature (in Celsius) and pressure (in bars), and the following
+    columns correspond to the mass fractions of the phases present. 
+    The function outputs a phase diagram with different colors for
+    different phases, as well as a legend with the names of the phases and a black solid line 
+    for the phase boundaries (if requested).
+    
+    Input Parameters:
+        Model: string specifying which thermodynamic model was used to obtain the results. Default
+               is "Holland". Other option is "MELTS".
+        Combined: pandas dataframe with the results. The default value is None.
+        P_units: string specifying the units used for pressure. The default is "bar". Other options
+                 are "MPa", "kbar", and "GPa".
+        T_units: string specifying the units used for temperature. The default is "C". The other
+                 option is "K".
+        lines: True/False. Plot phase boundaries.
+        T_C: array with the temperature values in Celsius to be plotted. The default is None, and
+             the function will use all the temperature values provided in the Combined dataframe.
+        P_bar: array with the pressure values in bars to be plotted. The default is None, and the
+               function will use all the pressure values provided in the Combined dataframe.
+    
+    Output:
+        A plot of the phase diagram.
+    '''
     Results = Combined.copy()
 
     if Model == "Holland":
@@ -391,7 +417,7 @@ def plot_phaseDiagram(Model = "Holland", Combined = None, P_units = "bar", T_uni
 
     f, a = plt.subplots(1,2, figsize = (10,6), gridspec_kw = {'width_ratios': [8,2]})
     a[1].axis("off")
-    z1 = a[0].pcolormesh(PT_Results['T_C'],
+    a[0].pcolormesh(PT_Results['T_C'],
                     PT_Results['P_bar'],
                     PT_Results['PhaseNo.'], cmap = "Reds", zorder = 2, shading = 'auto')
 
@@ -485,4 +511,4 @@ def plot_phaseDiagram(Model = "Holland", Combined = None, P_units = "bar", T_uni
 
     plt.show()
 
-    return z1
+    return

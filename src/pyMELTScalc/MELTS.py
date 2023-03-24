@@ -768,7 +768,10 @@ melt
             elif R == 'pressure':
                 Results['Conditions'][R].loc[i] = melts.engine.pressure
             elif R == 'logfO2':
-                Results['Conditions'][R].loc[i] = melts.engine.getProperty(R)
+                try:
+                    Results['Conditions'][R].loc[i] = melts.engine.getProperty(R)
+                except:
+                    Results['Conditions'][R].loc[i] = np.nan
             else:
                 Results['Conditions'][R].loc[i] = melts.engine.getProperty(R, 'bulk')
 

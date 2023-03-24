@@ -8,11 +8,58 @@ import multiprocessing
 from multiprocessing import Queue
 from multiprocessing import Process
 from tqdm.notebook import tqdm, trange
-import pickle
-import psutil
 import time
 
 def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar = None, T_min_C = None, T_max_C = None, T_num = None, P_min_bar = None, P_max_bar = None, P_num = None, Fe3Fet_Liq = None, H2O_Liq = None, fO2_buffer = None, fO2_offset = None, i_max = 25):
+    """
+    Calculate phase diagrams for igneous systems (rocks and magmas).
+
+    Parameters:
+    -----------
+    cores : int, optional
+        The number of CPU cores to use for parallel processing. Default is None, which
+        sets the number of cores to the number of CPUs available on the machine.
+    Model : str, optional
+        The name of the thermodynamic model to use. Default is None, which sets the model
+        to "MELTSv1.0.2".
+    bulk : dict or pandas.Series
+        The bulk composition of the system. If passed as a pandas.Series, it will first
+        be converted to a dict. Default is None.
+    T_C : array-like, optional
+        The array of temperature values to use for the phase diagram, in degrees Celsius.
+        Default is None.
+    P_bar : array-like, optional
+        The array of pressure values to use for the phase diagram, in bars. Default is None.
+    T_min_C : float, optional
+        The minimum temperature value to use for the phase diagram, in degrees Celsius.
+        Default is None.
+    T_max_C : float, optional
+        The maximum temperature value to use for the phase diagram, in degrees Celsius.
+        Default is None.
+    T_num : int, optional
+        The number of temperature values to use for the phase diagram. Default is None.
+    P_min_bar : float, optional
+        The minimum pressure value to use for the phase diagram, in bars. Default is None.
+    P_max_bar : float, optional
+        The maximum pressure value to use for the phase diagram, in bars. Default is None.
+    P_num : int, optional
+        The number of pressure values to use for the phase diagram. Default is None.
+    Fe3Fet_Liq : float, optional
+        The Fe3+/Fetot ratio for the liquid phase. Default is None.
+    H2O_Liq : float, optional
+        The water content of the liquid phase, in wt%. Default is None.
+    fO2_buffer : str, optional
+        The name of the oxygen buffer to use for the phase diagram. Default is None.
+    fO2_offset : float, optional
+        The offset to apply to the fO2 buffer value. Default is None.
+    i_max : int, optional
+        The maximum number of attempts to make at calculating the phase diagram. Default is 25.
+
+    Returns:
+    --------
+    pandas.DataFrame
+        A dataframe containing the phase diagram results.
+    """
 
     comp = bulk.copy()
 
@@ -46,15 +93,6 @@ def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar
     P_flat = np.round(P.flatten(),2)
 
     A = len(P_flat)//cores + 1
-
-    # B = len(P_flat) % cores
-    #
-    # if A > 0:
-    #     Group = np.zeros(A) + cores
-    #     if B > 0:
-    #         Group = np.append(Group, B)
-    # else:
-    #     Group = np.array([B])
 
     c = 0
     j = 0
@@ -159,7 +197,56 @@ def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar
 
 
 def phaseDiagram_eq(cores = None, Model = None, bulk = None, T_C = None, P_bar = None, T_min_C = None, T_max_C = None, T_num = None, P_min_bar = None, P_max_bar = None, P_num = None, Fe3Fet_Liq = None, H2O_Liq = None, fO2_buffer = None, fO2_offset = None, number_max = 50):
+    """
+    Calculates the phase diagram for a given bulk composition over a
+    range of temperatures and pressures.
 
+    Parameters:
+    -----------
+    cores : int or None, optional
+        The number of cores to use for multiprocessing, default is set to the number of logical processors available.
+    Model : str or None, optional
+        The thermodynamic model to use, either 'MELTSv1.0.2' or 'Holland'. Default is None.
+    bulk : dict, pandas.core.series.Series
+        The bulk composition to use. Can be a dictionary with the element names and mole
+        fractions, a pandas series.
+    T_C : array-like or None, optional
+        The temperature range (in degrees Celsius) to calculate the phase diagram over. If
+        T_min_C is given and T_C is None, this array is generated automatically. Default is None.
+    P_bar : array-like or None, optional
+        The pressure range (in bars) to calculate the phase diagram over. If P_min_bar is given
+        and P_bar is None, this array is generated automatically. Default is None.
+    T_min_C : float or None, optional
+        The minimum temperature (in degrees Celsius) to calculate the phase diagram over. Default is None.
+    T_max_C : float or None, optional
+        The maximum temperature (in degrees Celsius) to calculate the phase diagram over. Default is None.
+    T_num : int or None, optional
+        The number of temperature steps to calculate the phase diagram over. Default is None.
+    P_min_bar : float or None, optional
+        The minimum pressure (in bars) to calculate the phase diagram over. Default is None.
+    P_max_bar : float or None, optional
+        The maximum pressure (in bars) to calculate the phase diagram over. Default is None.
+    P_num : int or None, optional
+        The number of pressure steps to calculate the phase diagram over. Default is None.
+    Fe3Fet_Liq : float or None, optional
+        The Fe3+/Fet ratio of the liquid for the bulk composition. Default is None.
+    H2O_Liq : float or None, optional
+        The H2O content of the liquid for the bulk composition. Default is None.
+    fO2_buffer : str or None, optional
+        The oxygen buffer to use for MELTS. Default is None.
+    fO2_offset : float or None, optional
+        The oxygen buffer offset to use for MELTS. Default is None.
+    number_max : int, optional
+        The maximum number of calculations to perform in a single Holland model calculation.
+        If there are more than this number of calculations to perform, multiprocessing is used.
+        Default is 50.
+
+    Returns:
+    --------
+    pandas.core.frame.DataFrame
+        A dataframe containing the equilibrium phase assemblage(s) for the given bulk
+        composition over the range of temperatures and pressures specified.
+    """
     comp = bulk.copy()
 
     if cores is None:
@@ -271,8 +358,6 @@ def phaseDiagram_eq(cores = None, Model = None, bulk = None, T_C = None, P_bar =
             A = s//cores
             B = s % cores
 
-            # A = s//cores
-            # B = s % cores
             if A > 0:
                 Group = np.zeros(A) + cores
             if B > 0:
@@ -280,8 +365,6 @@ def phaseDiagram_eq(cores = None, Model = None, bulk = None, T_C = None, P_bar =
                     Group = np.append(Group, B)
                 else:
                     Group = np.array([B])
-            # else:
-            #     Group = np.array([B])
 
             qs = []
             q = Queue()
@@ -347,6 +430,5 @@ def equilibrate(q, index,*, Model = None, P_bar = None, T_C = None, comp = None,
             except:
                 pass
 
-        # Results = MM.equilibrate(Model = Model, P_bar = P_bar, T_C = T_C, comp = comp, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset)
         q.put([Combined, index])
         return
