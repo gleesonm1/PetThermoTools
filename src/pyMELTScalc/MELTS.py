@@ -510,7 +510,7 @@ def phaseSat_MELTS(Model = None, comp = None, phases = None, T_initial_C = None,
 
     return Results
 
-def path_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid = None, T_C = None, T_path_C = None, T_start_C = None, T_end_C = None, dt_C = None, P_bar = None, P_path_bar = None, P_start_bar = None, P_end_bar = None, dp_bar = None, isenthalpic = None, isentropic = None, isochoric = None, find_liquidus = None, fO2_buffer = None, fO2_offset = None, fluid_sat = None):
+def path_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid = None, T_C = None, T_path_C = None, T_start_C = None, T_end_C = None, dt_C = None, P_bar = None, P_path_bar = None, P_start_bar = None, P_end_bar = None, dp_bar = None, isenthalpic = None, isentropic = None, isochoric = None, find_liquidus = None, fO2_buffer = None, fO2_offset = None, fluid_sat = None, Crystallinity_limit = None):
     '''
     Perform a single  calculation in MELTS. WARNING! Running this function directly from the command land/jupyter notebook will initiate the MELTS C library in the main python process. Once this has been initiated the MELTS C library cannot be re-loaded and failures during the calculation will likely cause a terminal error to occur.
 
@@ -576,6 +576,9 @@ melt
 
     fO2_offset: float
         Offset from the buffer spcified in fO2_buffer (log units).
+
+    Crystallinity_limit: float
+        Crystallinity of the system (as a fraction) to determine when the calculation will be terminated.    
 
     Returns:
     ----------
@@ -794,6 +797,18 @@ melt
 
                 for pr in Results[phase + '_prop']:
                     Results[phase + '_prop'][pr].loc[i] = melts.engine.getProperty(pr, phase)
+
+        if Crystallinity_limit is not None:
+            Volume = 0
+            Fluid_List = ['liquid1', 'water1', 'fluid1']
+            for phase in PhaseList:
+                if phase not in Fluid_List:
+                    Volume = Volume + float(Results[phase + '_prop']['v'].loc[i])
+            
+            Total_volume = Volume + float(Results['liquid1_prop']['v'].loc[i])
+
+            if Volume/Total_volume > Crystallinity_limit:
+                return Results
 
         melts = melts.addNodeAfter()
 

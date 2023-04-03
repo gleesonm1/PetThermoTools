@@ -36,7 +36,8 @@ setup(
             'scipy',
             'julia',
             'tinynumpy',
-            'shapely'
+            'shapely',
+            'Thermobar'
             ],
 
     classifiers=[
