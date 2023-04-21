@@ -12,6 +12,82 @@ from multiprocessing import Queue
 from multiprocessing import Process
 from tqdm.notebook import tqdm, trange
 
+def equilibrate_multi(cores = None, Model = None, bulk = None, T_C = None, P_bar = None, Fe3Fet_Liq = None, H2O_Liq = None, fO2_buffer = None, fO2_offset = None):
+    comp = bulk.copy()
+
+    if Model is None:
+        Model = "MELTSv1.0.2"
+
+    if Model == "Holland":
+        import pyMAGEMINcalc as MM
+
+    if cores is None:
+        cores = multiprocessing.cpu_count()
+
+    # if comp is entered as a pandas series, it must first be converted to a dict
+    if type(comp) == pd.core.series.Series:
+        comp = comp.to_dict()
+
+    # ensure the bulk composition has the correct headers etc.
+    comp = comp_fix(Model = Model, comp = comp, Fe3Fet_Liq = Fe3Fet_Liq, H2O_Liq = H2O_Liq)
+
+    if type(comp) == pd.core.frame.DataFrame:
+        A = len(P_bar)//cores
+        B = len(P_bar) % cores
+
+        if A > 0:
+            Group = np.zeros(A) + cores
+            if B > 0:
+                Group = np.append(Group, B)
+        else:
+            Group = np.array([B])
+
+        qs = []
+        q = Queue()
+
+        for j in tqdm(range(len(Group))):
+            ps = []
+            for i in range(int(cores*j), int(cores*j + Group[j])):
+                p = Process(target = equilibrate, args = (q, i), kwargs = {'Model': Model, 'P_bar': P_bar[i], 'T_C': T_C[i], 'comp': comp.loc[i].to_dict(), 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset})
+
+                ps.append(p)
+                p.start()
+
+            for p in ps:
+                try:
+                    ret = q.get(timeout = 90)
+                except:
+                    ret = []
+
+                qs.append(ret)
+
+            TIMEOUT = 5
+            start = time.time()
+            for p in ps:
+                if p.is_alive():
+                    while time.time() - start <= TIMEOUT:
+                        if not p.is_alive():
+                            p.join()
+                            p.terminate()
+                            break
+                        time.sleep(.1)
+                    else:
+                        p.terminate()
+                        p.join(5)
+                else:
+                    p.join()
+                    p.terminate()
+
+        Output = {}
+        for i in range(len(qs)):
+            if len(qs[i])>0:
+                Results, index = qs[i]
+
+                Output[str(index)] = Results
+
+    return Output
+
+
 def findCO2_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P_bar = None, Fe3Fet_Liq = None, H2O_Liq = None, fO2_buffer = None, fO2_offset = None):
 
     comp = bulk.copy()
@@ -399,3 +475,7 @@ def findLiq(q, index,*, Model = None, P_bar = None, T_initial_C = None, comp = N
         #    q.put([T_Liq, H2O_Melt, index, T_in])
         #    return
 
+def equilibrate(q, i,*, Model = None, P_bar = None, T_C = None, comp = None, fO2_buffer = None, fO2_offset = None):
+    Res = equilibrate_MELTS(Model = Model, P_bar = P_bar, T_C = T_C, comp = comp, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset)
+    q.put([Res, i])
+    return

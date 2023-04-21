@@ -119,29 +119,99 @@ def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar
             ps.append(p)
             p.start()
 
-        TIMEOUT = 300 #+ #0.5*len(T_flat)
+        TIMEOUT = 180
+        start = time.time()
+
+        for p in ps:
+            if time.time() - start < TIMEOUT - 10:
+                try:
+                    ret = q.get(timeout = TIMEOUT - (time.time()-start) + 10)
+                except:
+                    ret = []
+            else:
+                try:
+                    ret = q.get(timeout = 10)
+                except:
+                    ret = []
+
+            qs.append(ret)
+
+        TIMEOUT = 5
         start = time.time()
         for p in ps:
             if p.is_alive():
                 while time.time() - start <= TIMEOUT:
                     if not p.is_alive():
-                        p.terminate()
                         p.join()
+                        p.terminate()
                         break
                     time.sleep(.1)
                 else:
                     p.terminate()
-                    p.join()
+                    p.join(5)
             else:
-                p.terminate()
                 p.join()
+                p.terminate()
 
-            try:
-                ret = q.get(timeout = 2)
-            except:
-                ret = []
+        # TIMEOUT = 150 #+ #0.5*len(T_flat)
+        # start = time.time()
+        # for p in ps:
+        #     ret = []
+        #     if time.time() - start <= TIMEOUT:
+        #         while time.time() - start <= TIMEOUT:
+        #             try:
+        #                 ret = q.get(timeout = 2)
+        #                 break
+        #             except:
+        #                 continue
+        #
+        #             # if p.is_alive():
+        #             #     time.sleep(.1)
+        #             # else:
+        #             #     p.terminate()
+        #             #     p.join()
+        #             #     break
+        #
+        #         # if p.is_alive():
+        #     else:
+        #         try:
+        #             ret = q.get(timeout = 5)
+        #         except:
+        #             ret =[]
+        #
+        #     p.terminate()
+        #     p.join()
 
-            qs.append(ret)
+            # else:
+            #     p.terminate()
+            #     p.join()
+
+            # try:
+            #     ret = q.get(timeout = 5)
+            # except:
+            #     ret = []
+
+            # qs.append(ret)
+            # if p.is_alive():
+            #     while time.time() - start <= TIMEOUT:
+            #         if not p.is_alive():
+            #             p.terminate()
+            #             p.join()
+            #             break
+            #         time.sleep(.1)
+            #     else:
+            #         p.terminate()
+            #         p.join()
+            # else:
+            #     p.terminate()
+            #     p.join()
+            #
+            # try:
+            #     ret = q.get(timeout = 2)
+            # except:
+            #     ret = []
+
+            # qs.append(ret)
 
         for p in ps:
             p.kill()

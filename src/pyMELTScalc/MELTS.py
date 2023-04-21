@@ -743,28 +743,28 @@ melt
                 else:
                     melts.engine.calcEquilibriumState(1,0)
             except:
-                return Results
+                # return Results
                 break
 
         if isenthalpic is not None:
             try:
                 melts.engine.calcEquilibriumState(2,0)
             except:
-                return Results
+                # return Results
                 break
 
         if isentropic is not None:
             try:
                 melts.engine.calcEquilibriumState(3,0)
             except:
-                return Results
+                # return Results
                 break
 
         if isochoric is not None:
             try:
                 melts.engine.calcEquilibriumState(4,0)
             except:
-                return Results
+                # return Results
                 break
 
         for R in Results['Conditions']:
@@ -783,7 +783,7 @@ melt
         try:
             PhaseList = ['liquid1'] + melts.engine.solidNames
         except:
-            return Results
+            # return Results
             break
 
         for phase in PhaseList:
@@ -808,7 +808,7 @@ melt
             Total_volume = Volume + float(Results['liquid1_prop']['v'].loc[i])
 
             if Volume/Total_volume > Crystallinity_limit:
-                return Results
+                break
 
         melts = melts.addNodeAfter()
 
