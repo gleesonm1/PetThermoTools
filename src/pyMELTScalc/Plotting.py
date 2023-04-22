@@ -154,7 +154,7 @@ def plot_surfaces(Results = None, P_bar = None, phases = None, H2O_Liq = None):
 
 
 def residualT_plot(Results = None, P_bar = None, phases = None, H2O_Liq = None, Fe3Fet_Liq = None, T_cut_C = None):
-    
+
     if T_cut_C is None:
         T_cut_C = 12
 
@@ -331,14 +331,14 @@ def residualT_plot(Results = None, P_bar = None, phases = None, H2O_Liq = None, 
 
 def plot_phaseDiagram(Model = "Holland", Combined = None, P_units = "bar", T_units = "C", lines = None, T_C = None, P_bar = None):
     '''
-    This function plots the phase diagrams based on the results obtained from thermodynamic models. 
+    This function plots the phase diagrams based on the results obtained from thermodynamic models.
     The data should be organized in a pandas dataframe that contains two
     columns correspond to temperature (in Celsius) and pressure (in bars), and the following
-    columns correspond to the mass fractions of the phases present. 
+    columns correspond to the mass fractions of the phases present.
     The function outputs a phase diagram with different colors for
-    different phases, as well as a legend with the names of the phases and a black solid line 
+    different phases, as well as a legend with the names of the phases and a black solid line
     for the phase boundaries (if requested).
-    
+
     Input Parameters:
         Model: string specifying which thermodynamic model was used to obtain the results. Default
                is "Holland". Other option is "MELTS".
@@ -352,7 +352,7 @@ def plot_phaseDiagram(Model = "Holland", Combined = None, P_units = "bar", T_uni
              the function will use all the temperature values provided in the Combined dataframe.
         P_bar: array with the pressure values in bars to be plotted. The default is None, and the
                function will use all the pressure values provided in the Combined dataframe.
-    
+
     Output:
         A plot of the phase diagram.
     '''
@@ -392,7 +392,8 @@ def plot_phaseDiagram(Model = "Holland", Combined = None, P_units = "bar", T_uni
     Results = Results.sort_values(['T_C', 'P_bar'], ascending=[True, True])
 
     B = np.zeros(len(Results['Phase']))
-    C = np.sort(np.unique(A))
+    CC = np.sort(np.unique(A))
+    C = CC[np.where(CC != 'None')]
     for i in range(len(C)):
         B[np.where(Results['Phase'] == C[i])] = i
 
@@ -435,10 +436,12 @@ def plot_phaseDiagram(Model = "Holland", Combined = None, P_units = "bar", T_uni
     else:
         a[0].set_ylabel('Pressure (bar)')
 
-    j = len(np.unique(np.unique(Results['Phase'])))
+    #j = len(np.unique(np.unique(Results['Phase'])))
+    j = len(C)
     cmap = plt.get_cmap('Reds')
-    cmap = cmap(np.linspace(1,0,len(np.unique(np.unique(Results['Phase'])))+1))
-    for i in np.unique(np.unique(Results['Phase'])):
+    #cmap = cmap(np.linspace(1,0,len(np.unique(np.unique(Results['Phase'])))+1))
+    cmap = cmap(np.linspace(1,0,len(C)+1))
+    for i in C: #np.unique(np.unique(Results['Phase'])):
         if len(Results['PhaseNo.'].values[np.where(Results['Phase'].values == i)]) > 1200:
             T_print = np.nanmean(Results['T_C'][Results['Phase'] == i])
             P_print = np.nanmean(Results['P_bar'][Results['Phase'] == i])
@@ -451,7 +454,7 @@ def plot_phaseDiagram(Model = "Holland", Combined = None, P_units = "bar", T_uni
                 fontsize = 8,
                     rotation = p[0])
 
-        a[1].plot(0,j, 'sk', markerfacecolor = cmap[j][0:3], ms = 10)
+        a[1].plot(0,j, 'sk', markerfacecolor = cmap[j-1][0:3], ms = 10)
         a[1].text(1, j-0.2, i, fontsize = 10)
         j = j-1
 
