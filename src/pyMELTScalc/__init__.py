@@ -23,7 +23,7 @@ from pyMELTScalc.Liq import *
 # Code to create phase diagrams
 from pyMELTScalc.PhaseDiagrams import *
 # Functions to carry out specific crystallisation calculations. Simply calls the code in pyMELTScalc.Path
-from pyMELTScalc.Crystallise import *
+from pyMELTScalc.Path_wrappers import *
 # This contains the functions required to perform path calculations
 from pyMELTScalc.Path import *
 # This contains the functions required to perform volatile saturation calculations

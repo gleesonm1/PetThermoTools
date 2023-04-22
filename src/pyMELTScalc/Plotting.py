@@ -418,9 +418,11 @@ def plot_phaseDiagram(Model = "Holland", Combined = None, P_units = "bar", T_uni
 
     f, a = plt.subplots(1,2, figsize = (10,6), gridspec_kw = {'width_ratios': [8,2]})
     a[1].axis("off")
-    a[0].pcolormesh(PT_Results['T_C'],
+    im = a[0].pcolormesh(PT_Results['T_C'],
                     PT_Results['P_bar'],
                     PT_Results['PhaseNo.'], cmap = "Reds", zorder = 2, shading = 'auto')
+
+    #f.colorbar(im, ax = a[1])
 
     if T_units == "K":
         a[0].set_xlabel('Temperature ($\degree$K)')
@@ -442,17 +444,17 @@ def plot_phaseDiagram(Model = "Holland", Combined = None, P_units = "bar", T_uni
     #cmap = cmap(np.linspace(1,0,len(np.unique(np.unique(Results['Phase'])))+1))
     cmap = cmap(np.linspace(1,0,len(C)+1))
     for i in C: #np.unique(np.unique(Results['Phase'])):
-        if len(Results['PhaseNo.'].values[np.where(Results['Phase'].values == i)]) > 1200:
-            T_print = np.nanmean(Results['T_C'][Results['Phase'] == i])
-            P_print = np.nanmean(Results['P_bar'][Results['Phase'] == i])
-
-            p = np.polyfit(Results['T_C'][Results['Phase'] == i], Results['P_bar'][Results['Phase'] == i], 1)
-
-            a[0].text(T_print, P_print, i,
-                    horizontalalignment='center',
-                    verticalalignment='center',
-                fontsize = 8,
-                    rotation = p[0])
+        # if len(Results['PhaseNo.'].values[np.where(Results['Phase'].values == i)]) > 1200:
+        #     T_print = np.nanmean(Results['T_C'][Results['Phase'] == i])
+        #     P_print = np.nanmean(Results['P_bar'][Results['Phase'] == i])
+        #
+        #     p = np.polyfit(Results['T_C'][Results['Phase'] == i], Results['P_bar'][Results['Phase'] == i], 1)
+        #
+        #     a[0].text(T_print, P_print, i,
+        #             horizontalalignment='center',
+        #             verticalalignment='center',
+        #         fontsize = 8,
+        #             rotation = p[0])
 
         a[1].plot(0,j, 'sk', markerfacecolor = cmap[j-1][0:3], ms = 10)
         a[1].text(1, j-0.2, i, fontsize = 10)

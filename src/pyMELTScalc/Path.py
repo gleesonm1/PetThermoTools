@@ -267,11 +267,19 @@ def multi_path(cores = None, Model = None, comp = None, Frac_solid = None, Frac_
                 ps.append(p)
                 p.start()
 
+            TIMEOUT = 240
+            start = time.time()
             for p in ps:
-                try:
-                    ret = q.get(timeout = 180)
-                except:
-                    ret = []
+                if time.time() - start < TIMEOUT - 10:
+                    try:
+                        ret = q.get(timeout = TIMEOUT - (time.time()-start) + 10)
+                    except:
+                        ret = []
+                else:
+                    try:
+                        ret = q.get(timeout = 10)
+                    except:
+                        ret = []
 
                 qs.append(ret)
 
