@@ -468,7 +468,7 @@ def findLiq(q, index,*, Model = None, P_bar = None, T_initial_C = None, comp = N
     if Model == "Holland":
         import pyMAGEMINcalc as MM
         #try:
-        T_Liq = MM.findLiq(P_bar = P_bar, T_C_init = T_initial_C, comp = comp, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset)
+        T_Liq = MM.findLiq(P_bar = P_bar, T_C_init = T_initial_C, comp = comp)#, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset)
         q.put([T_Liq, H2O_Melt, CO2_Melt, index, T_in])
         return
         #except:
