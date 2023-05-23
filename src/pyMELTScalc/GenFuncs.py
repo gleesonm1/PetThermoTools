@@ -32,7 +32,7 @@ Names = {'liquid1': '_Liq',
         'apatite1': '_Apa',
         'apatite2': '_Apa2'}
 
-def comp_fix(Model = None, comp = None, Fe3Fet_Liq = None, H2O_Liq = None):
+def comp_fix(Model = None, comp = None, Fe3Fet_Liq = None, H2O_Liq = None, CO2_Liq = None):
     '''
     Ensure that the input variables contain the correct column headers for the following variables.
 
@@ -82,11 +82,37 @@ def comp_fix(Model = None, comp = None, Fe3Fet_Liq = None, H2O_Liq = None):
         else:
             comp['H2O_Liq'] = np.zeros(len(comp.iloc[:,0])) + H2O_Liq
 
+    if CO2_Liq is not None:
+        if type(comp) == dict:
+            if type(CO2_Liq) != np.ndarray:
+                comp['CO2_Liq'] = CO2_Liq
+            else:
+                Comp = pd.DataFrame.from_dict([comp]*len(CO2_Liq))
+                Comp['CO2_Liq'] = CO2_Liq
+                comp = Comp.copy()
+        else:
+            comp['CO2_Liq'] = np.zeros(len(comp.iloc[:,0])) + CO2_Liq
+
     if "MELTS" in Model:
         # check all required columns are present with appropriate suffix
         Columns_bad = ['SiO2', 'TiO2', 'Al2O3', 'FeOt', 'MnO', 'MgO', 'CaO', 'Na2O', 'K2O', 'P2O5', 'H2O', 'CO2', 'Fe3Fet']
         Columns_ideal = ['SiO2_Liq', 'TiO2_Liq', 'Al2O3_Liq', 'FeOt_Liq', 'MnO_Liq', 'MgO_Liq', 'CaO_Liq', 'Na2O_Liq', 'K2O_Liq', 'P2O5_Liq', 'H2O_Liq', 'CO2_Liq', 'Fe3Fet_Liq']
+
         Comp_start = comp.copy()
+        if "FeO_Liq" in list(Comp_start.keys()) and "Fe2O3_Liq" in list(Comp_start.keys()):
+            if "FeOt_Liq" not in list(Comp_start.keys()):
+                comp['FeOt_Liq'] = comp['FeO_Liq'] + 71.844/(159.69/2)*comp['Fe2O3_Liq']
+            if"Fe3Fet_Liq" not in list(Comp_start.keys()):
+                comp['Fe3Fet_Liq'] = (1 - comp['FeO_Liq']/(comp['FeO_Liq'] + 71.844/(159.69/2)*comp['Fe2O3_Liq']))
+            Comp_start = comp.copy()
+
+        if "FeO" in list(Comp_start.keys()) and "Fe2O3" in list(Comp_start.keys()):
+            if "FeOt" not in list(Comp_start.keys()):
+                comp['FeOt'] = comp['FeO'] + 71.844/(159.69/2)*comp['Fe2O3']
+            if"Fe3Fet" not in list(Comp_start.keys()):
+                comp['Fe3Fet'] = 1 - comp['FeO']/(comp['FeO'] + 71.844/(159.69/2)*comp['Fe2O3'])
+            Comp_start = comp.copy()
+
         if type(comp) == pd.core.frame.DataFrame:
             for el in Comp_start:
                 if el in Columns_bad:

@@ -186,19 +186,30 @@ def findSaturationPressure(cores = None, Model = None, comp = None, phases = Non
                         ps.append(p)
                         p.start()
 
+                    if timeout is None:
+                        TIMEOUT = 240
+                    else:
+                        TIMEOUT = timeout
+
+                    start = time.time()
                     for p in ps:
-                        try:
-                            ret = q.get(timeout = 180)
-                        except:
-                            ret = []
+                        if time.time() - start < TIMEOUT - 10:
+                            try:
+                                ret = q.get(timeout = TIMEOUT - (time.time()-start) + 10)
+                            except:
+                                ret = []
+                        else:
+                            try:
+                                ret = q.get(timeout = 10)
+                            except:
+                                ret = []
 
                         qs.append(ret)
 
-                    TIMEOUT = 20
+                    TIMEOUT = 5
                     start = time.time()
                     for p in ps:
                         if p.is_alive():
-                            time.sleep(.1)
                             while time.time() - start <= TIMEOUT:
                                 if not p.is_alive():
                                     p.join()
@@ -211,6 +222,33 @@ def findSaturationPressure(cores = None, Model = None, comp = None, phases = Non
                         else:
                             p.join()
                             p.terminate()
+
+
+                    # for p in ps:
+                    #     try:
+                    #         ret = q.get(timeout = 180)
+                    #     except:
+                    #         ret = []
+                    #
+                    #     qs.append(ret)
+                    #
+                    # TIMEOUT = 20
+                    # start = time.time()
+                    # for p in ps:
+                    #     if p.is_alive():
+                    #         time.sleep(.1)
+                    #         while time.time() - start <= TIMEOUT:
+                    #             if not p.is_alive():
+                    #                 p.join()
+                    #                 p.terminate()
+                    #                 break
+                    #             time.sleep(.1)
+                    #         else:
+                    #             p.terminate()
+                    #             p.join(5)
+                    #     else:
+                    #         p.join()
+                    #         p.terminate()
 
                 # # extract results
                 for kk in range(len(qs)):

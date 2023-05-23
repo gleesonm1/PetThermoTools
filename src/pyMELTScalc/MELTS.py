@@ -578,7 +578,7 @@ melt
         Offset from the buffer spcified in fO2_buffer (log units).
 
     Crystallinity_limit: float
-        Crystallinity of the system (as a fraction) to determine when the calculation will be terminated.    
+        Crystallinity of the system (as a fraction) to determine when the calculation will be terminated.
 
     Returns:
     ----------
@@ -659,6 +659,8 @@ melt
 
     if type(T) == np.ndarray and P_end_bar is None and dp_bar is not None:
         P = np.linspace(P_start_bar, P_start_bar - dp_bar*(len(T)-1), len(T))
+    if type(T) == np.ndarray and P_end_bar is not None and dp_bar is None:
+        P = np.linspace(P_start_bar, P_end_bar, len(T))
     elif type(P) == np.ndarray and T_end_C is None and dt_C is not None:
         T = np.linspace(T_start_C, T_start_C - dt_C*(len(P)-1), len(P))
 
@@ -720,21 +722,30 @@ melt
 
         if isenthalpic is not None:
             if i == 0:
-                melts.engine.setSystemProperties("Mode", "Isenthalpic")
-                melts.engine.calcEquilibriumState(1,0)
-                melts.engine.setSystemProperties("Mode", "Isenthalpic")
+                try:
+                    melts.engine.setSystemProperties("Mode", "Isenthalpic")
+                    melts.engine.calcEquilibriumState(1,0)
+                    melts.engine.setSystemProperties("Mode", "Isenthalpic")
+                except:
+                    break
 
         if isentropic is not None:
             if i == 0:
-                melts.engine.setSystemProperties("Mode", "Isentropic")
-                melts.engine.calcEquilibriumState(1,0)
-                melts.engine.setSystemProperties("Mode", "Isentropic")
+                try:
+                    melts.engine.setSystemProperties("Mode", "Isentropic")
+                    melts.engine.calcEquilibriumState(1,0)
+                    melts.engine.setSystemProperties("Mode", "Isentropic")
+                except:
+                    break
 
         if isochoric is not None:
             if i == 0:
-                melts.engine.setSystemProperties("Mode", "Isochoric")
-                melts.engine.calcEquilibriumState(1,0)
-                melts.engine.setSystemProperties("Mode", "Isochoric")
+                try:
+                    melts.engine.setSystemProperties("Mode", "Isochoric")
+                    melts.engine.calcEquilibriumState(1,0)
+                    melts.engine.setSystemProperties("Mode", "Isochoric")
+                except:
+                    break
 
         if isochoric is None and isenthalpic is None and isentropic is None:
             try:
@@ -748,14 +759,20 @@ melt
 
         if isenthalpic is not None:
             try:
-                melts.engine.calcEquilibriumState(2,0)
+                if Frac_solid is not None or Frac_fluid is not None:
+                    melts.engine.calcEquilibriumState(2,1)
+                else:
+                    melts.engine.calcEquilibriumState(2,0)
             except:
                 # return Results
                 break
 
         if isentropic is not None:
             try:
-                melts.engine.calcEquilibriumState(3,0)
+                if Frac_solid is not None or Frac_fluid is not None:
+                    melts.engine.calcEquilibriumState(3,1)
+                else:
+                    melts.engine.calcEquilibriumState(3,0)
             except:
                 # return Results
                 break
@@ -804,7 +821,7 @@ melt
             for phase in PhaseList:
                 if phase not in Fluid_List:
                     Volume = Volume + float(Results[phase + '_prop']['v'].loc[i])
-            
+
             Total_volume = Volume + float(Results['liquid1_prop']['v'].loc[i])
 
             if Volume/Total_volume > Crystallinity_limit:

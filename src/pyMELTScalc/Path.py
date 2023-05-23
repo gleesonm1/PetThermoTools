@@ -10,7 +10,7 @@ import time
 import sys
 from tqdm.notebook import tqdm, trange
 
-def multi_path(cores = None, Model = None, comp = None, Frac_solid = None, Frac_fluid = None, T_C = None, T_path_C = None, T_start_C = None, T_end_C = None, dt_C = None, P_bar = None, P_path_bar = None, P_start_bar = None, P_end_bar = None, dp_bar = None, Fe3Fet_Liq = None, H2O_Liq = None, isenthalpic = None, isentropic = None, isochoric = None, find_liquidus = None, fO2_buffer = None, fO2_offset = None, Print_suppress = None, fluid_sat = None, Crystallinity_limit = None):
+def multi_path(cores = None, Model = None, comp = None, Frac_solid = None, Frac_fluid = None, T_C = None, T_path_C = None, T_start_C = None, T_end_C = None, dt_C = None, P_bar = None, P_path_bar = None, P_start_bar = None, P_end_bar = None, dp_bar = None, Fe3Fet_Liq = None, H2O_Liq = None, CO2_Liq = None, isenthalpic = None, isentropic = None, isochoric = None, find_liquidus = None, fO2_buffer = None, fO2_offset = None, Print_suppress = None, fluid_sat = None, Crystallinity_limit = None, label = None, timeout = None, print_label = True):
     '''
     Carry out multiple calculations in parallel. Allows isobaric, polybaric and isochoric crystallisation to be performed as well as isothermal, isenthalpic or isentropic decompression. All temperature inputs/outputs are reported in degrees celcius and pressure is reported in bars.
 
@@ -108,7 +108,7 @@ def multi_path(cores = None, Model = None, comp = None, Frac_solid = None, Frac_
         comp = comp.to_dict()
 
     # ensure the bulk composition has the correct headers etc.
-    comp = comp_fix(Model = Model, comp = comp, Fe3Fet_Liq = Fe3Fet_Liq, H2O_Liq = H2O_Liq)
+    comp = comp_fix(Model = Model, comp = comp, Fe3Fet_Liq = Fe3Fet_Liq, H2O_Liq = H2O_Liq, CO2_Liq = CO2_Liq)
 
     if type(comp) == dict:
         if comp['H2O_Liq'] == 0.0 and "MELTS" in Model:
@@ -227,6 +227,24 @@ def multi_path(cores = None, Model = None, comp = None, Frac_solid = None, Frac_
         elif type(T_start_C) == float or type(T_start_C) == int:
             T_start_C = np.zeros(int(L)) + T_start_C
 
+        if P_end_bar is None:
+            P_end_bar = [None] * int(L)
+        elif type(P_end_bar) == float or type(P_end_bar) == int:
+            P_end_bar = np.zeros(int(L)) + P_end_bar
+        if T_end_C is None:
+            T_end_C = [None] * int(L)
+        elif type(T_end_C) == float or type(T_end_C) == int:
+            T_end_C = np.zeros(int(L)) + T_end_C
+
+        if dp_bar is None:
+            dp_bar = [None] * int(L)
+        elif type(dp_bar) == float or type(dp_bar) == int:
+            dp_bar = np.zeros(int(L)) + dp_bar
+        if dt_C is None:
+            dt_C = [None] * int(L)
+        elif type(dt_C) == float or type(dt_C) == int:
+            dt_C = np.zeros(int(L)) + dt_C
+
         if P_path_bar is None:
             P_path_bar = [None] * int(L)
         elif len(np.shape(P_path_bar))  == 1:
@@ -252,22 +270,26 @@ def multi_path(cores = None, Model = None, comp = None, Frac_solid = None, Frac_
                 if type(comp) == dict:
                     p = Process(target = path, args = (q, i),
                                 kwargs = {'Model': Model, 'comp': comp, 'Frac_solid': Frac_solid, 'Frac_fluid': Frac_fluid,
-                                        'T_C': T_C[i], 'T_path_C': T_path_C[i], 'T_start_C': T_start_C[i], 'T_end_C': T_end_C, 'dt_C': dt_C,
-                                        'P_bar': P_bar[i], 'P_path_bar': P_path_bar[i], 'P_start_bar': P_start_bar[i], 'P_end_bar': P_end_bar, 'dp_bar': dp_bar,
+                                        'T_C': T_C[i], 'T_path_C': T_path_C[i], 'T_start_C': T_start_C[i], 'T_end_C': T_end_C[i], 'dt_C': dt_C[i],
+                                        'P_bar': P_bar[i], 'P_path_bar': P_path_bar[i], 'P_start_bar': P_start_bar[i], 'P_end_bar': P_end_bar[i], 'dp_bar': dp_bar[i],
                                         'isenthalpic': isenthalpic, 'isentropic': isentropic, 'isochoric': isochoric, 'find_liquidus': find_liquidus,
                                         'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset[i], 'fluid_sat': fluid_sat, 'Crystallinity_limit': Crystallinity_limit})
                 else:
                     p = Process(target = path, args = (q, i),
                                 kwargs = {'Model': Model, 'comp': comp.loc[i].to_dict(), 'Frac_solid': Frac_solid, 'Frac_fluid': Frac_fluid,
-                                        'T_C': T_C[i], 'T_path_C': T_path_C[i], 'T_start_C': T_start_C[i], 'T_end_C': T_end_C, 'dt_C': dt_C,
-                                        'P_bar': P_bar[i], 'P_path_bar': P_path_bar[i], 'P_start_bar': P_start_bar[i], 'P_end_bar': P_end_bar, 'dp_bar': dp_bar,
+                                        'T_C': T_C[i], 'T_path_C': T_path_C[i], 'T_start_C': T_start_C[i], 'T_end_C': T_end_C[i], 'dt_C': dt_C[i],
+                                        'P_bar': P_bar[i], 'P_path_bar': P_path_bar[i], 'P_start_bar': P_start_bar[i], 'P_end_bar': P_end_bar[i], 'dp_bar': dp_bar[i],
                                         'isenthalpic': isenthalpic, 'isentropic': isentropic, 'isochoric': isochoric, 'find_liquidus': find_liquidus,
                                         'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset[i], 'fluid_sat': fluid_sat, 'Crystallinity_limit': Crystallinity_limit})
 
                 ps.append(p)
                 p.start()
 
-            TIMEOUT = 240
+            if timeout is None:
+                TIMEOUT = 240
+            else:
+                TIMEOUT = timeout
+
             start = time.time()
             for p in ps:
                 if time.time() - start < TIMEOUT - 10:
@@ -304,10 +326,76 @@ def multi_path(cores = None, Model = None, comp = None, Frac_solid = None, Frac_
                 print(" Complete (time taken = " + str(round(time.time() - s,2)) + " seconds)", end = "\n", flush = True)
 
         Results = {}
+        Out = {}
         for i in range(len(qs)):
             if len(qs[i]) > 0:
                 Res, index = qs[i]
-                Results['index = ' + str(index)] = Res
+                if label is None:
+                    Results['index = ' + str(index)] = Res
+                elif label == "P" or label == "pressure":
+                    Out[str(round(Res['Conditions']['pressure'].loc[0]))] = Res
+                elif label == "water" or label == "H2O":
+                    Out[str(round(Res['liquid1']['H2O'].loc[0], 2))] = Res
+                elif label == "carbon" or label == "CO2":
+                    Out[str(round(Res['liquid1']['CO2'].loc[0], 2))] = Res
+                elif label == "oxygen fugacity" or label == "fO2":
+                    Out[str(round(fO2_offset[index], 2))] = Res
+                elif label == "Fe redox" or label == "Fe3Fet" or label == "Fe3Fet_Liq":
+                    Out[str[round(Res['liquid1']['FeO'].loc[0]/(Res['liquid1']['FeO'].loc[0] + (71.844/(159.69/2))*Res['liquid1']['Fe2O3'].loc[0]),2)]] = Res
+                elif label in list(comp.keys()):
+                    Results[str(comp[label].loc[index])] = Res
+
+        if label == "P" or label == "pressure":
+            # A = Out.copy()
+            # B = [float(x) for x in A]
+            O = sorted(Out)
+            for o in O:
+                # if o % 1 == 0:
+                #     o = int(o)
+                Results['P = ' + o + ' bars'] = Out[o]
+
+        if label == "water" or label == "H2O":
+            # A = Out.copy()
+            # B = [float(x) for x in A]
+            O = sorted(Out)
+            for o in O:
+                # if o % 1 == 0:
+                #     o = int(o)
+                Results['H2O = ' + o + ' wt%'] = Out[o]
+
+        if label == "carbon" or label == "CO2":
+            # A = Out.copy()
+            # B = [float(x) for x in A]
+            O = sorted(B)
+            for o in O:
+                # if o % 1 == 0:
+                #     o = int(o)
+                Results['CO2 = ' + str(o) + ' wt%'] = Out[str[o]]
+
+        if label == "oxygen fugacity" or label == "fO2":
+            # A = Out.copy()
+            # B = [float(x) for x in A]
+            O = sorted(B)
+            for o in O:
+                # if o % 1 == 0:
+                #     o = int(o)
+
+                # if o > 0.0:
+                #     Results[fO2_buffer + ' +' + str(o)] = out[str(o)]
+                # else:
+                Results[fO2_buffer + ' ' + str(o)] = Out[str[o]]
+
+        if label == "Fe redox" or label == "Fe3Fet_Liq" or label == 'Fe3Fet':
+            # A = Out.copy()
+            # B = [float(x) for x in A]
+            O = sorted(B)
+            for o in O:
+                # if o % 1 == 0:
+                #     o = int(o)
+                Results['Fe3/Fet = ' + str(o)] = Out[str[o]]
+
+        if print_label is not None:
+            print(Results.keys())
 
         if "MELTS" in Model:
             Results = stich(Results, multi = True, Model = Model)
