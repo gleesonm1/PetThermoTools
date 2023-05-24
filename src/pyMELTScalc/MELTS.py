@@ -24,6 +24,8 @@ def equilibrate_MELTS(Model = None, P_bar = None, T_C = None, comp = None, fO2_b
     elif Model == "MELTSv1.2.0":
         melts = MELTSdynamic(4)
 
+    melts.engine.setSystemProperties("Suppress", "rutile")
+
     melts.engine.setBulkComposition(bulk)
     melts.engine.pressure = P_bar
     melts.engine.temperature = T_C
@@ -113,6 +115,8 @@ def findCO2_MELTS(P_bar = None, Model = None, T_C = None, comp = None, melts = N
             melts = MELTSdynamic(3)
         elif Model == "MELTSv1.2.0":
             melts = MELTSdynamic(4)
+
+        melts.engine.setSystemProperties("Suppress", "rutile")
 
     T_Liq = 0
     H2O = 0
@@ -294,6 +298,8 @@ def findLiq_MELTS(P_bar = None, Model = None, T_C_init = None, comp = None, melt
         elif Model == "MELTSv1.2.0":
             melts = MELTSdynamic(4)
 
+        melts.engine.setSystemProperties("Suppress", "rutile")
+
     try:
         melts.engine.setBulkComposition(bulk)
         melts.engine.pressure = P_bar
@@ -445,7 +451,7 @@ def phaseSat_MELTS(Model = None, comp = None, phases = None, T_initial_C = None,
     elif Model == "MELTSv1.2.0":
         melts = MELTSdynamic(4)
 
-    melts.engine.setSystemProperties("Suppress", "tridymite")
+    melts.engine.setSystemProperties("Suppress", "rutile")
 
     bulk = [comp['SiO2_Liq'], comp['TiO2_Liq'], comp['Al2O3_Liq'], comp['Fe3Fet_Liq']*((159.59/2)/71.844)*comp['FeOt_Liq'], 0.0, (1- comp['Fe3Fet_Liq'])*comp['FeOt_Liq'], comp['MnO_Liq'], comp['MgO_Liq'], 0.0, 0.0, comp['CaO_Liq'], comp['Na2O_Liq'], comp['K2O_Liq'], comp['P2O5_Liq'], comp['H2O_Liq'], comp['CO2_Liq'], 0.0, 0.0, 0.0]
     bulk = list(100*np.array(bulk)/np.sum(bulk))
@@ -873,6 +879,8 @@ def findSatPressure_MELTS(Model = None, T_C_init = None, P_bar_init = None, comp
         melts = MELTSdynamic(3)
     elif Model == "MELTSv1.2.0":
         melts = MELTSdynamic(4)
+
+    melts.engine.setSystemProperties("Suppress", "rutile")
 
     bulk = [comp['SiO2_Liq'], comp['TiO2_Liq'], comp['Al2O3_Liq'], comp['Fe3Fet_Liq']*((159.59/2)/71.844)*comp['FeOt_Liq'], 0.0, (1- comp['Fe3Fet_Liq'])*comp['FeOt_Liq'], comp['MnO_Liq'], comp['MgO_Liq'], 0.0, 0.0, comp['CaO_Liq'], comp['Na2O_Liq'], comp['K2O_Liq'], comp['P2O5_Liq'], comp['H2O_Liq'], comp['CO2_Liq'], 0.0, 0.0, 0.0]
     bulk = list(100*np.array(bulk)/np.sum(bulk))
