@@ -186,7 +186,7 @@ def findSaturationPressure(cores = None, Model = None, comp = None, phases = Non
                         ps.append(p)
                         p.start()
 
-                    TIMEOUT = 240
+                    TIMEOUT = 300
 
                     start = time.time()
                     for p in ps:
