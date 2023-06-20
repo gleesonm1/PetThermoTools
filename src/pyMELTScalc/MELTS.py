@@ -25,6 +25,7 @@ def equilibrate_MELTS(Model = None, P_bar = None, T_C = None, comp = None, fO2_b
         melts = MELTSdynamic(4)
 
     melts.engine.setSystemProperties("Suppress", "rutile")
+    melts.engine.setSystemProperties("Suppress", "tridymite")
 
     melts.engine.setBulkComposition(bulk)
     melts.engine.pressure = P_bar
@@ -282,9 +283,10 @@ def findLiq_MELTS(P_bar = None, Model = None, T_C_init = None, comp = None, melt
         else:
             bulk = [comp['SiO2_Liq'], comp['TiO2_Liq'], comp['Al2O3_Liq'], comp['Fe3Fet_Liq']*((159.59/2)/71.844)*comp['FeOt_Liq'], 0.0, (1 - comp['Fe3Fet_Liq'])*comp['FeOt_Liq'], comp['MnO_Liq'], comp['MgO_Liq'], 0.0, 0.0, comp['CaO_Liq'], comp['Na2O_Liq'], comp['K2O_Liq'], comp['P2O5_Liq'], comp['H2O_Liq'], comp['CO2_Liq'], 0.0, 0.0, 0.0]
 
-    T_Liq = 0
-    H2O_Melt = 0
-    CO2_Melt = 0
+    Results = {}
+    # T_Liq = 0
+    # H2O_Melt = 0
+    # CO2_Melt = 0
 
     from meltsdynamic import MELTSdynamic
 
@@ -299,13 +301,14 @@ def findLiq_MELTS(P_bar = None, Model = None, T_C_init = None, comp = None, melt
             melts = MELTSdynamic(4)
 
         melts.engine.setSystemProperties("Suppress", "rutile")
+        melts.engine.setSystemProperties("Suppress", "tridymite")
 
     try:
         melts.engine.setBulkComposition(bulk)
         melts.engine.pressure = P_bar
         melts.engine.temperature = T_C_init
     except:
-        return T_Liq, H2O_Melt
+        return Results
 
     if fO2_buffer is not None:
         if fO2_offset is None:
@@ -317,14 +320,10 @@ def findLiq_MELTS(P_bar = None, Model = None, T_C_init = None, comp = None, melt
     try:
         melts.engine.calcEquilibriumState(1,0)
     except:
-        if CO2_return is not None:
-                return T_Liq, H2O_Melt, CO2_Melt
-
-        elif bulk_return is not None:
-            return T_Liq, H2O_Melt, melts
-
+        if bulk_return is not None:
+            return Results, melts
         else:
-            return T_Liq, H2O_Melt
+            return Results
 
     PhaseList = melts.engine.solidNames
     if PhaseList is None:
@@ -338,31 +337,6 @@ def findLiq_MELTS(P_bar = None, Model = None, T_C_init = None, comp = None, melt
         Step = np.array([3,1,0.1])
 
     for j in range(len(Step)):
-        if len(i) == len(PhaseList):
-            while len(i) == len(PhaseList):
-                try:
-                    melts = melts.addNodeAfter()
-                    melts.engine.temperature = melts.engine.temperature - Step[j]
-                    melts.engine.calcEquilibriumState(1,0)
-                except:
-                    if CO2_return is not None:
-                            return T_Liq, H2O_Melt, CO2_Melt
-
-                    elif bulk_return is not None:
-                        return T_Liq, H2O_Melt, melts
-
-                    else:
-                        return T_Liq, H2O_Melt
-
-                    break
-
-                PhaseList = melts.engine.solidNames
-                if PhaseList is None:
-                    PhaseList = ['liquid1']
-                else:
-                    PhaseList = ['liquid1'] + PhaseList
-                i = set.intersection(set(Liq),set(PhaseList))
-
         if len(i) < len(PhaseList):
             while len(i) < len(PhaseList):
                 try:
@@ -370,14 +344,31 @@ def findLiq_MELTS(P_bar = None, Model = None, T_C_init = None, comp = None, melt
                     melts.engine.temperature = melts.engine.temperature + Step[j]
                     melts.engine.calcEquilibriumState(1,0)
                 except:
-                    if CO2_return is not None:
-                            return T_Liq, H2O_Melt, CO2_Melt
-
-                    elif bulk_return is not None:
-                        return T_Liq, H2O_Melt, melts
-
+                    if bulk_return is not None:
+                        return Results, melts
                     else:
-                        return T_Liq, H2O_Melt
+                        return Results
+
+                    break
+
+                PhaseList = melts.engine.solidNames
+                if PhaseList is None:
+                    PhaseList = ['liquid1']
+                else:
+                    PhaseList = ['liquid1'] + PhaseList
+                i = set.intersection(set(Liq),set(PhaseList))
+    
+        if len(i) == len(PhaseList):
+            while len(i) == len(PhaseList):
+                try:
+                    melts = melts.addNodeAfter()
+                    melts.engine.temperature = melts.engine.temperature - Step[j]
+                    melts.engine.calcEquilibriumState(1,0)
+                except:
+                    if bulk_return is not None:
+                        return Results, melts
+                    else:
+                        return Results
 
                     break
 
@@ -389,19 +380,56 @@ def findLiq_MELTS(P_bar = None, Model = None, T_C_init = None, comp = None, melt
                 i = set.intersection(set(Liq),set(PhaseList))
 
 
-    T_Liq = melts.engine.temperature
-    H2O_Melt = melts.engine.getProperty('dispComposition', 'liquid1', 'H2O')
+    Results = pd.DataFrame(data = np.zeros((1, 17)), columns = ['T_Liq', 'liquidus_phase', 'fluid_saturated', 'SiO2', 'TiO2', 'Al2O3', 'Fe2O3', 'Cr2O3', 'FeO', 'MnO', 'MgO', 'CaO', 'Na2O', 'K2O', 'P2O5', 'H2O', 'CO2'])
+    for j in Results:
+        if j == "T_Liq":
+            Results.loc[0,'T_Liq'] = melts.engine.temperature + 0.05            
+        elif j == "fluid_saturated":
+            if type(melts.engine.solidNames) == list:
+                if 'fluid1' in melts.engine.solidNames:
+                    Results.loc[0, 'fluid_saturated'] = "Yes"
+                elif 'water1' in melts.engine.solidNames:
+                    Results.loc[0, 'fluid_saturated'] = "Yes"
+                else:
+                    Results.loc[0, 'fluid_saturated'] = "No"
+        elif j == "liquidus_phase":
+            PL = melts.engine.solidNames
+            if type(melts.engine.solidNames) == list:
+                if 'fluid1' in melts.engine.solidNames:
+                    PL = melts.engine.solidNames
+                    PL.remove('fluid1')
+                    Results.loc[0,'liquidus_phase'] = PL[0]
+                    
+                elif 'water1' in melts.engine.solidNames:
+                    PL = melts.engine.solidNames
+                    PL.remove('water1')
+                    Results.loc[0,'liquidus_phase'] = PL[0]
 
-    if CO2_return is not None:
-        CO2_Melt = melts.engine.getProperty('dispComposition', 'liquid1', 'CO2')
-        return T_Liq, H2O_Melt, CO2_Melt
+                else:
+                    Results.loc[0,'liquidus_phase'] = PL[0]  
+            else:
+                Results.loc[0,'liquidus_phase'] = PL[0]
+        else:
+            try:
+                melts = melts.addNodeAfter()
+                melts.engine.temperature = melts.engine.temperature + 5
+                melts.engine.calcEquilibriumState(1,0)
 
-    elif bulk_return is not None:
-        return T_Liq, H2O_Melt, melts
+                
+                melts = melts.addNodeAfter()
+                melts.engine.temperature = melts.engine.temperature - 4.9
+                melts.engine.calcEquilibriumState(1,0)
+            except:
+                if bulk_return is not None:
+                    return Results, melts
+                else:
+                    return Results
+            Results.loc[0,j] = melts.engine.getProperty('dispComposition', 'liquid1', j)
 
+    if bulk_return is not None:
+        return Results, melts
     else:
-        return T_Liq, H2O_Melt
-
+        return Results
 
 def phaseSat_MELTS(Model = None, comp = None, phases = None, T_initial_C = None, T_step_C = None, dt_C = None, P_bar = None, H2O_Liq = None, fO2_buffer = None, fO2_offset = None):
     '''
@@ -452,12 +480,15 @@ def phaseSat_MELTS(Model = None, comp = None, phases = None, T_initial_C = None,
         melts = MELTSdynamic(4)
 
     melts.engine.setSystemProperties("Suppress", "rutile")
+    melts.engine.setSystemProperties("Suppress", "tridymite")
 
     bulk = [comp['SiO2_Liq'], comp['TiO2_Liq'], comp['Al2O3_Liq'], comp['Fe3Fet_Liq']*((159.59/2)/71.844)*comp['FeOt_Liq'], 0.0, (1- comp['Fe3Fet_Liq'])*comp['FeOt_Liq'], comp['MnO_Liq'], comp['MgO_Liq'], 0.0, 0.0, comp['CaO_Liq'], comp['Na2O_Liq'], comp['K2O_Liq'], comp['P2O5_Liq'], comp['H2O_Liq'], comp['CO2_Liq'], 0.0, 0.0, 0.0]
     bulk = list(100*np.array(bulk)/np.sum(bulk))
 
     try:
-        Results['T_Liq'], Results['H2O_melt'] = findLiq_MELTS(P_bar = P_bar, comp = bulk, T_C_init = T_initial_C, melts = melts, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset)
+        Liq_Results = findLiq_MELTS(P_bar = P_bar, comp = bulk, T_C_init = T_initial_C, melts = melts, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset)
+        Results['T_Liq'] = Liq_Results['T_Liq'].values[0]
+        Results['H2O_melt'] = Liq_Results['H2O'].values[0]
     except:
         return Results
 
@@ -546,7 +577,6 @@ def path_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid = None, 
 
     T_end_C: float
         Final temperature in crystallisation calculations.
-melt
     dt_C: float
         Temperature increment during crystallisation calculations.
 
@@ -619,6 +649,7 @@ melt
         melts = MELTSdynamic(4)
 
     melts.engine.setSystemProperties("Suppress", "rutile")
+    melts.engine.setSystemProperties("Suppress", "tridymite")
 
     bulk = [comp['SiO2_Liq'], comp['TiO2_Liq'], comp['Al2O3_Liq'], comp['Fe3Fet_Liq']*((159.59/2)/71.844)*comp['FeOt_Liq'], 0.0, (1- comp['Fe3Fet_Liq'])*comp['FeOt_Liq'], comp['MnO_Liq'], comp['MgO_Liq'], 0.0, 0.0, comp['CaO_Liq'], comp['Na2O_Liq'], comp['K2O_Liq'], comp['P2O5_Liq'], comp['H2O_Liq'], comp['CO2_Liq'], 0.0, 0.0, 0.0]
     bulk = list(100*np.array(bulk)/np.sum(bulk))
@@ -627,18 +658,18 @@ melt
         if P_path_bar is not None:
             try:
                 if type(P_path_bar) == np.ndarray:
-                    T_Liq, H2O_Melt = findLiq_MELTS(P_bar = P_path_bar[0], comp = bulk, melts = melts, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, T_C_init = 1400)
+                    Liq_Results = findLiq_MELTS(P_bar = P_path_bar[0], comp = bulk, melts = melts, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, T_C_init = 1400)
                 else:
-                    T_Liq, H2O_Melt = findLiq_MELTS(P_bar = P_path_bar, comp = bulk, melts = melts, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, T_C_init = 1400)
+                    Liq_Results = findLiq_MELTS(P_bar = P_path_bar, comp = bulk, melts = melts, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, T_C_init = 1400)
             except:
                 return Results
         elif P_start_bar is not None:
             try:
-                T_Liq, H2O_Melt = findLiq_MELTS(P_bar = P_start_bar, comp = bulk, melts = melts, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, T_C_init = 1400)
+                Liq_Results = findLiq_MELTS(P_bar = P_start_bar, comp = bulk, melts = melts, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, T_C_init = 1400)
             except:
                 return Results
 
-        T_start_C = T_Liq
+        T_start_C = Liq_Results['T_Liq'].values[0] + 0.1
 
     else:
         if fO2_buffer is not None:
@@ -686,12 +717,12 @@ melt
             melts.engine.pressure = P[0]
 
     if find_liquidus is not None:
-        melts.engine.temperature = T_Liq
+        melts.engine.temperature = T_start_C
 
         if P_path_bar is not None or T_path_C is not None:
             if type(P) == np.ndarray and type(T) == np.ndarray:
-                T_Liq_loc = np.abs(T - T_Liq).argmin()
-                if T[T_Liq_loc]>T_Liq:
+                T_Liq_loc = np.abs(T - T_start_C).argmin()
+                if T[T_Liq_loc]>T_start_C:
                     T = T[T_Liq_loc:]
                     P = P[T_Liq_loc:]
                 else:
@@ -718,7 +749,10 @@ melt
         if type(T) == np.ndarray:
             melts.engine.temperature = T[i]
         if type(P) == np.ndarray:
-            melts.engine.pressure = P[i]
+            if i == 0:
+                melts.engine.pressure = P[i]
+            if isochoric is None:
+                melts.engine.pressure = P[i]
 
         if Frac_solid is not None:
             melts.engine.setSystemProperties("Mode", "Fractionate Solids")
@@ -881,13 +915,14 @@ def findSatPressure_MELTS(Model = None, T_C_init = None, P_bar_init = None, comp
         melts = MELTSdynamic(4)
 
     melts.engine.setSystemProperties("Suppress", "rutile")
+    melts.engine.setSystemProperties("Suppress", "tridymite")
 
     bulk = [comp['SiO2_Liq'], comp['TiO2_Liq'], comp['Al2O3_Liq'], comp['Fe3Fet_Liq']*((159.59/2)/71.844)*comp['FeOt_Liq'], 0.0, (1- comp['Fe3Fet_Liq'])*comp['FeOt_Liq'], comp['MnO_Liq'], comp['MgO_Liq'], 0.0, 0.0, comp['CaO_Liq'], comp['Na2O_Liq'], comp['K2O_Liq'], comp['P2O5_Liq'], comp['H2O_Liq'], comp['CO2_Liq'], 0.0, 0.0, 0.0]
     bulk = list(100*np.array(bulk)/np.sum(bulk))
 
-    T_Liq, H2O_Melt, melts = findLiq_MELTS(P_bar = P_bar, comp = bulk, melts = melts, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, T_C_init = T_C_init, bulk_return = True, Step = np.array([5,1]))
+    Liq_Results, melts = findLiq_MELTS(P_bar = P_bar, comp = bulk, melts = melts, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, T_C_init = T_C_init, bulk_return = True, Step = np.array([5,1]))
 
-    if T_Liq == 0.0:
+    if Liq_Results['T_Liq'] == 0.0:
         out = {'SiO2_Liq': 0.0, 'TiO2_Liq': 0.0, 'Al2O3_Liq': 0.0, 'FeOt_Liq': 0.0, 'MnO_Liq': 0.0, 'MgO_Liq': 0.0, 'CaO_Liq': 0.0, 'Na2O_Liq': 0.0, 'K2O_Liq': 0.0, 'P2O5_Liq': 0.0, 'H2O_Liq': 0.0, 'CO2_Liq': 0.0, 'Fe3Fet_Liq': 0.0, 'P_bar': 0.0, 'T_Liq': 0.0}
         return out
 
@@ -903,9 +938,9 @@ def findSatPressure_MELTS(Model = None, T_C_init = None, P_bar_init = None, comp
         if "fluid1" in PhaseList:
             while "fluid1" in PhaseList:
                 P_bar = P_bar + Steps[i]
-                T_Liq, H2O_Melt, melts = findLiq_MELTS(P_bar = P_bar, comp = bulk, melts = melts, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, T_C_init = T_Liq, bulk_return = True, Step = np.array([5,1]))
+                Liq_Results, melts = findLiq_MELTS(P_bar = P_bar, comp = bulk, melts = melts, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, T_C_init = Liq_Results['T_Liq'], bulk_return = True, Step = np.array([5,1]))
 
-                if T_Liq == 0.0:
+                if Liq_Results['T_Liq'] == 0.0:
                     out = {'SiO2_Liq': 0.0, 'TiO2_Liq': 0.0, 'Al2O3_Liq': 0.0, 'FeOt_Liq': 0.0, 'MnO_Liq': 0.0, 'MgO_Liq': 0.0, 'CaO_Liq': 0.0, 'Na2O_Liq': 0.0, 'K2O_Liq': 0.0, 'P2O5_Liq': 0.0, 'H2O_Liq': 0.0, 'CO2_Liq': 0.0, 'Fe3Fet_Liq': 0.0, 'P_bar': 0.0, 'T_Liq': 0.0}
                     return out
                     break
@@ -923,9 +958,9 @@ def findSatPressure_MELTS(Model = None, T_C_init = None, P_bar_init = None, comp
                     P_bar = P_bar + Steps[i]
                     break
 
-                T_Liq, H2O_Melt, melts = findLiq_MELTS(P_bar = P_bar, comp = bulk, melts = melts, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, T_C_init = T_Liq, bulk_return = True, Step = np.array([5,1]))
+                Liq_Results, melts = findLiq_MELTS(P_bar = P_bar, comp = bulk, melts = melts, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, T_C_init = Liq_Results['T_Liq'], bulk_return = True, Step = np.array([5,1]))
 
-                if T_Liq == 0.0:
+                if Liq_Results['T_Liq'] == 0.0:
                     out = {'SiO2_Liq': 0.0, 'TiO2_Liq': 0.0, 'Al2O3_Liq': 0.0, 'FeOt_Liq': 0.0, 'MnO_Liq': 0.0, 'MgO_Liq': 0.0, 'CaO_Liq': 0.0, 'Na2O_Liq': 0.0, 'K2O_Liq': 0.0, 'P2O5_Liq': 0.0, 'H2O_Liq': 0.0, 'CO2_Liq': 0.0, 'Fe3Fet_Liq': 0.0, 'P_bar': 0.0, 'T_Liq': 0.0}
                     return out
                     break
@@ -937,7 +972,7 @@ def findSatPressure_MELTS(Model = None, T_C_init = None, P_bar_init = None, comp
                     PhaseList = ['liquid1'] + PhaseList
 
     bulk_out = melts.engine.getProperty('dispComposition', 'liquid1')
-    out = {'SiO2_Liq': bulk_out[0], 'TiO2_Liq': bulk_out[1], 'Al2O3_Liq': bulk_out[2], 'FeOt_Liq': bulk_out[5] + 71.844/(159.69/2)*bulk_out[3], 'MnO_Liq': bulk_out[6], 'MgO_Liq': bulk_out[7], 'CaO_Liq': bulk_out[10], 'Na2O_Liq': bulk_out[11], 'K2O_Liq': bulk_out[12], 'P2O5_Liq': bulk_out[13], 'H2O_Liq': bulk_out[14], 'CO2_Liq': bulk_out[15], 'Fe3Fet_Liq': (71.844/(159.69/2)*bulk_out[3])/(bulk_out[5] + 71.844/(159.69/2)*bulk_out[3]), 'P_bar': P_bar, 'T_Liq': T_Liq}
+    out = {'SiO2_Liq': bulk_out[0], 'TiO2_Liq': bulk_out[1], 'Al2O3_Liq': bulk_out[2], 'FeOt_Liq': bulk_out[5] + 71.844/(159.69/2)*bulk_out[3], 'MnO_Liq': bulk_out[6], 'MgO_Liq': bulk_out[7], 'CaO_Liq': bulk_out[10], 'Na2O_Liq': bulk_out[11], 'K2O_Liq': bulk_out[12], 'P2O5_Liq': bulk_out[13], 'H2O_Liq': bulk_out[14], 'CO2_Liq': bulk_out[15], 'Fe3Fet_Liq': (71.844/(159.69/2)*bulk_out[3])/(bulk_out[5] + 71.844/(159.69/2)*bulk_out[3]), 'P_bar': P_bar, 'T_Liq': Liq_Results['T_Liq']}
 
     return out
 

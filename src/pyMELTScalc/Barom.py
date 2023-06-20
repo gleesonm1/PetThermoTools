@@ -19,7 +19,7 @@ from tqdm.notebook import tqdm, trange
 from scipy import interpolate
 from shapely.geometry import MultiPoint, Point, Polygon
 
-def findSaturationPressure(cores = None, Model = None, comp = None, phases = None, P_bar = None, Fe3Fet_Liq = None, H2O_Liq = None, T_initial_C = None, dt_C = None, T_step_C = None, T_cut_C = None, find_range = None, find_min = None, fO2_buffer = None, fO2_offset = None):
+def findSaturationPressure(cores = None, Model = None, bulk = None, phases = None, P_bar = None, Fe3Fet_Liq = None, H2O_Liq = None, T_initial_C = None, dt_C = None, T_step_C = None, T_cut_C = None, find_range = None, find_min = None, fO2_buffer = None, fO2_offset = None):
     '''
     Carry out multiple calculations in parallel. Allows isobaric, polybaric and isochoric crystallisation to be performed as well as isothermal, isenthalpic or isentropic decompression. All temperature inputs/outputs are reported in degrees celcius and pressure is reported in bars.
 
@@ -32,7 +32,7 @@ def findSaturationPressure(cores = None, Model = None, comp = None, phases = Non
         "MELTS" or "Holland". Dictates whether MELTS or MAGEMin calculations are performed. Default "MELTS".
         Version of melts can be specified "MELTSv1.0.2", "MELTSv1.1.0", "MELTSv1.2.0", or "pMELTS". Default "v.1.0.2".
 
-    comp: Dict or pd.DataFrame
+    bulk: Dict or pd.DataFrame
         Initial compositon for calculations. If type == Dict, the same initial composition will be used in all calculations.
 
     phases: list
@@ -77,6 +77,7 @@ def findSaturationPressure(cores = None, Model = None, comp = None, phases = Non
         Dictionary containing information regarding the saturation temperature of each phase and the residuals between the different phases
     '''
 
+    comp = bulk.copy()
     # set default values if required
     if Model is None:
         Model == "MELTSv1.0.2"
@@ -281,21 +282,24 @@ def findMinimum(Results = None, P_bar = None, T_cut_C = None, H2O_Liq = None, Fe
     '''
     Take the results of SatPress and search for the minimum point using a parabolic fit.
     '''
+    if T_cut_C is None:
+        T_cut_C = 10
+
     if H2O_Liq is None and Fe3Fet_Liq is None:
         if 'Res_abc' in list(Results.keys()):
             Minimum = {'Res_abc', 'Res_ab', 'Res_ac', 'Res_bc'}
             CurveMin = {}
             for m in Minimum:
                 if len(Results[m][0,0,:][~np.isnan(Results[m][0,0,:])]) > 2:
-                    y = Results[m][0,0,:][np.where(~np.isnan(Results[m][0,0,:]))]
-                    x = P_bar[np.where(~np.isnan(Results[m][0,0,:]))]
+                    y = Results[m][0,0,:][(np.where(~np.isnan(Results[m][0,0,:]))) and (np.where(Results[m][0,0,:] < T_cut_C))]
+                    x = P_bar[(np.where(~np.isnan(Results[m][0,0,:]))) and (np.where(Results[m][0,0,:] < T_cut_C))]
 
                     try:
                         y_new = interpolate.UnivariateSpline(x, y, k = 5)
                     except:
-                        y_new = interpolate.UnivariateSpline(x, y, k = 3)
+                        y_new = interpolate.UnivariateSpline(x, y, k = 2)
 
-                    P_new = np.linspace(P_bar[np.where(P_bar == np.nanmin(P_bar[np.where(~np.isnan(Results[m][0,0,:]))]))], P_bar[np.where(P_bar == np.nanmax(P_bar[np.where(~np.isnan(Results[m][0,0,:]))]))], 200)
+                    P_new = np.linspace(P_bar[np.where(P_bar == np.nanmin(P_bar[(np.where(~np.isnan(Results[m][0,0,:]))) and (np.where(Results[m][0,0,:] < T_cut_C))]))], P_bar[np.where(P_bar == np.nanmax(P_bar[(np.where(~np.isnan(Results[m][0,0,:]))) and (np.where(Results[m][0,0,:] < T_cut_C))]))], 200)
 
                     NewMin = np.nanmin(y_new(P_new))
                     P_min = P_new[np.where(y_new(P_new) == NewMin)][0]
@@ -320,7 +324,11 @@ def findMinimum(Results = None, P_bar = None, T_cut_C = None, H2O_Liq = None, Fe
                 y = Results[m][0,0,:][np.where(~np.isnan(Results[m][0,0,:]))]
                 x = P_bar[np.where(~np.isnan(Results[m][0,0,:]))]
 
-                y_new = interpolate.UnivariateSpline(x, y, k=5)
+                try:
+                    y_new = interpolate.UnivariateSpline(x, y, k=5)
+                except:
+                    y_new = interpolate.UnivariateSpline(x, y, k = 2)
+
                 P_new = np.linspace(P_bar[np.where(P_bar == np.nanmin(P_bar[np.where(~np.isnan(Results[m][0,0,:]))]))], P_bar[np.where(P_bar == np.nanmax(P_bar[np.where(~np.isnan(Results[m][0,0,:]))]))], 200)
 
                 NewMin = np.nanmin(y_new(P_new))
