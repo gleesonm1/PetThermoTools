@@ -207,6 +207,8 @@ def findCO2_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P
         else:
             T_initial_C = np.array([1300.0])
 
+    if type(T_initial_C) == int or type(T_initial_C) == float:
+        T_initial_C = np.array([T_initial_C])
 
     if cores is None:
         cores = multiprocessing.cpu_count()
