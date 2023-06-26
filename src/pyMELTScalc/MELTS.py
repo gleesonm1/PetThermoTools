@@ -978,7 +978,7 @@ def findSatPressure_MELTS(Model = None, T_C_init = None, P_bar_init = None, comp
         if Liq_Results['fluid_saturated'].loc[0] == "Yes":
             while Liq_Results['fluid_saturated'].loc[0] == "Yes":
                 P_bar = P_bar + Steps[i]
-                Liq_Results = findLiq_MELTS(Model = Model, P_bar = P_bar, comp = bulk, melts = melts, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, T_C_init = Liq_Results['T_Liq'].values[0], Step = np.array([5,1, 0.2]))
+                Liq_Results = findLiq_MELTS(Model = Model, P_bar = P_bar, comp = bulk, melts = melts, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, T_C_init = Liq_Results['T_Liq'].values[0], Step = np.array([5,1]))
 
                 if Liq_Results['T_Liq'].values[0] == 0.0:
                     out = {'SiO2_Liq': 0.0, 'TiO2_Liq': 0.0, 'Al2O3_Liq': 0.0, 'FeOt_Liq': 0.0, 'MnO_Liq': 0.0, 'MgO_Liq': 0.0, 'CaO_Liq': 0.0, 'Na2O_Liq': 0.0, 'K2O_Liq': 0.0, 'P2O5_Liq': 0.0, 'H2O_Liq': 0.0, 'CO2_Liq': 0.0, 'Fe3Fet_Liq': 0.0, 'P_bar': 0.0, 'T_Liq': 0.0}
@@ -992,7 +992,7 @@ def findSatPressure_MELTS(Model = None, T_C_init = None, P_bar_init = None, comp
                     P_bar = P_bar + Steps[i]
                     break
 
-                Liq_Results = findLiq_MELTS(Model = Model, P_bar = P_bar, comp = bulk, melts = melts, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, T_C_init = Liq_Results['T_Liq'].values[0], Step = np.array([5,1, 0.2]))
+                Liq_Results = findLiq_MELTS(Model = Model, P_bar = P_bar, comp = bulk, melts = melts, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, T_C_init = Liq_Results['T_Liq'].values[0], Step = np.array([5,1]))
 
                 if Liq_Results['T_Liq'].values[0] == 0.0:
                     out = {'SiO2_Liq': 0.0, 'TiO2_Liq': 0.0, 'Al2O3_Liq': 0.0, 'FeOt_Liq': 0.0, 'MnO_Liq': 0.0, 'MgO_Liq': 0.0, 'CaO_Liq': 0.0, 'Na2O_Liq': 0.0, 'K2O_Liq': 0.0, 'P2O5_Liq': 0.0, 'H2O_Liq': 0.0, 'CO2_Liq': 0.0, 'Fe3Fet_Liq': 0.0, 'P_bar': 0.0, 'T_Liq': 0.0}
