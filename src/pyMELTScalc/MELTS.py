@@ -144,22 +144,23 @@ def findCO2_MELTS(P_bar = None, Model = None, T_C = None, comp = None, melts = N
                                             Model = Model,
                                             fO2_buffer = fO2_buffer, 
                                             fO2_offset = fO2_offset, 
-                                            T_C_init = T_C,
+                                            T_C_init = Liq_Results['T_Liq'].values[0],
                                             step = np.array([5,1]))
                 
             if j != len(CO2_step) - 1:
                 bulk[15] = bulk[15] - CO2_step[j]
-                # Liq_Results = findLiq_MELTS(P_bar = P_bar, 
-                #                             comp = bulk, 
-                #                             melts = melts, 
-                #                             Model = Model,
-                #                             fO2_buffer = fO2_buffer, 
-                #                             fO2_offset = fO2_offset, 
-                #                             T_C_init = T_C)
+                Liq_Results = findLiq_MELTS(P_bar = P_bar, 
+                                            comp = bulk, 
+                                            melts = melts, 
+                                            Model = Model,
+                                            fO2_buffer = fO2_buffer, 
+                                            fO2_offset = fO2_offset, 
+                                            T_C_init = Liq_Results['T_Liq'].values[0],
+                                            step = np.array([5,1]))
                 
     T_Liq = Liq_Results['T_Liq'].loc[0]
-    H2O = Liq_Results['H2O'].loc[0]
-    CO2 = Liq_Results['CO2'].loc[0]
+    H2O = bulk[14]
+    CO2 = bulk[15]
                 
 
     # try:
@@ -323,7 +324,8 @@ def findLiq_MELTS(P_bar = None, Model = None, T_C_init = None, comp = None, melt
         else:
             bulk = [comp['SiO2_Liq'], comp['TiO2_Liq'], comp['Al2O3_Liq'], comp['Fe3Fet_Liq']*((159.59/2)/71.844)*comp['FeOt_Liq'], 0.0, (1 - comp['Fe3Fet_Liq'])*comp['FeOt_Liq'], comp['MnO_Liq'], comp['MgO_Liq'], 0.0, 0.0, comp['CaO_Liq'], comp['Na2O_Liq'], comp['K2O_Liq'], comp['P2O5_Liq'], comp['H2O_Liq'], comp['CO2_Liq'], 0.0, 0.0, 0.0]
 
-    Results = {}
+    Results = pd.DataFrame(data = np.zeros((1, 17)), columns = ['T_Liq', 'liquidus_phase', 'fluid_saturated', 'SiO2', 'TiO2', 'Al2O3', 'Fe2O3', 'Cr2O3', 'FeO', 'MnO', 'MgO', 'CaO', 'Na2O', 'K2O', 'P2O5', 'H2O', 'CO2'])
+
     # T_Liq = 0
     # H2O_Melt = 0
     # CO2_Melt = 0
@@ -938,7 +940,7 @@ def findSatPressure_MELTS(Model = None, T_C_init = None, P_bar_init = None, comp
             'P_bar': the saturation pressure in bars.
             'T_Liq': the temperature in degrees Celsius at which the saturation pressure is calculated.
     """
-
+    
     if P_bar_init is None:
         P_bar_init = 10000
 
@@ -964,59 +966,55 @@ def findSatPressure_MELTS(Model = None, T_C_init = None, P_bar_init = None, comp
     bulk = [comp['SiO2_Liq'], comp['TiO2_Liq'], comp['Al2O3_Liq'], comp['Fe3Fet_Liq']*((159.59/2)/71.844)*comp['FeOt_Liq'], 0.0, (1- comp['Fe3Fet_Liq'])*comp['FeOt_Liq'], comp['MnO_Liq'], comp['MgO_Liq'], 0.0, 0.0, comp['CaO_Liq'], comp['Na2O_Liq'], comp['K2O_Liq'], comp['P2O5_Liq'], comp['H2O_Liq'], comp['CO2_Liq'], 0.0, 0.0, 0.0]
     bulk = list(100*np.array(bulk)/np.sum(bulk))
 
-    Liq_Results, melts = findLiq_MELTS(P_bar = P_bar, comp = bulk, melts = melts, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, T_C_init = T_C_init, bulk_return = True, Step = np.array([5,1]))
+    Liq_Results = findLiq_MELTS(Model = Model, P_bar = P_bar, comp = bulk, melts = melts, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, T_C_init = T_C_init, Step = np.array([5,1]))
 
-    if Liq_Results['T_Liq'] == 0.0:
+    if Liq_Results['T_Liq'].values[0] == 0.0:
         out = {'SiO2_Liq': 0.0, 'TiO2_Liq': 0.0, 'Al2O3_Liq': 0.0, 'FeOt_Liq': 0.0, 'MnO_Liq': 0.0, 'MgO_Liq': 0.0, 'CaO_Liq': 0.0, 'Na2O_Liq': 0.0, 'K2O_Liq': 0.0, 'P2O5_Liq': 0.0, 'H2O_Liq': 0.0, 'CO2_Liq': 0.0, 'Fe3Fet_Liq': 0.0, 'P_bar': 0.0, 'T_Liq': 0.0}
         return out
 
-    PhaseList = melts.engine.solidNames
-    if PhaseList is None:
-        PhaseList = ['liquid1']
-    else:
-        PhaseList = ['liquid1'] + PhaseList
-
-    Steps = np.array([500, 50, 10])
+    Steps = np.array([500, 100, 10])
 
     for i in range(len(Steps)):
-        if "fluid1" in PhaseList:
-            while "fluid1" in PhaseList:
+        if Liq_Results['fluid_saturated'].loc[0] == "Yes":
+            while Liq_Results['fluid_saturated'].loc[0] == "Yes":
                 P_bar = P_bar + Steps[i]
-                Liq_Results, melts = findLiq_MELTS(P_bar = P_bar, comp = bulk, melts = melts, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, T_C_init = Liq_Results['T_Liq'], bulk_return = True, Step = np.array([5,1]))
+                Liq_Results = findLiq_MELTS(Model = Model, P_bar = P_bar, comp = bulk, melts = melts, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, T_C_init = Liq_Results['T_Liq'].values[0], Step = np.array([5,1, 0.2]))
 
-                if Liq_Results['T_Liq'] == 0.0:
+                if Liq_Results['T_Liq'].values[0] == 0.0:
                     out = {'SiO2_Liq': 0.0, 'TiO2_Liq': 0.0, 'Al2O3_Liq': 0.0, 'FeOt_Liq': 0.0, 'MnO_Liq': 0.0, 'MgO_Liq': 0.0, 'CaO_Liq': 0.0, 'Na2O_Liq': 0.0, 'K2O_Liq': 0.0, 'P2O5_Liq': 0.0, 'H2O_Liq': 0.0, 'CO2_Liq': 0.0, 'Fe3Fet_Liq': 0.0, 'P_bar': 0.0, 'T_Liq': 0.0}
                     return out
                     break
 
-                PhaseList = melts.engine.solidNames
-                if PhaseList is None:
-                    PhaseList = ['liquid1']
-                else:
-                    PhaseList = ['liquid1'] + PhaseList
-
-        if "fluid1" not in PhaseList:
-            while "fluid1" not in PhaseList:
+        if Liq_Results['fluid_saturated'].loc[0] == "No":
+            while Liq_Results['fluid_saturated'].loc[0] == "No":
                 P_bar = P_bar - Steps[i]
                 if P_bar < 0:
                     P_bar = P_bar + Steps[i]
                     break
 
-                Liq_Results, melts = findLiq_MELTS(P_bar = P_bar, comp = bulk, melts = melts, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, T_C_init = Liq_Results['T_Liq'], bulk_return = True, Step = np.array([5,1]))
+                Liq_Results = findLiq_MELTS(Model = Model, P_bar = P_bar, comp = bulk, melts = melts, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, T_C_init = Liq_Results['T_Liq'].values[0], Step = np.array([5,1, 0.2]))
 
-                if Liq_Results['T_Liq'] == 0.0:
+                if Liq_Results['T_Liq'].values[0] == 0.0:
                     out = {'SiO2_Liq': 0.0, 'TiO2_Liq': 0.0, 'Al2O3_Liq': 0.0, 'FeOt_Liq': 0.0, 'MnO_Liq': 0.0, 'MgO_Liq': 0.0, 'CaO_Liq': 0.0, 'Na2O_Liq': 0.0, 'K2O_Liq': 0.0, 'P2O5_Liq': 0.0, 'H2O_Liq': 0.0, 'CO2_Liq': 0.0, 'Fe3Fet_Liq': 0.0, 'P_bar': 0.0, 'T_Liq': 0.0}
                     return out
                     break
 
-                PhaseList = melts.engine.solidNames
-                if PhaseList is None:
-                    PhaseList = ['liquid1']
-                else:
-                    PhaseList = ['liquid1'] + PhaseList
-
-    bulk_out = melts.engine.getProperty('dispComposition', 'liquid1')
-    out = {'SiO2_Liq': bulk_out[0], 'TiO2_Liq': bulk_out[1], 'Al2O3_Liq': bulk_out[2], 'FeOt_Liq': bulk_out[5] + 71.844/(159.69/2)*bulk_out[3], 'MnO_Liq': bulk_out[6], 'MgO_Liq': bulk_out[7], 'CaO_Liq': bulk_out[10], 'Na2O_Liq': bulk_out[11], 'K2O_Liq': bulk_out[12], 'P2O5_Liq': bulk_out[13], 'H2O_Liq': bulk_out[14], 'CO2_Liq': bulk_out[15], 'Fe3Fet_Liq': (71.844/(159.69/2)*bulk_out[3])/(bulk_out[5] + 71.844/(159.69/2)*bulk_out[3]), 'P_bar': P_bar, 'T_Liq': Liq_Results['T_Liq']}
+    # bulk_out = melts.engine.getProperty('dispComposition', 'liquid1')
+    out = {'SiO2_Liq': Liq_Results['SiO2'].values[0], 
+           'TiO2_Liq': Liq_Results['TiO2'].values[0],
+           'Al2O3_Liq': Liq_Results['Al2O3'].values[0], 
+           'FeOt_Liq': Liq_Results['FeO'].values[0] + 71.844/(159.69/2)*Liq_Results['Fe2O3'].values[0], 
+           'MnO_Liq': Liq_Results['MnO'].values[0], 
+           'MgO_Liq': Liq_Results['MgO'].values[0], 
+           'CaO_Liq': Liq_Results['CaO'].values[0],
+           'Na2O_Liq': Liq_Results['Na2O'].values[0], 
+           'K2O_Liq': Liq_Results['K2O'].values[0], 
+           'P2O5_Liq': Liq_Results['P2O5'].values[0], 
+           'H2O_Liq': Liq_Results['H2O'].values[0], 
+           'CO2_Liq': Liq_Results['CO2'].values[0], 
+           'Fe3Fet_Liq': (71.844/(159.69/2)*Liq_Results['Fe2O3'].values[0])/(Liq_Results['FeO'].values[0] + 71.844/(159.69/2)*Liq_Results['Fe2O3'].values[0]), 
+           'P_bar': P_bar, 
+           'T_Liq': Liq_Results['T_Liq'].values[0]}
 
     return out
 

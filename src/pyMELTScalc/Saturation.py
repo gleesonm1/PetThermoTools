@@ -10,7 +10,7 @@ import time
 import sys
 from tqdm.notebook import tqdm, trange
 
-def findSatPressure(cores = None, Model = None, bulk = None, T_C_init = None, P_bar_init = None, Fe3Fet_Liq = None, H2O_Liq = None, fO2_buffer = None, fO2_offset = None):
+def findSatPressure(cores = None, Model = None, bulk = None, T_C_init = None, P_bar_init = None, Fe3Fet_Liq = None, H2O_Liq = None, CO2_Liq = None, fO2_buffer = None, fO2_offset = None):
     """
     Calculates the saturation pressure of a specified composition in the liquid or melt phase. The function will return the saturation pressure of the liquid or melt as a pandas dataframe. If the saturation pressure cannot be calculated, the function will return an empty dataframe.
 
@@ -52,7 +52,7 @@ def findSatPressure(cores = None, Model = None, bulk = None, T_C_init = None, P_
         comp = comp.to_dict()
 
     # ensure the bulk composition has the correct headers etc.
-    comp = comp_fix(Model = Model, comp = comp, Fe3Fet_Liq = Fe3Fet_Liq, H2O_Liq = H2O_Liq)
+    comp = comp_fix(Model = Model, comp = comp, Fe3Fet_Liq = Fe3Fet_Liq, H2O_Liq = H2O_Liq, CO2_Liq = CO2_Liq)
 
     if type(comp) == dict:
         if comp['H2O_Liq'] == 0.0 and "MELTS" in Model:
