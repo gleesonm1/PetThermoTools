@@ -463,7 +463,7 @@ def findLiq_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P
             if len(qs[i])>0:
                 Res, index, T_in[i] = qs[i]
                 for j in Res:
-                    Results.loc[index, j] = Res.loc[0,j]
+                    Results.loc[index] = Res
 
         # H2O = np.zeros(len(T_Liq))
         # CO2 = np.zeros(len(T_Liq))
