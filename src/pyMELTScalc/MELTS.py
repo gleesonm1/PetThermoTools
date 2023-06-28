@@ -145,7 +145,7 @@ def findCO2_MELTS(P_bar = None, Model = None, T_C = None, comp = None, melts = N
                                             fO2_buffer = fO2_buffer, 
                                             fO2_offset = fO2_offset, 
                                             T_C_init = Liq_Results['T_Liq'],
-                                            step = np.array([5,1]))
+                                            step = np.array([1]))
                 
             if j != len(CO2_step) - 1:
                 bulk[15] = bulk[15] - CO2_step[j]
@@ -156,7 +156,7 @@ def findCO2_MELTS(P_bar = None, Model = None, T_C = None, comp = None, melts = N
                                             fO2_buffer = fO2_buffer, 
                                             fO2_offset = fO2_offset, 
                                             T_C_init = Liq_Results['T_Liq'],
-                                            step = np.array([5,1]))
+                                            step = np.array([1]))
                 
     T_Liq = Liq_Results['T_Liq']
     H2O = bulk[14]
@@ -330,9 +330,9 @@ def findLiq_MELTS(P_bar = None, Model = None, T_C_init = None, comp = None, melt
     # H2O_Melt = 0
     # CO2_Melt = 0
 
-    from meltsdynamic import MELTSdynamic
 
     if melts is None:
+        from meltsdynamic import MELTSdynamic
         if Model is None or Model == "MELTSv1.0.2":
             melts = MELTSdynamic(1)
         elif Model == "pMELTS":

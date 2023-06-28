@@ -250,11 +250,20 @@ def findCO2_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P
             ps.append(p)
             p.start()
 
+        TIMEOUT = 240
+
+        start = time.time()
         for p in ps:
-            try:
-                ret = q.get(timeout = 90)
-            except:
-                ret = []
+            if time.time() - start < TIMEOUT - 10:
+                try:
+                    ret = q.get(timeout = TIMEOUT - (time.time()-start) + 10)
+                except:
+                    ret = []
+            else:
+                try:
+                    ret = q.get(timeout = 10)
+                except:
+                    ret = []
 
             qs.append(ret)
 

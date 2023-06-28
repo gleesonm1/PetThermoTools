@@ -58,41 +58,6 @@ def comp_fix(Model = None, comp = None, Fe3Fet_Liq = None, H2O_Liq = None, CO2_L
     if Model is None:
         Model = "MELTSv1.0.2"
 
-    # set the liquid Fe redox state if specified separate to the bulk composition
-    if Fe3Fet_Liq is not None:
-        if type(comp) == dict:
-            if type(Fe3Fet_Liq) != np.ndarray:
-                comp['Fe3Fet_Liq'] = Fe3Fet_Liq
-            else:
-                Comp = pd.DataFrame.from_dict([comp]*len(Fe3Fet_Liq))
-                Comp['Fe3Fet_Liq'] = Fe3Fet_Liq
-                comp = Comp.copy()
-        else:
-            comp['Fe3Fet_Liq'] = np.zeros(len(comp.iloc[:,0])) + Fe3Fet_Liq
-
-
-    if H2O_Liq is not None:
-        if type(comp) == dict:
-            if type(H2O_Liq) != np.ndarray:
-                comp['H2O_Liq'] = H2O_Liq
-            else:
-                Comp = pd.DataFrame.from_dict([comp]*len(H2O_Liq))
-                Comp['H2O_Liq'] = H2O_Liq
-                comp = Comp.copy()
-        else:
-            comp['H2O_Liq'] = np.zeros(len(comp.iloc[:,0])) + H2O_Liq
-
-    if CO2_Liq is not None:
-        if type(comp) == dict:
-            if type(CO2_Liq) != np.ndarray:
-                comp['CO2_Liq'] = CO2_Liq
-            else:
-                Comp = pd.DataFrame.from_dict([comp]*len(CO2_Liq))
-                Comp['CO2_Liq'] = CO2_Liq
-                comp = Comp.copy()
-        else:
-            comp['CO2_Liq'] = np.zeros(len(comp.iloc[:,0])) + CO2_Liq
-
     if "MELTS" in Model:
         # check all required columns are present with appropriate suffix
         Columns_bad = ['SiO2', 'TiO2', 'Al2O3', 'FeOt', 'MnO', 'MgO', 'CaO', 'Na2O', 'K2O', 'P2O5', 'H2O', 'CO2', 'Fe3Fet']
@@ -154,6 +119,41 @@ def comp_fix(Model = None, comp = None, Fe3Fet_Liq = None, H2O_Liq = None, CO2_L
             for el in Columns_ideal:
                 if el not in list(comp.keys()):
                     comp[el] = 0.0
+
+    # set the liquid Fe redox state if specified separate to the bulk composition
+    if Fe3Fet_Liq is not None:
+        if type(comp) == dict:
+            if type(Fe3Fet_Liq) != np.ndarray:
+                comp['Fe3Fet_Liq'] = Fe3Fet_Liq
+            else:
+                Comp = pd.DataFrame.from_dict([comp]*len(Fe3Fet_Liq))
+                Comp['Fe3Fet_Liq'] = Fe3Fet_Liq
+                comp = Comp.copy()
+        else:
+            comp['Fe3Fet_Liq'] = np.zeros(len(comp.iloc[:,0])) + Fe3Fet_Liq
+
+
+    if H2O_Liq is not None:
+        if type(comp) == dict:
+            if type(H2O_Liq) != np.ndarray:
+                comp['H2O_Liq'] = H2O_Liq
+            else:
+                Comp = pd.DataFrame.from_dict([comp]*len(H2O_Liq))
+                Comp['H2O_Liq'] = H2O_Liq
+                comp = Comp.copy()
+        else:
+            comp['H2O_Liq'] = np.zeros(len(comp.iloc[:,0])) + H2O_Liq
+
+    if CO2_Liq is not None:
+        if type(comp) == dict:
+            if type(CO2_Liq) != np.ndarray:
+                comp['CO2_Liq'] = CO2_Liq
+            else:
+                Comp = pd.DataFrame.from_dict([comp]*len(CO2_Liq))
+                Comp['CO2_Liq'] = CO2_Liq
+                comp = Comp.copy()
+        else:
+            comp['CO2_Liq'] = np.zeros(len(comp.iloc[:,0])) + CO2_Liq
 
     return comp
 
