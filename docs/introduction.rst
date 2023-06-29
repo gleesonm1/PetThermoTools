@@ -16,7 +16,7 @@ pyMELTScalc performs all calculations using  Celsuis for temperature and bar for
 ==============================
 Reporting bugs/issues with the code
 ==============================
-No software is free of bugs, particularly when new features are being constantly added. We have extensively benchmarked pyMELTScalc to existing spreadsheets, and before the package is published on PyPI, automatic unit tests are run through GitHub in the attempt to catch problems introduced by changing Python dependencies/updates. However, if users spot any bugs, or wish to request features, they should submit an 'issue' on the GitHub page. Alternatively, they can email the author team. In both cases, please upload any files the code is using (e.g. excel, jupyter notebooks) so that I can run your code to see what the issue is!
+No software is free of bugs, particularly when still in the early stages of development. Many of the calculations performed in pyMELTScalc have been benchmarked to the results obtained by alternative MELTS software packages (e.g., MELTS for Excel). However, if users spot any bugs, or wish to request features, they should submit an 'issue' on the GitHub page. Alternatively, they can email the development team. In both cases, please upload any files the code is using (e.g. excel, jupyter notebooks) so that I can run your code to see what the issue is!
 
 
 

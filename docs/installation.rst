@@ -26,9 +26,9 @@ You then need to import pyMELTScalc into the script you are running code in. In 
 
 .. code-block:: python
 
-   import pyMELTScalc as ss
+   import pyMELTScalc as M
 
-This means any time you want to call a function from pyMELTScalc, you do ss.function_name.
+This means any time you want to call a function from pyMELTScalc, you do M.function_name.
 
 
 
@@ -48,8 +48,8 @@ Or in your Jupyter environment:
    !pip install pyMELTScalc --upgrade
 
 
-For maximum reproducability, you should state which version of pyMELTScalc you are using. If you have imported pyMELTScalc as pt, you can find this using:
+For maximum reproducability, you should state which version of pyMELTScalc you are using. If you have imported pyMELTScalc as M, you can find this using:
 
 .. code-block:: python
 
-    ss.__version__
+    M.__version__
