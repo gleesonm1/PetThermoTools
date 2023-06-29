@@ -1,3 +1,7 @@
+## ReadTheDocs
+
+https://pymeltscalc.readthedocs.io/en/latest/
+
 ## pyMELTScalc
 
 Petrological calculations using the MELTS or thermodynamic databases. Through integration with the pyMAGEMINcalc repository, calculations can also be performed using the thermodynamic database of Holland et al. (2018).
