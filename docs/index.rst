@@ -26,7 +26,7 @@ Welcome to pyMELTScalc's documentation!
 
 .. toctree::
    :maxdepth: 2
-   :caption: Data Input Options
+   :caption: Melt liquidus temperature
 
    Examples/LiquidusTests/LiquidusTest
 
