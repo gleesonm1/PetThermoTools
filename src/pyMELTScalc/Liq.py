@@ -486,7 +486,11 @@ def findLiq_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P
     else:
         Results, index, T_in = qs[0]
 
-    return Results
+    Res = comp_fix(Model = Model, comp = Results)
+    Res = Res[['T_Liq', 'liquidus_phase', 'fluid_saturated', 'SiO2_Liq', 'TiO2_Liq', 'Al2O3_Liq', 'FeOt_Liq', 'MnO_Liq', 'MgO_Liq', 'CaO_Liq', 'Na2O_Liq', 'K2O_Liq', 'P2O5_Liq', 'H2O_Liq', 'CO2_Liq']]
+    Res.rename(columns = {'T_Liq': 'T_C_Liq'})
+
+    return Res
 
 def findCO2(q, index, *, Model = None, P_bar = None, T_initial_C = None, comp = None, fO2_buffer = None, fO2_offset = None):
     T_Liq = 0
