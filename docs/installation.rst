@@ -8,8 +8,6 @@ Installation
 First, obtain Python3 (tested on V3.7). If you haven't used python before, we recomend installing it through anaconda.
  `anaconda3 <https://www.anaconda.com/products/individual>`_.
 
-All of the You Tube examples shown here use Jupyter Lab, which is an easy-friendly editor that will be installed along with Anaconda.
-
 pyMELTScalc can be installed using pip in one line. If you are using a terminal, enter:
 
 .. code-block:: python
