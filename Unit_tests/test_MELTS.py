@@ -21,7 +21,7 @@ class test_compfix(unittest.TestCase):
     def test_compfix_single_df(self):
         self.assertAlmostEqual(M.comp_fix(Model="pMELTS",
                                           comp=Liq_test,
-                                          CO2_Liq=0.2)['CO2_Liq'], 0.2,
+                                          CO2_Liq=0.2)['CO2_Liq'][0], 0.2,
 decimalPlace, "CO2 doesn't match test value")
 
 #     def test_Simple_mantle_S(self):
