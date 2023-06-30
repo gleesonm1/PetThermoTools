@@ -48,9 +48,45 @@ You then need to import pyMELTScalc into the script you are running code in. In 
 This means any time you want to call a function from pyMELTScalc, you do M.function_name.
 
 
+Using MAGEMin
+=============
+Before any calculations can be performed using the MAGEMin software steps 1 & 3 above mush be completed. Once this has been done users must:
+
+- First ensure that they have a local Julia installation (https://julialang.org/downloads/).
+- Next, users should run Julia and enter the following commands:
+
+..code-block:: julia
+   import Pkg 
+   using Pkg 
+   Pkg.add(url = "https://github.com/gleesonm1/MAGEMinCalc")
+
+- Once this has been done, users need to ppen Python and install Julia within the Python environment via pip. This can be done in the terminal:
+
+.. code-block:: python
+   pip install Julia
+
+or within a Jupyter environment:
+
+.. code-block:: python
+   !pip install Julia
+
+- Following this, users should run the following code in Python:
+
+.. code-block:: python
+   import julia 
+   julia.install()
+
+- At this point the installation is nearly complete, users simply need to install the pyMAGEMINcalc package in Python via the terminal:
+
+.. code-block:: python
+   pip install "https://github.com/gleesonm1/pyMAGEMINcalc/refs/tags/v0.0.6.zip"
+
+or a Jupyter environment:
+
+.. code-block:: python
+   !pip install "https://github.com/gleesonm1/pyMAGEMINcalc/refs/tags/v0.0.6.zip"
 
 
-========
 Updating
 ========
 
