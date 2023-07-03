@@ -32,11 +32,11 @@ Welcome to pyMELTScalc's documentation!
 
 
 
-.. .. toctree::
-..    :maxdepth: 2
-..    :caption: Introductory Examples
+.. toctree::
+   :maxdepth: 2
+   :caption: MELTS barometry
 
-..    Examples/Intro_Example_Petrolog_FC/FC_Petrolog
+   Examples/BarometryTests/q2f_tests
 
 
 
