@@ -19,7 +19,7 @@ from tqdm.notebook import tqdm, trange
 from scipy import interpolate
 from shapely.geometry import MultiPoint, Point, Polygon
 
-def findSaturationPressure(cores = None, Model = None, bulk = None, phases = None, P_bar = None, Fe3Fet_Liq = None, H2O_Liq = None, T_initial_C = None, dt_C = None, T_step_C = None, T_cut_C = None, find_range = None, find_min = None, fO2_buffer = None, fO2_offset = None):
+def findSaturationPressure(cores = None, Model = None, bulk = None, phases = None, P_bar = None, Fe3Fet_Liq = None, H2O_Liq = None, T_initial_C = None, dt_C = None, T_maxdrop_C = None, T_cut_C = None, find_range = None, find_min = None, fO2_buffer = None, fO2_offset = None):
     '''
     Carry out multiple calculations in parallel. Allows isobaric, polybaric and isochoric crystallisation to be performed as well as isothermal, isenthalpic or isentropic decompression. All temperature inputs/outputs are reported in degrees celcius and pressure is reported in bars.
 
@@ -50,10 +50,10 @@ def findSaturationPressure(cores = None, Model = None, bulk = None, phases = Non
     T_initial_C: float
         Starting temperature for the liquidus calculations. Default = 1200
 
-    dt_C: float
+    T_maxdrop_C: float
         Max temperature drop of the calculations. Default = 25
 
-    T_step_C: float
+    dt_C: float
         Temperature change at each model step. Default = 1
 
     T_cut_C: float
@@ -76,6 +76,9 @@ def findSaturationPressure(cores = None, Model = None, bulk = None, phases = Non
     Results: Dict
         Dictionary containing information regarding the saturation temperature of each phase and the residuals between the different phases
     '''
+
+    T_step_C = dt_C
+    dt_C = T_maxdrop_C 
 
     comp = bulk.copy()
     # set default values if required
@@ -136,11 +139,11 @@ def findSaturationPressure(cores = None, Model = None, bulk = None, phases = Non
     # create main output dictionary
     Results = {}
     if len(phases) == 3:
-        List = ['a_sat', 'b_sat', 'c_sat', 'T_Liq', 'H2O_melt', 'Res_abc', 'Res_ab', 'Res_ac', 'Res_bc']
+        List = [phases[0], phases[1], phases[2], 'T_Liq', 'H2O_melt', '3 Phase Saturation', phases[0] + ' - ' + phases[1], phases[0] + ' - ' + phases[2], phases[1] + ' - ' + phases[2]]
         for l in List:
             Results[l] = base_array.copy()
     else:
-        List = ['a_sat', 'b_sat', 'T_Liq', 'H2O_melt', 'Res_ab']
+        List = [phases[0], phases[1], 'T_Liq', 'H2O_melt', phases[0] + ' - ' + phases[1]]
         for l in List:
             Results[l] = base_array.copy()
 
@@ -263,31 +266,33 @@ def findSaturationPressure(cores = None, Model = None, bulk = None, phases = Non
 
         if find_min is not None:
             if H2O_Liq is not None:
-                Results = findMinimum(Results = Results, P_bar = P_bar, T_cut_C = T_cut_C, H2O_Liq = H2O_Liq, Fe3Fet_Liq = Fe3Fet_Liq)
+                Results = findMinimum(Results = Results, P_bar = P_bar, T_cut_C = T_cut_C, H2O_Liq = H2O_Liq, Fe3Fet_Liq = Fe3Fet_Liq, phases = phases)
             else:
-                Results = findMinimum(Results = Results, P_bar = P_bar, T_cut_C = T_cut_C, H2O_Liq = H2O_Liq, Fe3Fet_Liq = Fe3Fet_Liq)
+                Results = findMinimum(Results = Results, P_bar = P_bar, T_cut_C = T_cut_C, H2O_Liq = H2O_Liq, Fe3Fet_Liq = Fe3Fet_Liq, phases = phases)
 
         if find_range is not None:
             Results['range'] = np.zeros(np.shape(Results[l]))
             if len(phases) == 3:
-                Results['range'][np.where(Results['Res_abc'] <= T_cut_C)] = True
-                Results['range'][np.where(Results['Res_abc'] > T_cut_C)] = False
+                Results['range'][np.where(Results['3 Phase Saturation'] <= T_cut_C)] = True
+                Results['range'][np.where(Results['3 Phase Saturation'] > T_cut_C)] = False
             else:
-                Results['range'][np.where(Results['Res_ab'] <= T_cut_C)] = True
-                Results['range'][np.where(Results['Res_ab'] > T_cut_C)] = False
+                Results['range'][np.where(Results[phases[0] + ' - ' + phases[1]] <= T_cut_C)] = True
+                Results['range'][np.where(Results[phases[0] + ' - ' + phases[1]] > T_cut_C)] = False
+
+    
 
     return Results
 
-def findMinimum(Results = None, P_bar = None, T_cut_C = None, H2O_Liq = None, Fe3Fet_Liq = None):
+def findMinimum(Results = None, P_bar = None, T_cut_C = None, H2O_Liq = None, Fe3Fet_Liq = None, phases = None):
     '''
-    Take the results of SatPress and search for the minimum point using a parabolic fit.
+    Take the results of SatPress and search for the minimum point using a spline fit.
     '''
     if T_cut_C is None:
         T_cut_C = 10
 
     if H2O_Liq is None and Fe3Fet_Liq is None:
-        if 'Res_abc' in list(Results.keys()):
-            Minimum = {'Res_abc', 'Res_ab', 'Res_ac', 'Res_bc'}
+        if '3 Phase Saturation' in list(Results.keys()):
+            Minimum = {'3 Phase Saturation', phases[0] + ' - ' + phases[1], phases[0] + ' - ' + phases[2], phases[1] + ' - ' + phases[2]}
             CurveMin = {}
             for m in Minimum:
                 if len(Results[m][0,0,:][~np.isnan(Results[m][0,0,:])]) > 2:
@@ -319,7 +324,7 @@ def findMinimum(Results = None, P_bar = None, T_cut_C = None, H2O_Liq = None, Fe
 
             Results['CurveMin'] = CurveMin
         else:
-            m = 'Res_ab'
+            m = phases[0] + ' - ' + phases[1]
             if len(Results[m][0,0,:][~np.isnan(Results[m][0,0,:])]) > 2:
                 y = Results[m][0,0,:][np.where(~np.isnan(Results[m][0,0,:]))]
                 x = P_bar[np.where(~np.isnan(Results[m][0,0,:]))]
@@ -344,14 +349,14 @@ def findMinimum(Results = None, P_bar = None, T_cut_C = None, H2O_Liq = None, Fe
                 P_min = np.nan
                 Test = 'Fail'
 
-            Results['CurveMin'] = {'Res_ab': {'P_min': P_min, 'Res_min': NewMin, 'y_new': y_new, 'P_new': P_new, 'test': Test}}
+            Results['CurveMin'] = {phases[0] + ' - ' + phases[1]: {'P_min': P_min, 'Res_min': NewMin, 'y_new': y_new, 'P_new': P_new, 'test': Test}}
 
     if H2O_Liq is not None and Fe3Fet_Liq is None:
-        if 'Res_abc' in list(Results.keys()):
+        if '3 Phase Saturation' in list(Results.keys()):
             X, Y = np.meshgrid(P_bar, H2O_Liq)
             Y = Results['H2O_melt'][:,0,:].copy()
 
-            Minimum = {'Res_abc', 'Res_ab', 'Res_ac', 'Res_bc'}
+            Minimum = {'3 Phase Saturation', phases[0] + ' - ' + phases[1], phases[0] + ' - ' + phases[2], phases[1] + ' - ' + phases[2]}
             CurveMin = {}
             for m in Minimum:
                 if len(Results[m][:,0,:][~np.isnan(Results[m][:,0,:])]) > 4:
@@ -405,11 +410,11 @@ def findMinimum(Results = None, P_bar = None, T_cut_C = None, H2O_Liq = None, Fe
             Results['CurveMin'] = CurveMin
 
     if H2O_Liq is not None and Fe3Fet_Liq is not None:
-        if 'Res_abc' in list(Results.keys()):
+        if '3 Phase Saturation' in list(Results.keys()):
             X, Y = np.meshgrid(P_bar, H2O_Liq)
             Y = Results['H2O_melt'][:,0,:].copy()
 
-            Minimum = {'Res_abc', 'Res_ab', 'Res_ac', 'Res_bc'}
+            Minimum = {'3 Phase Saturation', phases[0] + ' - ' + phases[1], phases[0] + ' - ' + phases[2], phases[1] + ' - ' + phases[2]}
             CurveMin = {}
             for m in Minimum:
                 Res_min_save = 50
@@ -536,27 +541,27 @@ def satTemperature(q, index, *, Model = None, comp = None, phases = None, T_init
         try:
             Results = phaseSat_MELTS(Model = Model, comp = comp, phases = phases, T_initial_C = T_initial_C, T_step_C = T_step_C, dt_C = dt_C, P_bar = P_bar, H2O_Liq = H2O_Liq, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset)
         except:
-            Results = {'a_sat': np.nan, 'b_sat': np.nan, 'c_sat': np.nan, 'T_Liq': np.nan, 'H2O_melt': np.nan}
+            Results = {phases[0]: np.nan, phases[1]: np.nan, phases[2]: np.nan, 'T_Liq': np.nan, 'H2O_melt': np.nan}
             if len(phases) == 2:
-                del Results['c_sat']
+                del Results[phases[2]]
 
         if len(phases) == 3:
-            Res = ['Res_abc', 'Res_ab', 'Res_ac', 'Res_bc']
+            Res = ['3 Phase Saturation', phases[0] + ' - ' + phases[1], phases[0] + ' - ' + phases[2], phases[1] + ' - ' + phases[2]]
             for R in Res:
                 Results[R] = np.nan
 
-            if ~np.isnan(Results['a_sat']) and ~np.isnan(Results['b_sat']) and ~np.isnan(Results['c_sat']):
-                Results['Res_abc'] = np.nanmax(np.array([abs(Results['a_sat'] - Results['b_sat']), abs(Results['a_sat'] - Results['c_sat']), abs(Results['b_sat'] - Results['c_sat'])]))
-            if ~np.isnan(Results['a_sat']) and ~np.isnan(Results['b_sat']):
-                Results['Res_ab'] = abs(Results['a_sat'] - Results['b_sat'])
-            if ~np.isnan(Results['a_sat']) and ~np.isnan(Results['c_sat']):
-                Results['Res_ac'] = abs(Results['a_sat'] - Results['c_sat'])
-            if ~np.isnan(Results['b_sat']) and ~np.isnan(Results['c_sat']):
-                Results['Res_bc'] = abs(Results['b_sat'] - Results['c_sat'])
+            if ~np.isnan(Results[phases[0]]) and ~np.isnan(Results[phases[1]]) and ~np.isnan(Results[phases[2]]):
+                Results['3 Phase Saturation'] = np.nanmax(np.array([abs(Results[phases[0]] - Results[phases[1]]), abs(Results[phases[0]] - Results[phases[2]]), abs(Results[phases[1]] - Results[phases[2]])]))
+            if ~np.isnan(Results[phases[0]]) and ~np.isnan(Results[phases[1]]):
+                Results[phases[0] + ' - ' + phases[1]] = abs(Results[phases[0]] - Results[phases[1]])
+            if ~np.isnan(Results[phases[0]]) and ~np.isnan(Results[phases[2]]):
+                Results[phases[0] + ' - ' + phases[2]] = abs(Results[phases[0]] - Results[phases[2]])
+            if ~np.isnan(Results[phases[1]]) and ~np.isnan(Results[phases[2]]):
+                Results[phases[1] + ' - ' + phases[2]] = abs(Results[phases[1]] - Results[phases[2]])
         else:
-            Results['Res_ab'] = np.nan
-            if ~np.isnan(Results['a_sat']) and ~np.isnan(Results['b_sat']):
-                Results['Res_ab'] = abs(Results['a_sat'] - Results['b_sat'])
+            Results[phases[0] + ' - ' + phases[1]] = np.nan
+            if ~np.isnan(Results[phases[0]]) and ~np.isnan(Results[phases[1]]):
+                Results[phases[0] + ' - ' + phases[1]] = abs(Results[phases[0]] - Results[phases[1]])
 
         q.put([Results, index])
         return
@@ -564,22 +569,22 @@ def satTemperature(q, index, *, Model = None, comp = None, phases = None, T_init
     if Model == "Holland":
         Results = phaseSat_Holland(comp = comp, phases = phases, T_initial_C = T_initial_C, T_step_C = T_step_C, dt_C = dt_C, P_bar = P_bar, H2O_Liq = H2O_Liq)
         if len(phases) == 3:
-            Res = ['Res_abc', 'Res_ab', 'Res_ac', 'Res_bc']
+            Res = ['3 Phase Saturation', phases[0] + ' - ' + phases[1], phases[0] + ' - ' + phases[2], phases[1] + ' - ' + phases[2]]
             for R in Res:
                 Results[R] = np.nan
 
-            if Results['a_sat'] != np.nan & Results['b_sat'] != np.nan & Results['c_sat'] != np.nan:
-                Results['Res_abc'] = np.nanmax(np.array([abs(Results['a_sat'] - Results['b_sat']), abs(Results['a_sat'] - Results['c_sat']), abs(Results['b_sat'] - Results['c_sat'])]))
-            if Results['a_sat'] != np.nan & Results['b_sat'] != np.nan:
-                Results['Res_ab'] = abs(Results['a_sat'] - Results['b_sat'])
-            if Results['a_sat'] != np.nan & Results['c_sat'] != np.nan:
-                Results['Res_ac'] = abs(Results['a_sat'] - Results['c_sat'])
-            if Results['b_sat'] != np.nan & Results['c_sat'] != np.nan:
-                Results['Res_bc'] = abs(Results['b_sat'] - Results['c_sat'])
+            if Results[phases[0]] != np.nan & Results[phases[1]] != np.nan & Results[phases[2]] != np.nan:
+                Results['3 Phase Saturation'] = np.nanmax(np.array([abs(Results[phases[0]] - Results[phases[1]]), abs(Results[phases[0]] - Results[phases[2]]), abs(Results[phases[1]] - Results[phases[2]])]))
+            if Results[phases[0]] != np.nan & Results[phases[1]] != np.nan:
+                Results[phases[0] + ' - ' + phases[1]] = abs(Results[phases[0]] - Results[phases[1]])
+            if Results[phases[0]] != np.nan & Results[phases[2]] != np.nan:
+                Results[phases[0] + ' - ' + phases[2]] = abs(Results[phases[0]] - Results[phases[2]])
+            if Results[phases[1]] != np.nan & Results[phases[2]] != np.nan:
+                Results[phases[1] + ' - ' + phases[2]] = abs(Results[phases[1]] - Results[phases[2]])
         else:
-            Results['Res_ab'] = np.nan
-            if Results['a_sat'] != np.nan & Results['b_sat'] != np.nan:
-                Results['Res_ab'] = abs(Results['a_sat'] - Results['b_sat'])
+            Results[phases[0] + ' - ' + phases[1]] = np.nan
+            if Results[phases[0]] != np.nan & Results[phases[1]] != np.nan:
+                Results[phases[0] + ' - ' + phases[1]] = abs(Results[phases[0]] - Results[phases[1]])
 
         q.put([Results, index])
         return
@@ -622,15 +627,15 @@ def satTemperature(q, index, *, Model = None, comp = None, phases = None, T_init
 #             pickle.dump(bulk, f)
 #
 #         if len(Phases) == 3:
-#             a_Sat, b_Sat, c_Sat, T_Liq, H2O_Melt = findSat(P, Model, Phases, bulk, T_initial = T_initial, dt = T_cut, T_step = T_cut, cores = cores)
+#             phases[0], b_Sat, c_Sat, T_Liq, H2O_Melt = findSat(P, Model, Phases, bulk, T_initial = T_initial, dt = T_cut, T_step = T_cut, cores = cores)
 #         else:
-#             a_Sat, b_Sat, T_Liq, H2O_Melt = findSat(P, Model, Phases, bulk, T_initial = T_initial, dt = T_cut, T_step = T_cut, cores = cores)
+#             phases[0], b_Sat, T_Liq, H2O_Melt = findSat(P, Model, Phases, bulk, T_initial = T_initial, dt = T_cut, T_step = T_cut, cores = cores)
 #
 #         # calc residuals
 #         if len(Phases) == 3:
-#             Results_new = findResiduals(a_Sat, b_Sat, c_Sat = c_Sat)
+#             Results_new = findResiduals(phases[0], b_Sat, c_Sat = c_Sat)
 #         else:
-#             Results_new = findResiduals(a_Sat, b_Sat)
+#             Results_new = findResiduals(phases[0], b_Sat)
 #
 #         Results_new['H2O_sat'] = H2O_Melt
 #         Results_new['T_Liq'] = T_Liq
@@ -699,18 +704,18 @@ def satTemperature(q, index, *, Model = None, comp = None, phases = None, T_init
 #                 pickle.dump(Bulk_new, f)
 #
 #             if len(Phases) == 3:
-#                 a_Sat, b_Sat, c_Sat, T_Liq, H2O_Melt = findSat(P, Model, Phases, bulk, T_initial = T_initial, dt = T_cut, T_step = T_cut, cores = cores)
+#                 phases[0], b_Sat, c_Sat, T_Liq, H2O_Melt = findSat(P, Model, Phases, bulk, T_initial = T_initial, dt = T_cut, T_step = T_cut, cores = cores)
 #             else:
-#                 a_Sat, b_Sat, T_Liq, H2O_Melt = findSat(P, Model, Phases, bulk, T_initial = T_initial, dt = T_cut, T_step = T_cut, cores = cores)
+#                 phases[0], b_Sat, T_Liq, H2O_Melt = findSat(P, Model, Phases, bulk, T_initial = T_initial, dt = T_cut, T_step = T_cut, cores = cores)
 #
 #             # calc residuals
 #             if len(Phases) == 3:
-#                 Res = findResiduals(a_Sat, b_Sat, c_Sat = c_Sat)
+#                 Res = findResiduals(phases[0], b_Sat, c_Sat = c_Sat)
 #                 Res_abc_mat[i, :] = Res['abc']
 #                 Res_ac_mat[i, :] = Res['ac']
 #                 Res_bc_mat[i, :] = Res['bc']
 #             else:
-#                 Res = findResiduals(a_Sat, b_Sat)
+#                 Res = findResiduals(phases[0], b_Sat)
 #
 #             T_Liq_mat[i, :] = T_Liq
 #             H2O_mat[i, :] = H2O_Melt
@@ -791,18 +796,18 @@ def satTemperature(q, index, *, Model = None, comp = None, phases = None, T_init
 #                 pickle.dump(Bulk_new, f)
 #
 #             if len(Phases) == 3:
-#                 a_Sat, b_Sat, c_Sat, T_Liq, H2O_Melt = findSat(P, Model, Phases, bulk, T_initial = T_initial, dt = T_cut, T_step = T_cut, cores = cores)
+#                 phases[0], b_Sat, c_Sat, T_Liq, H2O_Melt = findSat(P, Model, Phases, bulk, T_initial = T_initial, dt = T_cut, T_step = T_cut, cores = cores)
 #             else:
-#                 a_Sat, b_Sat, T_Liq, H2O_Melt = findSat(P, Model, Phases, bulk, T_initial = T_initial, dt = T_cut, T_step = T_cut, cores = cores)
+#                 phases[0], b_Sat, T_Liq, H2O_Melt = findSat(P, Model, Phases, bulk, T_initial = T_initial, dt = T_cut, T_step = T_cut, cores = cores)
 #
 #             # calc residuals
 #             if len(Phases) == 3:
-#                 Res = findResiduals(a_Sat, b_Sat, c_Sat = c_Sat)
+#                 Res = findResiduals(phases[0], b_Sat, c_Sat = c_Sat)
 #                 Res_abc_mat[i, :] = Res['abc']
 #                 Res_ac_mat[i, :] = Res['ac']
 #                 Res_bc_mat[i, :] = Res['bc']
 #             else:
-#                 Res = findResiduals(a_Sat, b_Sat)
+#                 Res = findResiduals(phases[0], b_Sat)
 #
 #             T_Liq_mat[i, :] = T_Liq
 #             H2O_mat[i, :] = H2O_Melt
@@ -932,18 +937,18 @@ def satTemperature(q, index, *, Model = None, comp = None, phases = None, T_init
 #                     pickle.dump(Bulk_new, f)
 #
 #                 if len(Phases) == 3:
-#                     a_Sat, b_Sat, c_Sat, T_Liq, H2O_Melt = findSat(P, Model, Phases, Bulk_new, T_initial = T_initial, dt = T_cut, T_step = T_cut, cores = cores)
+#                     phases[0], b_Sat, c_Sat, T_Liq, H2O_Melt = findSat(P, Model, Phases, Bulk_new, T_initial = T_initial, dt = T_cut, T_step = T_cut, cores = cores)
 #                 else:
-#                     a_Sat, b_Sat, T_Liq, H2O_Melt = findSat(P, Model, Phases, Bulk_new, T_initial = T_initial, dt = T_cut, T_step = T_cut, cores = cores)
+#                     phases[0], b_Sat, T_Liq, H2O_Melt = findSat(P, Model, Phases, Bulk_new, T_initial = T_initial, dt = T_cut, T_step = T_cut, cores = cores)
 #
 #                 # calc residuals
 #                 if len(Phases) == 3:
-#                     Res = findResiduals(a_Sat, b_Sat, c_Sat = c_Sat)
+#                     Res = findResiduals(phases[0], b_Sat, c_Sat = c_Sat)
 #                     Res_abc_mat_2D[j, :] = Res['abc']
 #                     Res_ac_mat_2D[j, :] = Res['ac']
 #                     Res_bc_mat_2D[j, :] = Res['bc']
 #                 else:
-#                     Res = findResiduals(a_Sat, b_Sat)
+#                     Res = findResiduals(phases[0], b_Sat)
 #
 #                 Res_ab_mat_2D[j, :] = Res['ab']
 #                 T_Liq_mat_2D[j, :] = T_Liq

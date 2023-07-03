@@ -510,9 +510,9 @@ def phaseSat_MELTS(Model = None, comp = None, phases = None, T_initial_C = None,
         Dict containing a float for each saturation temperature found and the T_Liq and melt H2O values.
 
     '''
-    Results = {'a_sat': np.nan, 'b_sat': np.nan, 'c_sat': np.nan, 'T_Liq': np.nan, 'H2O_melt': np.nan}
+    Results = {phases[0]: np.nan, phases[1]: np.nan, phases[2]: np.nan, 'T_Liq': np.nan, 'H2O_melt': np.nan}
     if len(phases) == 2:
-        del Results['c_sat']
+        del Results[phases[2]]
 
     from meltsdynamic import MELTSdynamic
 
@@ -569,21 +569,21 @@ def phaseSat_MELTS(Model = None, comp = None, phases = None, T_initial_C = None,
                 if 'clinopyroxene2' in PhaseList:
                     PhaseList = ['orthopyroxene1'] + PhaseList
 
-                if phases[0] in PhaseList and np.isnan(Results['a_sat']):# == 0:
-                    Results['a_sat'] = melts.engine.temperature
+                if phases[0] in PhaseList and np.isnan(Results[phases[0]]):# == 0:
+                    Results[phases[0]] = melts.engine.temperature
 
-                if phases[1] in PhaseList and np.isnan(Results['b_sat']):# == 0:
-                    Results['b_sat'] = melts.engine.temperature
+                if phases[1] in PhaseList and np.isnan(Results[phases[1]]):# == 0:
+                    Results[phases[1]] = melts.engine.temperature
 
                 if len(phases) == 3:
-                    if phases[2] in PhaseList and np.isnan(Results['c_sat']):# == 0:
-                        Results['c_sat'] = melts.engine.temperature
+                    if phases[2] in PhaseList and np.isnan(Results[phases[2]]):# == 0:
+                        Results[phases[2]] = melts.engine.temperature
 
-                    if ~np.isnan(Results['a_sat']) and ~np.isnan(Results['b_sat']) and ~np.isnan(Results['c_sat']):# > 0:
+                    if ~np.isnan(Results[phases[0]]) and ~np.isnan(Results[phases[1]]) and ~np.isnan(Results[phases[2]]):# > 0:
                         break
 
                 if len(phases) == 2:
-                    if ~np.isnan(Results['a_sat']) and ~np.isnan(Results['b_sat']):# > 0:
+                    if ~np.isnan(Results[phases[0]]) and ~np.isnan(Results[phases[1]]):# > 0:
                         break
 
                 T = T - T_step_C

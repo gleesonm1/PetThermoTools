@@ -131,11 +131,11 @@ def plot_surfaces(Results = None, P_bar = None, phases = None, H2O_Liq = None):
         a.set_ylabel('T ($\degree$C)')
         for i in range(len(phases)):
             if i == 0:
-                a.plot(P_bar, Results['a_sat'][0,0,:], '-r', linewidth = 2, label = phases[i])
+                a.plot(P_bar, Results[phases[0]][0,0,:], '-r', linewidth = 2, label = phases[i])
             if i == 1:
-                a.plot(P_bar, Results['b_sat'][0,0,:], '-b', linewidth = 2, label = phases[i])
+                a.plot(P_bar, Results[phases[1]][0,0,:], '-b', linewidth = 2, label = phases[i])
             if i == 2:
-                a.plot(P_bar, Results['c_sat'][0,0,:], '-k', linewidth = 2, label = phases[i])
+                a.plot(P_bar, Results[phases[2]][0,0,:], '-k', linewidth = 2, label = phases[i])
 
         a.legend()
 
@@ -147,11 +147,11 @@ def plot_surfaces(Results = None, P_bar = None, phases = None, H2O_Liq = None):
         a = f.add_subplot(1,1,1, projection = '3d')
         for i in range(len(phases)):
             if i == 0:
-                a.plot_surface(X, Y, Results['a_sat'][:,0,:], color = 'r', label = phases[i])
+                a.plot_surface(X, Y, Results[phases[0]][:,0,:], color = 'r', label = phases[i])
             if i == 1:
-                a.plot_surface(X, Y, Results['b_sat'][:,0,:], color = 'b', label = phases[i])
+                a.plot_surface(X, Y, Results[phases[1]][:,0,:], color = 'b', label = phases[i])
             if i == 2:
-                a.plot_surface(X, Y, Results['c_sat'][:,0,:], color = 'k', label = phases[i])
+                a.plot_surface(X, Y, Results[phases[2]][:,0,:], color = 'k', label = phases[i])
 
     return f, a
 
@@ -169,7 +169,7 @@ def residualT_plot(Results = None, P_bar = None, phases = None, H2O_Liq = None, 
             a[0][0].set_ylabel('Residual T ($\degree$C)')
             a[1][0].set_ylabel('Residual T ($\degree$C)')
 
-            m = np.array([['Res_abc', 'Res_ab'], ['Res_ac', 'Res_bc']])
+            m = np.array([['3 Phase Saturation', phases[0] + ' - ' + phases[1]], [phases[0] + ' - ' + phases[2], phases[1] + ' - ' + phases[2]]])
             Name = np.array([['Three phase saturation', phases[0] + ' - ' + phases[1]],
                 [phases[0] + ' - ' + phases[2], phases[1] + ' - ' + phases[2]]])
 
@@ -190,15 +190,15 @@ def residualT_plot(Results = None, P_bar = None, phases = None, H2O_Liq = None, 
             a.set_xlabel('P (bars)')
             a.set_ylabel('Residual T ($\degree$C)')
             a.set_title(phases[0] + ' - ' + phases[1])
-            if ~np.isnan(Results['CurveMin']['Res_ab']['P_min']):
-                a.plot(P_bar, Results['Res_ab'][0,0,:], 'ok', markerfacecolor="b", label="original", markersize = 8)
-                a.plot(Results['CurveMin']['Res_ab']['P_new'], Results['CurveMin']['Res_ab']['y_new'],
+            if ~np.isnan(Results['CurveMin'][phases[0] + ' - ' + phases[1]]['P_min']):
+                a.plot(P_bar, Results[phases[0] + ' - ' + phases[1]][0,0,:], 'ok', markerfacecolor="b", label="original", markersize = 8)
+                a.plot(Results['CurveMin'][phases[0] + ' - ' + phases[1]]['P_new'], Results['CurveMin'][phases[0] + ' - ' + phases[1]]['y_new'],
                             '-', c="r", label="spline fit")
-                a.plot([np.nanmin(Results['CurveMin']['Res_ab']['P_new']), np.nanmax(Results['CurveMin']['Res_ab']['P_new'])],
-                            [Results['CurveMin']['Res_ab']['Res_min'], Results['CurveMin']['Res_ab']['Res_min']], ':k')
-                a.plot([Results['CurveMin']['Res_ab']['P_min'], Results['CurveMin']['Res_ab']['P_min']],
-                            [np.nanmin(Results['CurveMin']['Res_ab']['y_new']) - 5,
-                            np.nanmax(Results['CurveMin']['Res_ab']['y_new']) + 5], ':k')
+                a.plot([np.nanmin(Results['CurveMin'][phases[0] + ' - ' + phases[1]]['P_new']), np.nanmax(Results['CurveMin'][phases[0] + ' - ' + phases[1]]['P_new'])],
+                            [Results['CurveMin'][phases[0] + ' - ' + phases[1]]['Res_min'], Results['CurveMin'][phases[0] + ' - ' + phases[1]]['Res_min']], ':k')
+                a.plot([Results['CurveMin'][phases[0] + ' - ' + phases[1]]['P_min'], Results['CurveMin'][phases[0] + ' - ' + phases[1]]['P_min']],
+                            [np.nanmin(Results['CurveMin'][phases[0] + ' - ' + phases[1]]['y_new']) - 5,
+                            np.nanmax(Results['CurveMin'][phases[0] + ' - ' + phases[1]]['y_new']) + 5], ':k')
 
     if H2O_Liq is not None and Fe3Fet_Liq is None:
         if len(Results['CurveMin']) == 4:
@@ -210,7 +210,7 @@ def residualT_plot(Results = None, P_bar = None, phases = None, H2O_Liq = None, 
 
             a = np.array([[a1,a2], [a3, a4]])
 
-            m = np.array([['Res_abc', 'Res_ab'], ['Res_ac', 'Res_bc']])
+            m = np.array([['3 Phase Saturation', phases[0] + ' - ' + phases[1]], [phases[0] + ' - ' + phases[2], phases[1] + ' - ' + phases[2]]])
             Name = np.array([['Three phase saturation', phases[0] + ' - ' + phases[1]],
                 [phases[0] + ' - ' + phases[2], phases[1] + ' - ' + phases[2]]])
 
@@ -277,7 +277,7 @@ def residualT_plot(Results = None, P_bar = None, phases = None, H2O_Liq = None, 
 
             a = np.array([[a1,a2], [a3, a4]])
 
-            m = np.array([['Res_abc', 'Res_ab'], ['Res_ac', 'Res_bc']])
+            m = np.array([['3 Phase Saturation', phases[0] + ' - ' + phases[1]], [phases[0] + ' - ' + phases[2], phases[1] + ' - ' + phases[2]]])
             Name = np.array([['Three phase saturation', phases[0] + ' - ' + phases[1]],
                 [phases[0] + ' - ' + phases[2], phases[1] + ' - ' + phases[2]]])
 
