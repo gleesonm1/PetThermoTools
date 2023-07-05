@@ -99,6 +99,12 @@ def multi_path(cores = None, Model = None, bulk = None, Frac_solid = None, Frac_
 
     '''
 
+    if Frac_solid is False:
+        Frac_solid = None
+
+    if Frac_fluid is False:
+        Frac_fluid = None
+
     comp = bulk.copy()
     # set default values if required
     if Model is None:

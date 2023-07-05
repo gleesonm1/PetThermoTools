@@ -31,6 +31,12 @@ Welcome to pyMELTScalc's documentation!
    Examples/LiquidusTests/LiquidusTest
 
 
+.. toctree::
+   :maxdepth: 2
+   :caption: Crystallisation calculations
+
+   Examples/CrystallisationTests/BasalticCrystallisation
+
 
 .. toctree::
    :maxdepth: 2
@@ -40,12 +46,7 @@ Welcome to pyMELTScalc's documentation!
 
 
 
-.. .. toctree::
-..    :maxdepth: 2
-..    :caption: Integrating with PyMELTS
 
-..    Examples/Integrating_with_PyMELTS/Single_FC_Model
-..    Examples/Integrating_with_PyMELTS/Polybaric_FC_Model
 
 
 
