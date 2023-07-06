@@ -135,11 +135,20 @@ def findSatPressure(cores = None, Model = None, bulk = None, T_C_init = None, P_
                 ps.append(p)
                 p.start()
 
+            TIMEOUT = 420
+            
+            start = time.time()
             for p in ps:
-                try:
-                    ret = q.get(timeout = 180)
-                except:
-                    ret = []
+                if time.time() - start < TIMEOUT - 10:
+                    try:
+                        ret = q.get(timeout = TIMEOUT - (time.time()-start) + 10)
+                    except:
+                        ret = []
+                else:
+                    try:
+                        ret = q.get(timeout = 10)
+                    except:
+                        ret = []
 
                 qs.append(ret)
 
@@ -159,6 +168,31 @@ def findSatPressure(cores = None, Model = None, bulk = None, T_C_init = None, P_
                 else:
                     p.join()
                     p.terminate()
+
+            # for p in ps:
+            #     try:
+            #         ret = q.get(timeout = 180)
+            #     except:
+            #         ret = []
+
+            #     qs.append(ret)
+
+            # TIMEOUT = 5
+            # start = time.time()
+            # for p in ps:
+            #     if p.is_alive():
+            #         while time.time() - start <= TIMEOUT:
+            #             if not p.is_alive():
+            #                 p.join()
+            #                 p.terminate()
+            #                 break
+            #             time.sleep(.1)
+            #         else:
+            #             p.terminate()
+            #             p.join(5)
+            #     else:
+            #         p.join()
+            #         p.terminate()
 
         Res = pd.DataFrame(data = np.zeros((int(L),15)), columns = ['SiO2_Liq', 'TiO2_Liq', 'Al2O3_Liq', 'FeOt_Liq', 'MnO_Liq', 'MgO_Liq', 'CaO_Liq', 'Na2O_Liq', 'K2O_Liq', 'P2O5_Liq', 'H2O_Liq', 'CO2_Liq', 'Fe3Fet_Liq', 'P_bar', 'T_Liq'])
         for i in range(len(qs)):
