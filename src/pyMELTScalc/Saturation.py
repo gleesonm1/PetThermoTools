@@ -203,7 +203,6 @@ def findSatPressure(cores = None, Model = None, bulk = None, T_C_init = None, P_
         return Res
 
 
-
 def satP(q, index, *, Model = None, comp = None, T_C_init = None, P_bar_init = None, fO2_buffer = None, fO2_offset = None):
     """Find the saturation pressure for a given composition and temperature.
 

@@ -272,7 +272,6 @@ def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar
 
     return Combined
 
-
 def phaseDiagram_eq(cores = None, Model = None, bulk = None, T_C = None, P_bar = None, T_min_C = None, T_max_C = None, T_num = None, P_min_bar = None, P_max_bar = None, P_num = None, Fe3Fet_Liq = None, H2O_Liq = None, fO2_buffer = None, fO2_offset = None, number_max = 50):
     """
     Calculates the phase diagram for a given bulk composition over a
@@ -487,7 +486,6 @@ def phaseDiagram_eq(cores = None, Model = None, bulk = None, T_C = None, P_bar =
             Combined = pd.concat([Combined, df], axis = 0, ignore_index = True)
 
     return Combined
-
 
 def equilibrate(q, index,*, Model = None, P_bar = None, T_C = None, comp = None, fO2_buffer = None, fO2_offset = None):
 

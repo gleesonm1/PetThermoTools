@@ -163,7 +163,6 @@ def equilibrate_multi(cores = None, Model = None, bulk = None, T_C = None, P_bar
 
     return Output
 
-
 def findCO2_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P_bar = None, Fe3Fet_Liq = None, H2O_Liq = None, fO2_buffer = None, fO2_offset = None):
 
     comp = bulk.copy()
@@ -505,7 +504,6 @@ def findCO2(q, index, *, Model = None, P_bar = None, T_initial_C = None, comp = 
         #except:
         #    q.put([T_Liq, H2O_Melt, CO2_Melt, index])
         #    return
-
 
 def findLiq(q, index,*, Model = None, P_bar = None, T_initial_C = None, comp = None, fO2_buffer = None, fO2_offset = None, CO2_return = None):
     '''
