@@ -19,7 +19,7 @@ from tqdm.notebook import tqdm, trange
 from scipy import interpolate
 from shapely.geometry import MultiPoint, Point, Polygon
 
-def findSaturationPressure(cores = None, Model = None, bulk = None, phases = None, P_bar = None, Fe3Fet_Liq = None, H2O_Liq = None, T_initial_C = None, dt_C = None, T_maxdrop_C = None, T_cut_C = None, find_range = None, find_min = None, fO2_buffer = None, fO2_offset = None):
+def findSaturationPressure(cores = None, Model = None, bulk = None, phases = None, P_bar = None, Fe3Fet_Liq = None, H2O_Liq = None, H2O_Sat = False, T_initial_C = None, dt_C = None, T_maxdrop_C = None, T_cut_C = None, find_range = None, find_min = None, fO2_buffer = None, fO2_offset = None):
     '''
     Carry out multiple calculations in parallel. Allows isobaric, polybaric and isochoric crystallisation to be performed as well as isothermal, isenthalpic or isentropic decompression. All temperature inputs/outputs are reported in degrees celcius and pressure is reported in bars.
 
@@ -81,6 +81,9 @@ def findSaturationPressure(cores = None, Model = None, bulk = None, phases = Non
     dt_C = T_maxdrop_C 
 
     comp = bulk.copy()
+    if H2O_Sat is True:
+        comp['H2O_Liq'] = 20
+
     # set default values if required
     if Model is None:
         Model == "MELTSv1.0.2"

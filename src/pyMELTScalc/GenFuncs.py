@@ -32,6 +32,14 @@ Names = {'liquid1': '_Liq',
         'apatite1': '_Apa',
         'apatite2': '_Apa2'}
 
+Names_MM = {'liq': '_Liq',
+            'ol': '_Ol',
+            'cpx': '_Cpx',
+            'opx': '_Opx',
+            'g': '_Grt',
+            'pl4t': '_Plag',
+            'spn': '_Sp'}
+
 def comp_fix(Model = None, comp = None, Fe3Fet_Liq = None, H2O_Liq = None, CO2_Liq = None):
     '''
     Ensure that the input variables contain the correct column headers for the following variables.
@@ -181,53 +189,80 @@ def stich(Res, multi = None, Model = None):
     if "MELTS" in Model:
         Order = ['SiO2', 'TiO2', 'Al2O3', 'Cr2O3', 'Fe2O3', 'FeO', 'FeOt', 'MnO', 'MgO', 'CaO', 'Na2O', 'K2O', 'P2O5', 'H2O', 'CO2', 'Fe3Fet']
         if multi is None:
-            Results = stich_work(Results = Results, Order = Order)
+            Results = stich_work(Results = Results, Order = Order, Model = "MELTS")
         else:
             for Ind in Res:
                 Result = Res[Ind].copy()
-                Result = stich_work(Results = Result, Order = Order)
+                Result = stich_work(Results = Result, Order = Order, Model = "MELTS")
                 Results[Ind] = Result.copy()
     else:
-        Order = ['SiO2', 'TiO2', 'Al2O3', 'Cr2O3', 'Fe2O3', 'FeO', 'FeOt', 'MgO', 'CaO', 'Na2O', 'K2O', 'H2O', 'Fe3Fet']
+        Order = ['SiO2', 'TiO2', 'Al2O3', 'Cr2O3', 'FeOt', 'MgO', 'CaO', 'Na2O', 'K2O', 'H2O', 'Fe3Fet']
         if multi is None:
-            Results = stich_work(Results = Results, Order = Order)
+            Results = stich_work(Results = Results, Order = Order, Model = "Holland")
         else:
             for Ind in Res:
                 Result = Res[Ind].copy()
-                Result = stich_work(Results = Result, Order = Order)
+                Result = stich_work(Results = Result, Order = Order, Model = "Holland")
                 Results[Ind] = Result.copy()
 
     return Results
 
-def stich_work(Results = None, Order = None):
+def stich_work(Results = None, Order = None, Model = "MELTS"):
     '''
     Does the work required by Stich.
     '''
     Res = Results.copy()
-    Results['Conditions'] = Results['Conditions'].rename(columns = {'temperature':'T_C'})
-    Results['Conditions'] = Results['Conditions'].rename(columns = {'pressure':'P_bar'})
+    if "MELTS" in Model:    
+        Results['Conditions'] = Results['Conditions'].rename(columns = {'temperature':'T_C'})
+        Results['Conditions'] = Results['Conditions'].rename(columns = {'pressure':'P_bar'})
+    else:
+        Results['Conditions'] = Results['Conditions'].rename(columns = {'P_kbar': 'P_bar'})
+        Results['Conditions']['P_bar'] = Results['Conditions']['P_bar']*1000
 
     SN = []
     for R in Results:
-        if '_prop' not in R and R != 'Conditions':
+        if '_prop' not in R and R != 'Conditions' and R != "sys":
             SN += [R]
 
-    for R in Results:
-        if "_prop" not in R and R != "Conditions":
+    for R in SN:
+        # if "_prop" not in R and R != "Conditions" and R!= "sys":
+        if "MELTS" in Model:
             Results[R]['FeOt'] = Results[R]['FeO'] + 71.844/(158.69/2)*Results[R]['Fe2O3']
             Results[R]['Fe3Fet'] = (71.844/(159.69/2)*Results[R]['Fe2O3'])/Results[R]['FeOt']
-            Results[R][Results[R + '_prop']['mass'] == 0.0] = np.nan
+            try:
+                Results[R][Results[R + '_prop']['mass'] == 0.0] = np.nan
+            except:
+                Results[R][Results[R + '_prop']['Mass'] == 0.0] = np.nan
             Results[R] = Results[R][Order]
-        if len(np.where(Res['Conditions']['temperature'] == 0.0)[0]) > 0:
-            Results[R] = Results[R].drop(labels = np.where(Res['Conditions']['temperature'] == 0.0)[0])
+        else:
+            Results[R] = Results[R].rename(columns = {'FeO': 'FeOt'})
+            Tot = Results[R].sum(axis = 1)
+            for el in Results[R]:
+                Results[R][el] = 100*Results[R][el]/Tot
+            Results[R]['Fe3Fet'] = Results[R]['O']/(((159.9/2)/71.844)*Results[R]['FeOt'] - Results[R]['FeOt'])
+            try:
+                Results[R][Results[R + '_prop']['mass'] == 0.0] = np.nan
+            except:
+                Results[R][Results[R + '_prop']['Mass'] == 0.0] = np.nan
+                
+            Results[R] = Results[R][Order]
+
+    for R in Results:
+        if len(np.where(Results['Conditions']['T_C'] == 0.0)[0]) > 0:
+            Results[R] = Results[R].drop(labels = np.where(Results['Conditions']['T_C'] == 0.0)[0])
 
     Results_Mass = pd.DataFrame(data = np.zeros((len(Results['Conditions']['T_C']), len(SN))), columns = SN)
     Results_Volume = Results_Mass.copy()
     Results_rho = Results_Mass.copy()
     for n in SN:
-        Results_Mass[n] = Results[n + '_prop']['mass']
-        Results_Volume[n] = Results[n + '_prop']['v']
-        Results_rho[n] = Results[n + '_prop']['rho']
+        try:
+            Results_Mass[n] = Results[n + '_prop']['mass']
+        except:
+            Results_Mass[n] = Results[n + '_prop']['Mass']
+
+        if "MELTS" in Model:
+            Results_Volume[n] = Results[n + '_prop']['v']
+            Results_rho[n] = Results[n + '_prop']['rho']
 
     # if Results_Mass.sum(axis=1)[0] != Results_Mass.sum(axis=1)[1]:
     #     for n in SN:
@@ -236,23 +271,34 @@ def stich_work(Results = None, Order = None):
 
     Results_All = Results['Conditions'].copy()
     for R in Results:
-        if R != "Conditions":
-            if any(n in R for n in Names):
-                for n in Names:
-                    if n in R:
-                        Results[R] = Results[R].add_suffix(Names[n])
-            else:
-                if '_prop' in R:
-                    Results[R] = Results[R].add_suffix('_' + R[:-5])
+        if R != "Conditions" and R != "sys":
+            if "MELTS" in Model:
+                if any(n in R for n in Names):
+                    for n in Names:
+                        if n in R:
+                            Results[R] = Results[R].add_suffix(Names[n])                
                 else:
-                    Results[R] = Results[R].add_suffix('_' + R)
-
+                    if '_prop' in R:
+                        Results[R] = Results[R].add_suffix('_' + R[:-5])
+                    else:
+                        Results[R] = Results[R].add_suffix('_' + R)
+            else:
+                if any(n in R for n in Names_MM):
+                    for n in Names_MM:
+                        if n in R:
+                            Results[R] = Results[R].add_suffix(Names_MM[n])
+                else:       
+                    if '_prop' in R:
+                        Results[R] = Results[R].add_suffix('_' + R[:-5])
+                    else:
+                        Results[R] = Results[R].add_suffix('_' + R)
 
             Results_All = pd.concat([Results_All, Results[R]], axis = 1)
 
     Results['All'] = Results_All
     Results['Mass'] = Results_Mass
-    Results['Volume'] = Results_Volume
-    Results['rho'] = Results_rho
+    if "MELTS" in Model:
+        Results['Volume'] = Results_Volume
+        Results['rho'] = Results_rho
 
     return Results

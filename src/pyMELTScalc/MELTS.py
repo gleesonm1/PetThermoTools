@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import sys
 import time
+import pyMelt as m
 
 def equilibrate_MELTS(Model = None, P_bar = None, T_C = None, comp = None, fO2_buffer = None, fO2_offset = None):
     Results = {}
@@ -1087,7 +1088,124 @@ def findSatPressure_MELTS(Model = None, T_C_init = None, P_bar_init = None, comp
 
     return out
 
+def AdiabaticDecompressionMelting_MELTS(Model = None, comp = None, Tp_C = None, P_path_bar = None, P_start_bar = None, P_end_bar = None, dp_bar = None, Frac = False, fO2_buffer = None, fO2_offset = None):
+    Results = {}
 
+    if comp is None:
+        raise Exception("No composition specified")
+
+    if P_path_bar is None and P_start_bar is None:
+        raise Exception("Initial P system must be defined")
+
+    from meltsdynamic import MELTSdynamic
+
+    if Model is None or Model == "MELTSv1.0.2":
+        melts = MELTSdynamic(1)
+    elif Model == "pMELTS":
+        melts = MELTSdynamic(2)
+    elif Model == "MELTSv1.1.0":
+        melts = MELTSdynamic(3)
+    elif Model == "MELTSv1.2.0":
+        melts = MELTSdynamic(4)
+
+    melts.engine.setSystemProperties("Suppress", "rutile")
+    melts.engine.setSystemProperties("Suppress", "tridymite")
+    
+    lz = m.lithologies.matthews.klb1()
+    mantle = m.mantle([lz], [1], ['Lz'])
+    if P_start_bar is not None:
+        T_start_C = mantle.adiabat(P_start_bar/10000, Tp_C)
+    else:
+        T_start_C = mantle.adiabat(P_path_bar[0]/10000, Tp_C)
+
+    bulk = [comp['SiO2_Liq'], comp['TiO2_Liq'], comp['Al2O3_Liq'], comp['Fe3Fet_Liq']*((159.59/2)/71.844)*comp['FeOt_Liq'], 0.0, (1- comp['Fe3Fet_Liq'])*comp['FeOt_Liq'], comp['MnO_Liq'], comp['MgO_Liq'], 0.0, 0.0, comp['CaO_Liq'], comp['Na2O_Liq'], comp['K2O_Liq'], comp['P2O5_Liq'], comp['H2O_Liq'], comp['CO2_Liq'], 0.0, 0.0, 0.0]
+    bulk = list(100*np.array(bulk)/np.sum(bulk))
+
+    melts.engine.setBulkComposition(bulk)
+    melts.engine.temperature = T_start_C
+
+    if P_path_bar is not None:
+        P = P_path_bar
+    else:
+        P = np.linspace(P_start_bar, P_end_bar, int(round((P_start_bar - P_end_bar)/dp_bar)))
+
+    Results['Conditions'] = pd.DataFrame(data = np.zeros((len(P), 7)), columns = ['temperature', 'pressure', 'h', 's', 'v', 'dvdp', 'logfO2'])
+
+    for k in range(len(P)):
+        if k != 0:
+            melts = melts.addNodeAfter()
+
+        melts.engine.pressure = P[k]
+        if k == 0:
+            T = T_start_C
+            # try:
+            #     melts.engine.setSystemProperties("Mode", "Isentropic")
+            #     melts.engine.calcEquilibriumState(1,0)
+            #     melts.engine.setSystemProperties("Mode", "Isentropic")
+            # except:
+            #     return Results
+        if k > 0:
+            T_save = np.zeros(3)
+            s_save = np.zeros(3)
+            for i in range(len(T_save)):
+                T_save[i] = T - (i)*1
+                melts.engine.temperature = T_save[i]
+                try:
+                    melts.engine.calcEquilibriumState(1,0)
+                except:
+                    return Results
+                s_save[i] = melts.engine.getProperty('s','bulk')
+                melts = melts.addNodeAfter()
+
+                print(s_save[i])
+
+            p = np.polyfit(s_save, T_save, 2)
+            T = p[0]*s**2 + p[1]*s + p[2]
+
+            melts.engine.temperature = T
+
+        try:
+            melts.engine.calcEquilibriumState(1,0)
+        except:
+            return Results
+            
+        for R in Results['Conditions']:
+            if R == 'temperature':
+                Results['Conditions'][R].loc[k] = melts.engine.temperature
+            elif R == 'pressure':
+                Results['Conditions'][R].loc[k] = melts.engine.pressure
+            elif R == 'logfO2':
+                try:
+                    Results['Conditions'][R].loc[k] = melts.engine.getProperty(R)
+                except:
+                    Results['Conditions'][R].loc[k] = np.nan
+            else:
+                Results['Conditions'][R].loc[k] = melts.engine.getProperty(R, 'bulk')
+
+        try:
+            if ~np.isnan(melts.engine.getProperty('mass', 'liquid1')):
+                PhaseList = ['liquid1'] + melts.engine.solidNames
+            else:
+                PhaseList = melts.engine.solidNames
+        except:
+            return Results
+
+        for phase in PhaseList:
+            if phase not in list(Results.keys()):
+                Results[phase] = pd.DataFrame(data = np.zeros((len(P), 14)), columns = ['SiO2', 'TiO2', 'Al2O3', 'Fe2O3', 'Cr2O3', 'FeO', 'MnO', 'MgO', 'CaO', 'Na2O', 'K2O', 'P2O5', 'H2O', 'CO2'])
+                Results[phase + '_prop'] = pd.DataFrame(data = np.zeros((len(P), 4)), columns = ['h', 'mass', 'v', 'rho'])
+
+            if phase in list(Results.keys()):
+                for el in Results[phase]:
+                    Results[phase][el].loc[k] = melts.engine.getProperty('dispComposition', phase, el)
+
+                for pr in Results[phase + '_prop']:
+                    Results[phase + '_prop'][pr].loc[k] = melts.engine.getProperty(pr, phase)
+        
+        if k == 0:
+            s = melts.engine.getProperty('s','bulk')
+
+    return Results
 
 
 

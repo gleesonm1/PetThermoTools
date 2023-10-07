@@ -81,24 +81,60 @@ def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar
     # ensure the bulk composition has the correct headers etc.
     comp = comp_fix(Model = Model, comp = comp, Fe3Fet_Liq = Fe3Fet_Liq, H2O_Liq = H2O_Liq)
 
+    if type(comp) == dict:
+        if comp['Fe3Fet_Liq'] == 0.0 and "MELTS" in Model and fO2_buffer is None:
+            raise Warning("MELTS often fails to produce any results when no ferric Fe is included in the starting composition and an fO2 buffer is not set.")
+
     if T_min_C is not None:
         T_C = np.linspace(T_min_C, T_max_C, T_num)
 
     if P_min_bar is not None:
         P_bar = np.linspace(P_min_bar, P_max_bar, P_num)
 
-    T, P = np.meshgrid(T_C, P_bar)
+    P, T = np.meshgrid(P_bar, T_C)
 
     T_flat = np.round(T.flatten(),2)
     P_flat = np.round(P.flatten(),2)
+
+    T_flat = np.flip(T_flat)
+    P_flat = np.flip(P_flat)
+
+    flat = np.array([T_flat, P_flat]).T
 
     A = len(P_flat)//cores + 1
 
     c = 0
     j = 0
+
+
+    # subarray_length = len(T_flat) // cores
+
+    # # Initialize an empty list to store subarrays
+    # subarrays_T = []
+
+    # Loop through the indices and create subarrays
+    # for i in range(subarray_length):
+    #     subarray_T = T_flat[i::subarray_length]
+    #     subarrays_T.append(subarray_T)
+        
+    #     subarray_P = T_flat[i::subarray_length]
+    #     subarrays_P.append(subarray_P)
+
     while len(T_flat)>1:
         if j > i_max:
             break
+
+        # Initialize an empty list to store subarrays
+        subarrays_T = []
+        subarrays_P = []
+
+        # Loop through the indices and create subarrays
+        for i in range(cores):
+            subarray_T = T_flat[i::cores]
+            subarrays_T.append(subarray_T)
+            
+            subarray_P = P_flat[i::cores]
+            subarrays_P.append(subarray_P)
 
         print('Attempt ' + str(j))
 
@@ -106,9 +142,10 @@ def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar
         q = Queue()
         ps = []
         j = j + 1
+
         for i in range(cores):
-            T_path_C = T_flat[i*A:(i+1)*A]
-            P_path_bar = P_flat[i*A:(i+1)*A]
+            T_path_C = np.array(subarrays_T[i])#T_flat[i*A:(i+1)*A]
+            P_path_bar = np.array(subarrays_P[i])#P_flat[i*A:(i+1)*A]
 
             if len(T_path_C) > 100:
                 T_path_C = T_path_C[:99]
@@ -222,18 +259,24 @@ def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar
                 Res, index = qs[i]
                 Results['index = ' + str(index)] = Res
 
-        if "MELTS" in Model:
-            Results = stich(Results, multi = True, Model = Model)
+        Results = stich(Results, multi = True, Model = Model)
 
         for i in Results.keys():
-            if c == 0:
-                Combined = Results[i]['All'].copy()
-                c = 1
-            else:
-                Combined = pd.concat([Combined, Results[i]['All']], axis = 0, ignore_index = True)
+            if len(Results[i]['All']['T_C']) > 1:
+                if c == 0:
+                    Combined = Results[i]['All'].copy()
+                    c = 1
+                else:
+                    Combined = pd.concat([Combined, Results[i]['All']], axis = 0, ignore_index = True)
 
-        flat = np.round(np.array([T.flatten(), P.flatten()]).T,2)
-        Res_flat = np.round(np.array([Combined['T_C'], Combined['P_bar']]).T,2)
+            Combined['T_C'] = np.round(Combined['T_C'], 2)
+            Combined['P_bar'] = np.round(Combined['P_bar'], 2)
+            Combined = Combined.sort_values(['T_C', 'P_bar'])
+            Combined = Combined.reset_index(drop = True)
+            if "MELTS" in Model:
+                Combined = Combined.dropna(subset = ['h'])
+
+        Res_flat = np.array([Combined['T_C'], Combined['P_bar']]).T
         new_flat = flat[np.where((flat[:, None] == Res_flat).all(-1).any(-1) == False)]
 
         if len(new_flat.T[0]) > 1:
@@ -269,6 +312,7 @@ def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar
     Combined['P_bar'] = np.round(Combined['P_bar'], 2)
     Combined = Combined.sort_values(['T_C', 'P_bar'])
     Combined = Combined.reset_index(drop = True)
+    Combined = Combined.dropna(subset = ['T_C'])
 
     return Combined
 
@@ -469,7 +513,6 @@ def phaseDiagram_eq(cores = None, Model = None, bulk = None, T_C = None, P_bar =
                 if len(qs[i]) > 0:
                     Res, index = qs[i]
                     Combined = pd.concat([Combined, Res], axis = 0, ignore_index = True)
-
 
     if len(Combined['T_C']) < len(T_flat):
         flat = np.round(np.array([T.flatten(), P.flatten()]).T,2)

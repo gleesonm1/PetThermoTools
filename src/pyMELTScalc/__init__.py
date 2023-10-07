@@ -26,10 +26,14 @@ from pyMELTScalc.PhaseDiagrams import *
 from pyMELTScalc.Path_wrappers import *
 # This contains the functions required to perform path calculations
 from pyMELTScalc.Path import *
+# This contains the functions required to simulate mantle melting
+from pyMELTScalc.Melting import *
 # This contains the functions required to perform volatile saturation calculations
 from pyMELTScalc.Saturation import *
 # This contains the functions used to call MELTS calculations
 from pyMELTScalc.MELTS import *
+# Compsitions saved for use in pyMELTScalc
+from pyMELTScalc.Compositions import *
 # This contains the functions used to perform calculations using the Holland et al. 2018 thermodynamic dataset - currently disabled
 # try:
 #     from pyMELTScalc.Holland import *

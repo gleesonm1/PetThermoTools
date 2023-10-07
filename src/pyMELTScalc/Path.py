@@ -191,7 +191,7 @@ def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid 
         TIMEOUT = 5
         start = time.time()
         if p.is_alive():
-            while time.time() <= TIMEOUT:
+            while time.time() - start <= TIMEOUT:
                 if not p.is_alive():
                     p.join()
                     p.terminate()
@@ -513,7 +513,10 @@ def path(q, index, *, Model = None, comp = None, Frac_solid = None, Frac_fluid =
 
     if Model == "Holland":
         import pyMAGEMINcalc as MM
-        Results = MM.path(comp = comp, Frac_solid = Frac_solid, Frac_fluid = Frac_fluid, T_C = T_C, T_path_C = T_path_C, T_start_C = T_start_C, T_end_C = T_end_C, dt_C = dt_C, P_bar = P_bar, P_path_bar = P_path_bar, P_start_bar = P_start_bar, P_end_bar = P_end_bar, dp_bar = dp_bar, find_liquidus = find_liquidus, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset)
-        q.put([Results, index])
+        try:
+            Results = MM.path(comp = comp, Frac_solid = Frac_solid, Frac_fluid = Frac_fluid, T_C = T_C, T_path_C = T_path_C, T_start_C = T_start_C, T_end_C = T_end_C, dt_C = dt_C, P_bar = P_bar, P_path_bar = P_path_bar, P_start_bar = P_start_bar, P_end_bar = P_end_bar, dp_bar = dp_bar, find_liquidus = find_liquidus, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset)
+            q.put([Results, index])
+        except:
+            q.put([])
         return
 
