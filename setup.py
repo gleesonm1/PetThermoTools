@@ -37,7 +37,8 @@ setup(
             'julia',
             'tinynumpy',
             'shapely',
-            'Thermobar'
+            'Thermobar',
+            'pyMelt'
             ],
 
     classifiers=[
