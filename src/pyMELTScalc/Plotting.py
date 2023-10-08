@@ -155,19 +155,26 @@ def plot_surfaces(Results = None, P_bar = None, phases = None, H2O_Liq = None):
 
     return f, a
 
-def residualT_plot(Results = None, P_bar = None, phases = None, H2O_Liq = None, Fe3Fet_Liq = None, T_cut_C = None):
+def residualT_plot(Results = None, P_bar = None, phases = None, H2O_Liq = None, Fe3Fet_Liq = None, T_cut_C = None, interpolate = True, xlim=None, ylim=None):
 
     if T_cut_C is None:
         T_cut_C = 12
 
+    if phases is None:
+        phases = ['quartz1', 'plagioclase1', 'k-feldspar1']
+
     if H2O_Liq is None and Fe3Fet_Liq is None:
-        if len(Results['CurveMin']) == 4:
+        if len(phases) == 3:
             f, a = plt.subplots(2,2, figsize = (10,8), sharex = True, sharey = True)
             f.tight_layout()
             a[1][0].set_xlabel('P (bars)')
             a[1][1].set_xlabel('P (bars)')
             a[0][0].set_ylabel('Residual T ($\degree$C)')
             a[1][0].set_ylabel('Residual T ($\degree$C)')
+            if xlim is not None:
+                a[0][0].set_xlim(xlim)
+            if ylim is not None:
+                a[0][0].set_ylim(ylim)
 
             m = np.array([['3 Phase Saturation', phases[0] + ' - ' + phases[1]], [phases[0] + ' - ' + phases[2], phases[1] + ' - ' + phases[2]]])
             Name = np.array([['Three phase saturation', phases[0] + ' - ' + phases[1]],
@@ -176,29 +183,36 @@ def residualT_plot(Results = None, P_bar = None, phases = None, H2O_Liq = None, 
             for i in range(2):
                 for j in range(2):
                     a[i][j].set_title(Name[i,j])
-                    if ~np.isnan(Results['CurveMin'][m[i,j]]['P_min']):
-                        a[i][j].plot(P_bar, Results[m[i,j]][0,0,:], 'ok', markerfacecolor="b", label="original", markersize = 8)
-                        a[i][j].plot(Results['CurveMin'][m[i,j]]['P_new'], Results['CurveMin'][m[i,j]]['y_new'],
-                                    '-', c="r", label="spline fit")
-                        a[i][j].plot([np.nanmin(Results['CurveMin'][m[i,j]]['P_new']), np.nanmax(Results['CurveMin'][m[i,j]]['P_new'])],
-                                    [Results['CurveMin'][m[i,j]]['Res_min'], Results['CurveMin'][m[i,j]]['Res_min']], ':k')
-                        a[i][j].plot([Results['CurveMin'][m[i,j]]['P_min'], Results['CurveMin'][m[i,j]]['P_min']],
-                                    [np.nanmin(Results['CurveMin'][m[i,j]]['y_new']) - 5,
-                                    np.nanmax(Results['CurveMin'][m[i,j]]['y_new']) + 5], ':k')
+                    a[i][j].plot(P_bar, Results[m[i,j]][0,0,:], 'ok', markerfacecolor="b", label="original", markersize = 8)
+                    if interpolate is True:
+                        if ~np.isnan(Results['CurveMin'][m[i,j]]['P_min']):
+                            a[i][j].plot(Results['CurveMin'][m[i,j]]['P_new'], Results['CurveMin'][m[i,j]]['y_new'],
+                                        '-', c="r", label="spline fit")
+                            a[i][j].plot([np.nanmin(Results['CurveMin'][m[i,j]]['P_new']), np.nanmax(Results['CurveMin'][m[i,j]]['P_new'])],
+                                        [Results['CurveMin'][m[i,j]]['Res_min'], Results['CurveMin'][m[i,j]]['Res_min']], ':k')
+                            a[i][j].plot([Results['CurveMin'][m[i,j]]['P_min'], Results['CurveMin'][m[i,j]]['P_min']],
+                                        [np.nanmin(Results['CurveMin'][m[i,j]]['y_new']) - 5,
+                                        np.nanmax(Results['CurveMin'][m[i,j]]['y_new']) + 5], ':k')
         else:
             f, a = plt.subplots(1,1, figsize = (5,4))
             a.set_xlabel('P (bars)')
             a.set_ylabel('Residual T ($\degree$C)')
             a.set_title(phases[0] + ' - ' + phases[1])
+            if xlim is not None:
+                a.set_xlim(xlim)
+            if ylim is not None:
+                a.set_ylim(ylim)
+
             if ~np.isnan(Results['CurveMin'][phases[0] + ' - ' + phases[1]]['P_min']):
                 a.plot(P_bar, Results[phases[0] + ' - ' + phases[1]][0,0,:], 'ok', markerfacecolor="b", label="original", markersize = 8)
-                a.plot(Results['CurveMin'][phases[0] + ' - ' + phases[1]]['P_new'], Results['CurveMin'][phases[0] + ' - ' + phases[1]]['y_new'],
-                            '-', c="r", label="spline fit")
-                a.plot([np.nanmin(Results['CurveMin'][phases[0] + ' - ' + phases[1]]['P_new']), np.nanmax(Results['CurveMin'][phases[0] + ' - ' + phases[1]]['P_new'])],
-                            [Results['CurveMin'][phases[0] + ' - ' + phases[1]]['Res_min'], Results['CurveMin'][phases[0] + ' - ' + phases[1]]['Res_min']], ':k')
-                a.plot([Results['CurveMin'][phases[0] + ' - ' + phases[1]]['P_min'], Results['CurveMin'][phases[0] + ' - ' + phases[1]]['P_min']],
-                            [np.nanmin(Results['CurveMin'][phases[0] + ' - ' + phases[1]]['y_new']) - 5,
-                            np.nanmax(Results['CurveMin'][phases[0] + ' - ' + phases[1]]['y_new']) + 5], ':k')
+                if interpolate is True:
+                    a.plot(Results['CurveMin'][phases[0] + ' - ' + phases[1]]['P_new'], Results['CurveMin'][phases[0] + ' - ' + phases[1]]['y_new'],
+                                '-', c="r", label="spline fit")
+                    a.plot([np.nanmin(Results['CurveMin'][phases[0] + ' - ' + phases[1]]['P_new']), np.nanmax(Results['CurveMin'][phases[0] + ' - ' + phases[1]]['P_new'])],
+                                [Results['CurveMin'][phases[0] + ' - ' + phases[1]]['Res_min'], Results['CurveMin'][phases[0] + ' - ' + phases[1]]['Res_min']], ':k')
+                    a.plot([Results['CurveMin'][phases[0] + ' - ' + phases[1]]['P_min'], Results['CurveMin'][phases[0] + ' - ' + phases[1]]['P_min']],
+                                [np.nanmin(Results['CurveMin'][phases[0] + ' - ' + phases[1]]['y_new']) - 5,
+                                np.nanmax(Results['CurveMin'][phases[0] + ' - ' + phases[1]]['y_new']) + 5], ':k')
 
     if H2O_Liq is not None and Fe3Fet_Liq is None:
         if len(Results['CurveMin']) == 4:

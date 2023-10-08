@@ -42,7 +42,9 @@ Welcome to pyMELTScalc's documentation!
    :maxdepth: 2
    :caption: MELTS barometry
 
-   Examples/BarometryTests/q2f_tests
+   Examples/BarometryTests/MELTS_geobarometry_example1
+   Examples/BarometryTests/MELTS_geobarometry_example2
+   
 
 
 
