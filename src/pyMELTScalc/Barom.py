@@ -570,26 +570,46 @@ def satTemperature(q, index, *, Model = None, comp = None, phases = None, T_init
         return
 
     if Model == "Holland":
-        Results = phaseSat_Holland(comp = comp, phases = phases, T_initial_C = T_initial_C, T_step_C = T_step_C, dt_C = dt_C, P_bar = P_bar, H2O_Liq = H2O_Liq)
+        import pyMAGEMINcalc as MM
+        Results = {phases[0]: np.nan, phases[1]: np.nan, phases[2]: np.nan, 'T_Liq': np.nan, 'H2O_melt': np.nan}
+        if len(phases) == 2:
+            del Results[phases[2]]
+
+        #try:
+        Result = MM.path(comp = comp, phases = phases, T_min_C = dt_C, dt_C = T_step_C, P_bar = P_bar, find_liquidus = True)
+        #Result = stich(Result, Model = Model)
+
+        for i in range(len(phases)):
+            try:
+                Results[phases[i]] = Result['Conditions']['T_C'][Result[phases[i]+'_prop']['mass'] > 0.0].values[0]
+                print(Results[phases[i]])
+            except:
+                Results[phases[i]] = np.nan
+
+        Results['T_Liq'] = Result['Conditions']['T_C'].values[0]
+        Results['H2O_melt'] = Result['liq']['H2O'].values[0]
+
         if len(phases) == 3:
             Res = ['3 Phase Saturation', phases[0] + ' - ' + phases[1], phases[0] + ' - ' + phases[2], phases[1] + ' - ' + phases[2]]
             for R in Res:
                 Results[R] = np.nan
 
-            if Results[phases[0]] != np.nan & Results[phases[1]] != np.nan & Results[phases[2]] != np.nan:
+            if ~np.isnan(Results[phases[0]]) and ~np.isnan(Results[phases[1]]) and ~np.isnan(Results[phases[2]]):
                 Results['3 Phase Saturation'] = np.nanmax(np.array([abs(Results[phases[0]] - Results[phases[1]]), abs(Results[phases[0]] - Results[phases[2]]), abs(Results[phases[1]] - Results[phases[2]])]))
-            if Results[phases[0]] != np.nan & Results[phases[1]] != np.nan:
+            if ~np.isnan(Results[phases[0]]) and ~np.isnan(Results[phases[1]]):
                 Results[phases[0] + ' - ' + phases[1]] = abs(Results[phases[0]] - Results[phases[1]])
-            if Results[phases[0]] != np.nan & Results[phases[2]] != np.nan:
+            if ~np.isnan(Results[phases[0]]) and ~np.isnan(Results[phases[2]]):
                 Results[phases[0] + ' - ' + phases[2]] = abs(Results[phases[0]] - Results[phases[2]])
-            if Results[phases[1]] != np.nan & Results[phases[2]] != np.nan:
+            if ~np.isnan(Results[phases[1]]) and ~np.isnan(Results[phases[2]]):
                 Results[phases[1] + ' - ' + phases[2]] = abs(Results[phases[1]] - Results[phases[2]])
         else:
             Results[phases[0] + ' - ' + phases[1]] = np.nan
-            if Results[phases[0]] != np.nan & Results[phases[1]] != np.nan:
+            if ~np.isnan(Results[phases[0]]) and ~np.isnan(Results[phases[1]]):
                 Results[phases[0] + ' - ' + phases[1]] = abs(Results[phases[0]] - Results[phases[1]])
-
+        
         q.put([Results, index])
+        #except:
+        #    q.put([Results, index])
         return
 
 

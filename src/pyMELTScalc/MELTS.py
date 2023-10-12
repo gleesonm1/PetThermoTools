@@ -1127,7 +1127,7 @@ def AdiabaticDecompressionMelting_MELTS(Model = None, comp = None, Tp_C = None, 
     if P_path_bar is not None:
         P = P_path_bar
     else:
-        P = np.linspace(P_start_bar, P_end_bar, int(round((P_start_bar - P_end_bar)/dp_bar)))
+        P = np.linspace(P_start_bar, P_end_bar, 1+int(round((P_start_bar - P_end_bar)/dp_bar)))
 
     Results['Conditions'] = pd.DataFrame(data = np.zeros((len(P), 7)), columns = ['temperature', 'pressure', 'h', 's', 'v', 'dvdp', 'logfO2'])
 
@@ -1138,6 +1138,12 @@ def AdiabaticDecompressionMelting_MELTS(Model = None, comp = None, Tp_C = None, 
         melts.engine.pressure = P[k]
         if k == 0:
             T = T_start_C
+
+            try:
+                melts.engine.calcEquilibriumState(1,0)
+                s = melts.engine.getProperty('s','bulk')
+            except:
+                return Results
             # try:
             #     melts.engine.setSystemProperties("Mode", "Isentropic")
             #     melts.engine.calcEquilibriumState(1,0)
@@ -1145,29 +1151,40 @@ def AdiabaticDecompressionMelting_MELTS(Model = None, comp = None, Tp_C = None, 
             # except:
             #     return Results
         if k > 0:
-            T_save = np.zeros(3)
-            s_save = np.zeros(3)
-            for i in range(len(T_save)):
-                T_save[i] = T - (i)*1
-                melts.engine.temperature = T_save[i]
+            s_check = 0
+            n = 4
+            while np.abs(s_check-s)/s > 0.0002:
+                T_save = np.linspace(T, T - 3.0, n)
+                s_save = np.zeros(len(T_save))
+                for i in range(len(T_save)):
+                    melts.engine.temperature = T_save[i]
+                    try:
+                        melts.engine.calcEquilibriumState(1,0)
+                    except:
+                        return Results
+
+                    s_save[i] = melts.engine.getProperty('s','bulk')
+                    melts = melts.addNodeAfter()
+
+                    print(s_save[i])
+
+                p = np.polyfit(s_save, T_save, 3)
+                T_next = p[0]*s**3 + p[1]*s**2 + p[2]*s + p[3]
+
+                melts.engine.temperature = T_next
+
                 try:
                     melts.engine.calcEquilibriumState(1,0)
                 except:
                     return Results
-                s_save[i] = melts.engine.getProperty('s','bulk')
-                melts = melts.addNodeAfter()
+                
+                s_check = melts.engine.getProperty('s','bulk')
 
-                print(s_save[i])
+                n = n*2
+                if n > 32:
+                    break
 
-            p = np.polyfit(s_save, T_save, 2)
-            T = p[0]*s**2 + p[1]*s + p[2]
-
-            melts.engine.temperature = T
-
-        try:
-            melts.engine.calcEquilibriumState(1,0)
-        except:
-            return Results
+            T = T_next
             
         for R in Results['Conditions']:
             if R == 'temperature':
@@ -1202,8 +1219,8 @@ def AdiabaticDecompressionMelting_MELTS(Model = None, comp = None, Tp_C = None, 
                 for pr in Results[phase + '_prop']:
                     Results[phase + '_prop'][pr].loc[k] = melts.engine.getProperty(pr, phase)
         
-        if k == 0:
-            s = melts.engine.getProperty('s','bulk')
+        # if k == 0:
+        #     s = melts.engine.getProperty('s','bulk')
 
     return Results
 

@@ -40,6 +40,13 @@ Welcome to pyMELTScalc's documentation!
 
 .. toctree::
    :maxdepth: 2
+   :caption: Melting calculations
+
+   Examples/MeltingTests/AdiabaticMeltExample
+
+
+.. toctree::
+   :maxdepth: 2
    :caption: MELTS barometry
 
    Examples/BarometryTests/MELTS_geobarometry_example1

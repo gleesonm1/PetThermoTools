@@ -539,7 +539,7 @@ def equilibrate(q, index,*, Model = None, P_bar = None, T_C = None, comp = None,
 
     if "Holland" in Model:
         import pyMAGEMINcalc as MM
-        from tqdm.notebook import tqdm, trange
+        #from tqdm.notebook import tqdm, trange
         Combined = pd.DataFrame()
         for i in range(len(T_C)):
             try:

@@ -406,8 +406,8 @@ def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid 
         if print_label is not None:
             print(Results.keys())
 
-        if "MELTS" in Model:
-            Results = stich(Results, multi = True, Model = Model)
+        #if "MELTS" in Model:
+        Results = stich(Results, multi = True, Model = Model)
 
         return Results
 

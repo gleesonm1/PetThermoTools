@@ -84,13 +84,13 @@ or within a Jupyter environment:
 
 .. code-block:: python
 
-   pip install "https://github.com/gleesonm1/pyMAGEMINcalc/refs/tags/v0.0.6.zip"
+   pip install "https://github.com/gleesonm1/pyMAGEMINcalc/refs/tags/v0.0.7.zip"
 
 or a Jupyter environment:
 
 .. code-block:: python
 
-   !pip install "https://github.com/gleesonm1/pyMAGEMINcalc/refs/tags/v0.0.6.zip"
+   !pip install "https://github.com/gleesonm1/pyMAGEMINcalc/refs/tags/v0.0.7.zip"
 
 
 Updating
