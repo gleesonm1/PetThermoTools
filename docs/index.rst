@@ -12,8 +12,8 @@ Welcome to pyMELTScalc's documentation!
 
    introduction
    installation
+   available_functions_pdf
    Changelog
-   .. available_functions_pdf
    .. importing_data
 
 
