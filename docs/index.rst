@@ -12,8 +12,6 @@ Welcome to PetThermoTools's documentation!
 
    introduction
    installation
-   available_functions_pdf
-   Changelog
    .. importing_data
 
 
