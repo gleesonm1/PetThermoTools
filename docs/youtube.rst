@@ -3,14 +3,14 @@ YouTube Tutorials
 #################
 .. contents::
 
-Subscribe to `pyMELTScalc on youtube <https://www.youtube.com/channel/UC3J8Lj6Yv_87nvdjjKKcG0g>`_ to get notified when we create new tutorial videos. Or watch tutorials below.
+Subscribe to `PetThermoTools on youtube <https://www.youtube.com/channel/UC3J8Lj6Yv_87nvdjjKKcG0g>`_ to get notified when we create new tutorial videos. Or watch tutorials below.
 
-We recommend readers go through the associated notebooks for each of their tutorials in their own time to read the detailed descriptions. These videos are only an introductory guide! Files available from: https://github.com/PennyWieser/pyMELTScalc. Click the green "Code" button in the top right, then "download zip", unzip, and open the "Examples" folder. Or you can download the files directly from this website.
+We recommend readers go through the associated notebooks for each of their tutorials in their own time to read the detailed descriptions. These videos are only an introductory guide! Files available from: https://github.com/PennyWieser/PetThermoTools. Click the green "Code" button in the top right, then "download zip", unzip, and open the "Examples" folder. Or you can download the files directly from this website.
 
 
-Why did we develop pyMELTScalc
+Why did we develop PetThermoTools
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-A short introduction to the motivation behind developing pyMELTScalc
+A short introduction to the motivation behind developing PetThermoTools
 
 .. raw:: html
 
@@ -21,7 +21,7 @@ A short introduction to the motivation behind developing pyMELTScalc
 
 
 
-Example pyMELTScalc calculation for a Petrolog3 fractionation path
+Example PetThermoTools calculation for a Petrolog3 fractionation path
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 This video shows how to perform SCSS and SCAS calculations for a Petrolog3 fractionation path
 
@@ -30,7 +30,7 @@ This video shows how to perform SCSS and SCAS calculations for a Petrolog3 fract
     <iframe width="560" height="315" src="https://www.youtube.com/embed/MOQTw_6praE" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
 ---------
 
-Integrating pyMELTScalc with PyMELTScalc
+Integrating PetThermoTools with PetThermoTools
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 This video shows how to integrate MELTS calculations and SCSS calculations in a single Jupyter Notebook.
 
@@ -61,7 +61,7 @@ This video shows how to model Cu and Ba behavoir during mantle melting in the pr
 
 Monte Carlo Simulations 1
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-This video gives an introduction to how to perform Monte Carlo simulations in pyMELTScalc
+This video gives an introduction to how to perform Monte Carlo simulations in PetThermoTools
 
 .. raw:: html
 

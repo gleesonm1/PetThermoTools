@@ -1,7 +1,7 @@
 import numpy as np
 import pyMelt as m
 
-# Saved compositions for use in pyMELTScalc
+# Saved compositions for use in PetThermoTools
 Compositions = {'KLB-1': {'SiO2_Liq': 44.48,
                         'TiO2_Liq': 0.16,
                         'Al2O3_Liq': 3.59,

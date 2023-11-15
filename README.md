@@ -1,7 +1,7 @@
 ## ReadTheDocs
 
-For instructions on the installation and use of pyMELTScalc please visit our readthedocs page.
+For instructions on the installation and use of PetThermoTools please visit our readthedocs page.
 
-https://pymeltscalc.readthedocs.io/en/latest/
+https://PetThermoTools.readthedocs.io/en/latest/
 
 

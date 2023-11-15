@@ -1,6 +1,6 @@
 Sulfide Saturation Functions
 ======================
 
-.. automodule:: pyMELTScalc.scss_calcs2
+.. automodule:: PetThermoTools.scss_calcs2
    :members:
 

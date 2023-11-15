@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from pyMELTScalc.Path import *
+from PetThermoTools.Path import *
 
 def isobaric_crystallisation(Model = None, bulk = None, Frac_solid = None, Frac_fluid = None, T_path_C = None, T_start_C = None, T_end_C = None, dt_C = None, P_bar = None, Fe3Fet_Liq = None, H2O_Liq = None, CO2_Liq = None, find_liquidus = None, fO2_buffer = None, fO2_offset = None, label = None, Crystallinity_limit = None, fluid_sat = None, timeout = None):
     '''

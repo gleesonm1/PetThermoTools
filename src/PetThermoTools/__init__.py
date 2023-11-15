@@ -13,30 +13,30 @@ import Thermobar as pt
 from os import path
 
 # General functions that are used across multiple types of calculations
-from pyMELTScalc.GenFuncs import *
+from PetThermoTools.GenFuncs import *
 # Plotting functions that are used in multiple types of calculations
-from pyMELTScalc.Plotting import *
+from PetThermoTools.Plotting import *
 # This has the main functions that call the barometry calculations
-from pyMELTScalc.Barom import *
+from PetThermoTools.Barom import *
 # This contains the functions required to find liquidis
-from pyMELTScalc.Liq import *
+from PetThermoTools.Liq import *
 # Code to create phase diagrams
-from pyMELTScalc.PhaseDiagrams import *
-# Functions to carry out specific crystallisation calculations. Simply calls the code in pyMELTScalc.Path
-from pyMELTScalc.Path_wrappers import *
+from PetThermoTools.PhaseDiagrams import *
+# Functions to carry out specific crystallisation calculations. Simply calls the code in PetThermoTools.Path
+from PetThermoTools.Path_wrappers import *
 # This contains the functions required to perform path calculations
-from pyMELTScalc.Path import *
+from PetThermoTools.Path import *
 # This contains the functions required to simulate mantle melting
-from pyMELTScalc.Melting import *
+from PetThermoTools.Melting import *
 # This contains the functions required to perform volatile saturation calculations
-from pyMELTScalc.Saturation import *
+from PetThermoTools.Saturation import *
 # This contains the functions used to call MELTS calculations
-from pyMELTScalc.MELTS import *
-# Compsitions saved for use in pyMELTScalc
-from pyMELTScalc.Compositions import *
+from PetThermoTools.MELTS import *
+# Compsitions saved for use in PetThermoTools
+from PetThermoTools.Compositions import *
 # This contains the functions used to perform calculations using the Holland et al. 2018 thermodynamic dataset - currently disabled
 # try:
-#     from pyMELTScalc.Holland import *
+#     from PetThermoTools.Holland import *
 # except:
 #     print('Warning: MAGEMin calculations cannot be performed')
 

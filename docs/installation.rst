@@ -2,7 +2,7 @@
 Installation
 ============
 
-There are three steps to installing pyMELTScalc locally on your machine.
+There are three steps to installing PetThermoTools locally on your machine.
 
 Step 1 - Install Python
 ======================
@@ -13,12 +13,12 @@ This may seem obvious, but the first step is to obtain Python3 (tested on V3.7).
 Step 2 - Download the alphaMELTS for MATLAB/Python source files
 ================================================================
 
-pyMELTScalc itself doesn't run any thermodynamic calculations. Instead, pyMELTScalc simply organises your inputs to so that the calculations will run in alphaMELTS for Python without you having to write out a new scipt every time you want to do something new! It also allows you to automate a huge number of calculations (e.g., enabling Monte Carlo simulations).
-Therefore, before any calculations are performed in pyMELTScalc users need to download the alphaMELTS for MATLAB/Python files from here: https://magmasource.caltech.edu/gitlist/MELTS_Matlab.git/ unzip the package and save it somewhere you'll remember!
+PetThermoTools itself doesn't run any thermodynamic calculations. Instead, PetThermoTools simply organises your inputs to so that the calculations will run in alphaMELTS for Python without you having to write out a new scipt every time you want to do something new! It also allows you to automate a huge number of calculations (e.g., enabling Monte Carlo simulations).
+Therefore, before any calculations are performed in PetThermoTools users need to download the alphaMELTS for MATLAB/Python files from here: https://magmasource.caltech.edu/gitlist/MELTS_Matlab.git/ unzip the package and save it somewhere you'll remember!
 
 For windows users you can move onto the code below! For Mac users there is an extra installation step that is explained here: https://magmasource.caltech.edu/forum/index.php/topic,995.0.html
 
-Once this has been completed the location of the alphaMELTS for MATLAB/Python files (found under the package subfolder in the above link) must be added to the Python path  before any Python script using pyMELTScalc can be run. It is possible to add a folder permanently to the Python path, but we recommend simply using the following code at the start of each Python script using pyMELTScalc:
+Once this has been completed the location of the alphaMELTS for MATLAB/Python files (found under the package subfolder in the above link) must be added to the Python path  before any Python script using PetThermoTools can be run. It is possible to add a folder permanently to the Python path, but we recommend simply using the following code at the start of each Python script using PetThermoTools:
 
 .. code-block:: python
 
@@ -26,28 +26,28 @@ Once this has been completed the location of the alphaMELTS for MATLAB/Python fi
    sys.path.append(r'LOCATION OF MELTS/PACKAGE files')
 
 
-Step 3 - Install pyMELTScalc
+Step 3 - Install PetThermoTools
 ============================
 
-pyMELTScalc can be installed using pip in one line. If you are using a terminal, enter:
+PetThermoTools can be installed using pip in one line. If you are using a terminal, enter:
 
 .. code-block:: python
 
-   pip install pyMELTScalc
+   pip install PetThermoTools
 
 If you are using Jupyter Notebooks or Jupyter Lab, you can also install it by entering the following code into a notebook cell (note the !):
 
 .. code-block:: python
 
-   !pip install pyMELTScalc
+   !pip install PetThermoTools
 
-You then need to import pyMELTScalc into the script you are running code in. In all the examples, we import pyMELTScalc as M:
+You then need to import PetThermoTools into the script you are running code in. In all the examples, we import PetThermoTools as M:
 
 .. code-block:: python
 
-   import pyMELTScalc as M
+   import PetThermoTools as M
 
-This means any time you want to call a function from pyMELTScalc, you do M.function_name.
+This means any time you want to call a function from PetThermoTools, you do M.function_name.
 
 
 Using MAGEMin
@@ -96,20 +96,20 @@ or a Jupyter environment:
 Updating
 ========
 
-To upgrade to the most recent version of pyMELTScalc, type the following into terminal:
+To upgrade to the most recent version of PetThermoTools, type the following into terminal:
 
 .. code-block:: python
 
-   pip install pyMELTScalc --upgrade
+   pip install PetThermoTools --upgrade
 
 Or in your Jupyter environment:
 
 .. code-block:: python
 
-   !pip install pyMELTScalc --upgrade
+   !pip install PetThermoTools --upgrade
 
 
-For maximum reproducability, you should state which version of pyMELTScalc you are using. If you have imported pyMELTScalc as M, you can find this using:
+For maximum reproducability, you should state which version of PetThermoTools you are using. If you have imported PetThermoTools as M, you can find this using:
 
 .. code-block:: python
 

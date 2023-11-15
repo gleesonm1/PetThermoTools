@@ -20,7 +20,7 @@ sys.path.insert(0, os.path.abspath('..'))
 
 # -- Project information -----------------------------------------------------
 
-project = 'pyMELTScalc'
+project = 'PetThermoTools'
 copyright = '2021, Penny Wieser'
 author = 'Penny Wieser'
 
@@ -79,13 +79,13 @@ nbsphinx_prolog = r"""
 
     <div class="admonition note">
       <p>This page was generated from
-        <a class="reference external" href="https://github.com/PennyWieser/pyMELTScalc/blob/{{ git_ref|e }}/{{ docname|e }}">{{ docname|e }}</a>.
+        <a class="reference external" href="https://github.com/PennyWieser/PetThermoTools/blob/{{ git_ref|e }}/{{ docname|e }}">{{ docname|e }}</a>.
 
             Interactive online version:
-            <a href="https://mybinder.org/v2/gh/PennyWieser/pyMELTScalc/{{ git_ref|e }}?filepath={{ docname|e }}"><img alt="Binder badge" src="https://mybinder.org/badge_logo.svg" style="vertical-align:text-bottom"></a>.
+            <a href="https://mybinder.org/v2/gh/PennyWieser/PetThermoTools/{{ git_ref|e }}?filepath={{ docname|e }}"><img alt="Binder badge" src="https://mybinder.org/badge_logo.svg" style="vertical-align:text-bottom"></a>.
     </p>
     <p>
-    <a class="reference download internal" download="" href="https://github.com/PennyWieser/pyMELTScalc/blob/{{ git_ref|e }}/{{ docname|e }}"><code class="xref download docutils literal notranslate"><span class="pre">Python</span> <span class="pre">Notebook</span> <span class="pre">Download</span></code></a>
+    <a class="reference download internal" download="" href="https://github.com/PennyWieser/PetThermoTools/blob/{{ git_ref|e }}/{{ docname|e }}"><code class="xref download docutils literal notranslate"><span class="pre">Python</span> <span class="pre">Notebook</span> <span class="pre">Download</span></code></a>
       </p>
       <script>
         if (document.location.host) {
@@ -170,7 +170,7 @@ html_static_path = ['_static']
 # -- Options for HTMLHelp output ---------------------------------------------
 
 # Output file base name for HTML help builder.
-htmlhelp_basename = 'pyMELTScalcdoc'
+htmlhelp_basename = 'PetThermoToolsdoc'
 
 
 # -- Options for LaTeX output ------------------------------------------------
@@ -197,7 +197,7 @@ latex_elements = {
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
-    (master_doc, 'pyMELTScalc.tex', 'pyMELTScalc Documentation',
+    (master_doc, 'PetThermoTools.tex', 'PetThermoTools Documentation',
      'Penny Wieser', 'manual'),
 ]
 
@@ -207,7 +207,7 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    (master_doc, 'pyMELTScalc', 'pyMELTScalc Documentation',
+    (master_doc, 'PetThermoTools', 'PetThermoTools Documentation',
      [author], 1)
 ]
 
@@ -218,8 +218,8 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-    (master_doc, 'pyMELTScalc', 'pyMELTScalc Documentation',
-     author, 'pyMELTScalc', 'One line description of project.',
+    (master_doc, 'PetThermoTools', 'PetThermoTools Documentation',
+     author, 'PetThermoTools', 'One line description of project.',
      'Miscellaneous'),
 ]
 

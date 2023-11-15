@@ -1,8 +1,8 @@
 import numpy as np
 import pandas as pd
-from pyMELTScalc.GenFuncs import *
-from pyMELTScalc.Plotting import *
-from pyMELTScalc.MELTS import *
+from PetThermoTools.GenFuncs import *
+from PetThermoTools.Plotting import *
+from PetThermoTools.MELTS import *
 import multiprocessing
 from multiprocessing import Queue
 from multiprocessing import Process

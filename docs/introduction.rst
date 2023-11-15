@@ -2,7 +2,7 @@
 Introduction
 ==============================
 
-Welome to pyMELTScalc - an open-source Python3 tool for performing phase equilibria calculations using the MELTS or Holland et al. (2018) thermodynamic models.
+Welome to PetThermoTools - an open-source Python3 tool for performing phase equilibria calculations using the MELTS or Holland et al. (2018) thermodynamic models.
 
 Using MELTS
 ===========
@@ -18,22 +18,22 @@ This package also provides the user to perform certain calculations using the th
 the recent development and release of MAGEMin (https://github.com/ComputationalThermodynamics; https://doi.org/10.1029/2022GC010427), with 
 Julia functions called from Python used to run the calculations. This opens the possibility to directly compare different thermodynamic models in a way that has not been possible before.
 
-Before the pyMELTScalc package can be used to perform MAGEMin calculations, the Julia code used to compile and run MAGEMin, which is hosted in a separate 
+Before the PetThermoTools package can be used to perform MAGEMin calculations, the Julia code used to compile and run MAGEMin, which is hosted in a separate 
 repository, must be imported and added to Julia. Please see the installation page for full details.
 
 
 =======================
-Citing pyMELTScalc
+Citing PetThermoTools
 =======================
 
-At present there is no publication associated with pyMELTScalc (although there are plans to release a pre-print in Fall 2023).
-We request that any users using pyMELTScalc in their research cite the pyMELTScalc zenodo repository https://zenodo.org/badge/latestdoi/536711798 and state the 
+At present there is no publication associated with PetThermoTools (although there are plans to release a pre-print in Fall 2023).
+We request that any users using PetThermoTools in their research cite the PetThermoTools zenodo repository https://zenodo.org/badge/latestdoi/536711798 and state the 
 version that was used.
 
 ==============================
 Reporting bugs/issues with the code
 ==============================
-No software is free of bugs, particularly when still in the early stages of development! Many of the calculations performed in pyMELTScalc have been benchmarked to the results obtained by alternative MELTS software packages (e.g., MELTS for Excel). However, if users spot any bugs, or wish to request features, they should submit an 'issue' on the GitHub page. Alternatively, they can email the development team. In both cases, please upload any files the code is using (e.g. excel, jupyter notebooks) so that I can run your code to see what the issue is!
+No software is free of bugs, particularly when still in the early stages of development! Many of the calculations performed in PetThermoTools have been benchmarked to the results obtained by alternative MELTS software packages (e.g., MELTS for Excel). However, if users spot any bugs, or wish to request features, they should submit an 'issue' on the GitHub page. Alternatively, they can email the development team. In both cases, please upload any files the code is using (e.g. excel, jupyter notebooks) so that I can run your code to see what the issue is!
 
 
 

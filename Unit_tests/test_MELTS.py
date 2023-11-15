@@ -1,6 +1,6 @@
 import unittest
 import pandas as pd
-import pyMELTScalc as M
+import PetThermoTools as M
 
 ## Setting a liquid composition
 

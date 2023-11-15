@@ -1,11 +1,11 @@
 import numpy as np
 import pandas as pd
-# from pyMELTScalc.Barom import *
-# from pyMELTScalc.Liq import *
-# from pyMELTScalc.Crystallise import *
-# from pyMELTScalc.MELTS import *
+# from PetThermoTools.Barom import *
+# from PetThermoTools.Liq import *
+# from PetThermoTools.Crystallise import *
+# from PetThermoTools.MELTS import *
 # try:
-#     from pyMELTScalc.Holland import *
+#     from PetThermoTools.Holland import *
 # except:
 #     pass
 

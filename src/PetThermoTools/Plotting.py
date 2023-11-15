@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 from shapely.geometry import MultiPoint, Point, Polygon
 import matplotlib.pyplot as plt
-from pyMELTScalc.GenFuncs import *
+from PetThermoTools.GenFuncs import *
 
 def harker(Results = None, x_axis = None, y_axis = None, phase = None, line_style = None, line_color = None, data = None, d_color = None, d_marker = None, label = None):
     '''

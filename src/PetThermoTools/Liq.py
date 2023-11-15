@@ -1,10 +1,10 @@
 import numpy as np
 import pandas as pd
-from pyMELTScalc.GenFuncs import *
-from pyMELTScalc.Plotting import *
-from pyMELTScalc.MELTS import *
+from PetThermoTools.GenFuncs import *
+from PetThermoTools.Plotting import *
+from PetThermoTools.MELTS import *
 # try:
-#     from pyMELTScalc.Holland import *
+#     from PetThermoTools.Holland import *
 # except:
 #     pass
 import multiprocessing
