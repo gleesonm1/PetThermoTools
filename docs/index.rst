@@ -7,13 +7,14 @@ Welcome to PetThermoTools's documentation!
 =================================================
 
 .. toctree::
-   :maxdepth: 3
+   :maxdepth: 4
    :caption: Contents:
 
    introduction
    installation
    available_functions_pdf
-   .. importing_data
+   Changelog   
+.. importing_data
 
 
 
