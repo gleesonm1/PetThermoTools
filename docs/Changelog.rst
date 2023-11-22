@@ -21,3 +21,8 @@ pyMAGEMINcalc v0.0.7 https://github.com/gleesonm1/pyMAGEMINcalc/archive/refs/tag
 MAGEMinCalc v0.2.22 https://github.com/gleesonm1/MAGEMinCalc/archive/refs/tags/v0.2.22.zip 
 MAGEMin_C v1.3.5 https://github.com/ComputationalThermodynamics/MAGEMin_C.jl/archive/refs/tags/v1.3.5.zip 
 
+Version 0.2.1 (November 22nd, 2023)
+================================
+Repository name updated to PetThermoTools (Petrology Thermodynamics Tools).
+Change-log and available functions linked to ReadTheDocs.
+pyMAGEMINcalc, MAGEMinCalc, and MAGEMin_C versions are as listed above.
