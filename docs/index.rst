@@ -13,7 +13,6 @@ Welcome to PetThermoTools's documentation!
    introduction
    installation
    available_functions_pdf
-   Changelog 
 
 .. importing_data
 
@@ -53,7 +52,12 @@ Welcome to PetThermoTools's documentation!
 
    Examples/BarometryTests/MELTS_geobarometry_example1
    Examples/BarometryTests/MELTS_geobarometry_example2
-   
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Updates and Version Information
+
+   Changelog 
 
 
 
