@@ -6,8 +6,8 @@ import sys
 import os
 import pickle
 import matplotlib.pyplot as plt
-import subprocess
-import glob
+# import subprocess
+# import glob
 from subprocess import Popen, PIPE
 import Thermobar as pt
 from os import path
