@@ -10,7 +10,14 @@ import time
 import sys
 from tqdm.notebook import tqdm, trange
 
-def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid = None, Frac_fluid = None, T_C = None, T_path_C = None, T_start_C = None, T_end_C = None, dt_C = None, P_bar = None, P_path_bar = None, P_start_bar = None, P_end_bar = None, dp_bar = None, Fe3Fet_Liq = None, H2O_Liq = None, CO2_Liq = None, isenthalpic = None, isentropic = None, isochoric = None, find_liquidus = None, fO2_buffer = None, fO2_offset = None, Print_suppress = None, fluid_sat = None, Crystallinity_limit = None, label = None, timeout = None, print_label = True):
+def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid = None, Frac_fluid = None, 
+               T_C = None, T_path_C = None, T_start_C = None, T_end_C = None, dt_C = None, 
+               P_bar = None, P_path_bar = None, P_start_bar = None, P_end_bar = None, dp_bar = None, 
+               Fe3Fet_Liq = None, H2O_Liq = None, CO2_Liq = None, 
+               isenthalpic = None, isentropic = None, isochoric = None, find_liquidus = None, 
+               fO2_buffer = None, fO2_offset = None, 
+               Print_suppress = None, fluid_sat = None, Crystallinity_limit = None, Combined = None,
+               label = None, timeout = None, print_label = True):
     '''
     Carry out multiple calculations in parallel. Allows isobaric, polybaric and isochoric crystallisation to be performed as well as isothermal, isenthalpic or isentropic decompression. All temperature inputs/outputs are reported in degrees celcius and pressure is reported in bars.
 

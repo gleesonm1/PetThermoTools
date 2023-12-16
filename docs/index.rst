@@ -44,6 +44,7 @@ Welcome to PetThermoTools's documentation!
    :caption: Melting calculations
 
    Examples/MeltingTests/AdiabaticMeltExample
+   Examples/MeltingTests/MeltingComparisons
 
 
 .. toctree::
