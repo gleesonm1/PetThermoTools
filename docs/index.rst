@@ -46,7 +46,6 @@ Welcome to PetThermoTools's documentation!
    Examples/MeltingTests/AdiabaticMeltExample
    Examples/MeltingTests/MeltingComparisons
 
-
 .. toctree::
    :maxdepth: 2
    :caption: MELTS barometry
