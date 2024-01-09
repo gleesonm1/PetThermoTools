@@ -247,9 +247,20 @@ def stich_work(Results = None, Order = None, Model = "MELTS"):
                 
             Results[R] = Results[R][Order]
 
+    if "MELTS" in Model:
+        Remove = np.where(Results['Conditions']['h'] == 0.0)[0]
+    else:
+        Remove = np.where(Results['Conditions']['T_C'] == 0.0)[0]
+
     for R in Results:
-        if len(np.where(Results['Conditions']['T_C'] == 0.0)[0]) > 0:
-            Results[R] = Results[R].drop(labels = np.where(Results['Conditions']['T_C'] == 0.0)[0])
+        if len(Remove) > 0:
+            Results[R] = Results[R].drop(labels = Remove)
+
+    # if "MELTS" in Model:
+    #     Remove_2 = np.where(Results['Conditions']['h'] == np.nan)[0]
+    #     for R in Results:
+    #         if len(Remove_2) > 0:
+    #             Results[R] = Results[R].drop(labels = Remove_2)
 
     Results_Mass = pd.DataFrame(data = np.zeros((len(Results['Conditions']['T_C']), len(SN))), columns = SN)
     Results_Volume = Results_Mass.copy()
@@ -300,5 +311,9 @@ def stich_work(Results = None, Order = None, Model = "MELTS"):
     if "MELTS" in Model:
         Results['Volume'] = Results_Volume
         Results['rho'] = Results_rho
+
+    if Results['Mass'].sum(axis = 1).iloc[-1] == 0.0:
+        for R in Results:
+            Results[R].drop(Results[R].tail(1).index,inplace=True)
 
     return Results

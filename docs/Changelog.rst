@@ -26,3 +26,8 @@ Version 0.2.1 (November 22nd, 2023)
 Repository name updated to PetThermoTools (Petrology Thermodynamics Tools).
 Change-log and available functions linked to ReadTheDocs.
 pyMAGEMINcalc, MAGEMinCalc, and MAGEMin_C versions are as listed above.
+
+
+Version 0.2.4 (January 9th, 2024)
+================================
+Update to crystallization and decompression codes so that the output DataFrames are always the same length.

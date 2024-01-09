@@ -31,6 +31,14 @@ def equilibrate_multi(cores = None, Model = None, bulk = None, T_C = None, P_bar
     # ensure the bulk composition has the correct headers etc.
     comp = comp_fix(Model = Model, comp = comp, Fe3Fet_Liq = Fe3Fet_Liq, H2O_Liq = H2O_Liq)
 
+    if type(comp) == dict:
+        if comp['H2O_Liq'] == 0.0 and "MELTS" in Model:
+            raise Warning("Adding small amounts of H$_{2}$O may improve the ability of MELTS to accurately reproduce the saturation of oxide minerals. Additionally, sufficient H$_{2}$O is required in the model for MELTS to predict the crystallisation of apatite, rather than whitlockite.")
+
+        if comp['Fe3Fet_Liq'] == 0.0 and "MELTS" in Model and fO2_buffer is None:
+            raise Warning("MELTS often fails to produce any results when no ferric Fe is included in the starting composition and an fO2 buffer is not set.")
+
+
     if type(P_bar) != np.ndarray:
         if type(comp) == pd.core.frame.DataFrame:
             P_bar = np.zeros(len(comp['SiO2_Liq'])) + P_bar
