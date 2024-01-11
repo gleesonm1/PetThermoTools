@@ -165,7 +165,7 @@ def comp_fix(Model = None, comp = None, Fe3Fet_Liq = None, H2O_Liq = None, CO2_L
 
     return comp
 
-def stich(Res, multi = None, Model = None):
+def stich(Res, multi = None, Model = None, Frac_fluid = None, Frac_solid = None):
     '''
     Takes the outputs from the multiple crystallisation/decompression calculations and stiches them together into a single dataframe. Additionally, it adds the relevant suffix to the composition and properties of each mineral (e.g., SiO2 -> SiO2_Liq for the liquid phase).
 
@@ -189,25 +189,25 @@ def stich(Res, multi = None, Model = None):
     if "MELTS" in Model:
         Order = ['SiO2', 'TiO2', 'Al2O3', 'Cr2O3', 'Fe2O3', 'FeO', 'FeOt', 'MnO', 'MgO', 'CaO', 'Na2O', 'K2O', 'P2O5', 'H2O', 'CO2', 'Fe3Fet']
         if multi is None:
-            Results = stich_work(Results = Results, Order = Order, Model = "MELTS")
+            Results = stich_work(Results = Results, Order = Order, Model = "MELTS", Frac_fluid = Frac_fluid, Frac_solid = Frac_solid)
         else:
             for Ind in Res:
                 Result = Res[Ind].copy()
-                Result = stich_work(Results = Result, Order = Order, Model = "MELTS")
+                Result = stich_work(Results = Result, Order = Order, Model = "MELTS", Frac_fluid = Frac_fluid, Frac_solid = Frac_solid)
                 Results[Ind] = Result.copy()
     else:
         Order = ['SiO2', 'TiO2', 'Al2O3', 'Cr2O3', 'FeOt', 'MgO', 'CaO', 'Na2O', 'K2O', 'H2O', 'Fe3Fet']
         if multi is None:
-            Results = stich_work(Results = Results, Order = Order, Model = "Holland")
+            Results = stich_work(Results = Results, Order = Order, Model = "Holland", Frac_fluid = Frac_fluid, Frac_solid = Frac_solid)
         else:
             for Ind in Res:
                 Result = Res[Ind].copy()
-                Result = stich_work(Results = Result, Order = Order, Model = "Holland")
+                Result = stich_work(Results = Result, Order = Order, Model = "Holland", Frac_fluid = Frac_fluid, Frac_solid = Frac_solid)
                 Results[Ind] = Result.copy()
 
     return Results
 
-def stich_work(Results = None, Order = None, Model = "MELTS"):
+def stich_work(Results = None, Order = None, Model = "MELTS", Frac_fluid = None, Frac_solid = None):
     '''
     Does the work required by Stich.
     '''
@@ -275,10 +275,17 @@ def stich_work(Results = None, Order = None, Model = "MELTS"):
             Results_Volume[n] = Results[n + '_prop']['v']
             Results_rho[n] = Results[n + '_prop']['rho']
 
-    # if Results_Mass.sum(axis=1)[0] != Results_Mass.sum(axis=1)[1]:
-    #     for n in SN:
-    #         if n != 'liquid1':
-    #             Results_Mass[n + '_sum'] = Results_Mass[n].cumsum()
+    if Frac_solid is True or Frac_fluid is True:
+        if Frac_solid is None:
+            Results_Mass['fluid1_cumsum'] = Results_Mass['fluid1'].cumsum()
+        elif Frac_fluid is None:
+            for n in SN:
+                if n != 'liquid1' and n!= 'fluid1':
+                    Results_Mass[n + '_cumsum'] = Results_Mass[n].cumsum()
+        else:
+            for n in SN:
+                if n != 'liquid1':
+                    Results_Mass[n + '_cumsum'] = Results_Mass[n].cumsum()
 
     Results_All = Results['Conditions'].copy()
     for R in Results:

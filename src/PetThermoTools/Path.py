@@ -216,7 +216,7 @@ def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid 
 
         if len(ret) > 0:
             Results, index = ret
-            Results = stich(Results, Model = Model)
+            Results = stich(Results, Model = Model, Frac_fluid = Frac_fluid, Frac_solid = Frac_solid)
             return Results
         else:
             Results = {}
@@ -302,11 +302,12 @@ def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid 
                 p.start()
 
             if timeout is None:
-                TIMEOUT = 240
+                TIMEOUT = 120
             else:
                 TIMEOUT = timeout
 
             start = time.time()
+            first = True
             for p in ps:
                 if time.time() - start < TIMEOUT - 10:
                     try:
@@ -314,6 +315,9 @@ def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid 
                     except:
                         ret = []
                 else:
+                    if first == True:
+                        print('Timeout Reached - this likely indicates the calculation failed. \n You can try increasing the timeout limit using the "timeout" kwarg.')
+                        first = False
                     try:
                         ret = q.get(timeout = 10)
                     except:
@@ -414,7 +418,7 @@ def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid 
             print(Results.keys())
 
         #if "MELTS" in Model:
-        Results = stich(Results, multi = True, Model = Model)
+        Results = stich(Results, multi = True, Model = Model, Frac_fluid = Frac_fluid, Frac_solid = Frac_solid)
 
         return Results
 

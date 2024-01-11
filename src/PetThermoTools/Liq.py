@@ -398,6 +398,16 @@ def findLiq_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P
                 T_initial_C = np.zeros(len(P_bar)) + 1300.0
         else:
             T_initial_C = np.array([1300.0])
+    else:
+        if type(T_initial_C) == int or type(T_initial_C) == float:
+            if type(comp) != dict or type(P_bar) == np.ndarray:
+                if type(comp) != dict:
+                    T_initial_C = np.zeros(len(comp['SiO2_Liq'].values)) + T_initial_C
+                else:
+                    T_initial_C = np.zeros(len(P_bar)) + T_initial_C
+            else:
+                T_initial_C = np.array([T_initial_C])
+            
 
 
     if cores is None:
@@ -432,6 +442,9 @@ def findLiq_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P
                     p = Process(target = findLiq, args = (q, i), kwargs = {'Model': Model, 'P_bar': P_bar, 'T_initial_C': T_initial_C[i], 'comp': comp, 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset, 'CO2_return': CO2_return})
             else:
                 if type(P_bar) == np.ndarray:
+                    if len(comp['SiO2_Liq']) != len(P_bar):
+                        raise Warning("The length of your composition and pressure variables are different. Please correct this before running the code.")
+
                     p = Process(target = findLiq, args = (q, i), kwargs = {'Model': Model, 'P_bar': P_bar[i], 'T_initial_C': T_initial_C[i], 'comp': comp.loc[i].to_dict(), 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset, 'CO2_return': CO2_return})
                 else:
                     p = Process(target = findLiq, args = (q, i), kwargs = {'Model': Model, 'P_bar': P_bar, 'T_initial_C': T_initial_C[i], 'comp': comp.loc[i].to_dict(), 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset, 'CO2_return': CO2_return})
@@ -496,6 +509,15 @@ def findLiq_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P
     Res = comp_fix(Model = Model, comp = Results)
     #Res = Res[['T_Liq', 'liquidus_phase', 'fluid_saturated', 'SiO2_Liq', 'TiO2_Liq', 'Al2O3_Liq', 'FeOt_Liq', 'MnO_Liq', 'MgO_Liq', 'CaO_Liq', 'Na2O_Liq', 'K2O_Liq', 'P2O5_Liq', 'H2O_Liq', 'CO2_Liq']]
     #Res.rename(columns = {'T_Liq': 'T_C_Liq'})
+    if type(Res) == dict:
+        Res = pd.DataFrame.from_dict(Res, orient = "index").T
+
+    Res = Res[['T_Liq', 'liquidus_phase', 'fluid_saturated', 
+       'SiO2_Liq', 'TiO2_Liq', 'Al2O3_Liq', 'FeOt_Liq','MnO_Liq', 'MgO_Liq', 'CaO_Liq',
+       'Na2O_Liq', 'K2O_Liq', 'P2O5_Liq', 'H2O_Liq', 'CO2_Liq', 
+       'Fe3Fet_Liq', 'Fe2O3', 'Cr2O3', 'FeO', ]]
+    
+    Res = Res.drop(columns = ['Fe2O3', 'Cr2O3', 'FeO'])
 
     return Res
 

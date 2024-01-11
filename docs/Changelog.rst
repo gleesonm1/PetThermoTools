@@ -31,3 +31,9 @@ pyMAGEMINcalc, MAGEMinCalc, and MAGEMin_C versions are as listed above.
 Version 0.2.4 (January 9th, 2024)
 ================================
 Update to crystallization and decompression codes so that the output DataFrames are always the same length.
+
+
+Version 0.2.5 (January 11th, 2024)
+================================
+Liquidus code updated to accept single (integer or float) inputs for initial temperature guess.
+Path/crysatllization and degassing codes now return cumulate sum of fractionated phases - e.g., Results['Mass']['olivine1_cumsum']
