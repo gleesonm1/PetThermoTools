@@ -840,7 +840,7 @@ def path_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid = None, 
                 else:
                     melts.engine.calcEquilibriumState(1,0)
             except:
-                # return Results
+                return Results
                 break
 
         if isenthalpic is not None:
@@ -886,7 +886,7 @@ def path_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid = None, 
         try:
             PhaseList = ['liquid1'] + melts.engine.solidNames
         except:
-            # return Results
+            return Results
             break
 
         for phase in PhaseList:
@@ -1166,7 +1166,7 @@ def AdiabaticDecompressionMelting_MELTS(Model = None, comp = None, Tp_C = None, 
                     s_save[i] = melts.engine.getProperty('s','bulk')
                     melts = melts.addNodeAfter()
 
-                    print(s_save[i])
+                    # print(s_save[i])
 
                 p = np.polyfit(s_save, T_save, 3)
                 T_next = p[0]*s**3 + p[1]*s**2 + p[2]*s + p[3]

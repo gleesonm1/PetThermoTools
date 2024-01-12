@@ -123,6 +123,11 @@ def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid 
     if type(comp) == pd.core.series.Series:
         comp = comp.to_dict()
 
+    if fO2_buffer is not None:
+        if fO2_buffer != "NNO":
+            if fO2_buffer != "FMQ":
+                raise Warning("fO2 buffer specified is not an allowed input. This argument can only be 'FMQ' or 'NNO' \n if you want to offset from these buffers use the 'fO2_offset' argument.")
+
     # ensure the bulk composition has the correct headers etc.
     comp = comp_fix(Model = Model, comp = comp, Fe3Fet_Liq = Fe3Fet_Liq, H2O_Liq = H2O_Liq, CO2_Liq = CO2_Liq)
 

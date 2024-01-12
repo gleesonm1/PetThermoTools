@@ -156,9 +156,9 @@ def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar
             ps.append(p)
             p.start()
 
-        TIMEOUT = 180
+        TIMEOUT = 120
         start = time.time()
-
+        first = True
         for p in ps:
             if time.time() - start < TIMEOUT - 10:
                 try:
@@ -166,6 +166,9 @@ def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar
                 except:
                     ret = []
             else:
+                if first == True:
+                    print('Timeout Reached. Calculation will continue in a new process.')
+                    first = False
                 try:
                     ret = q.get(timeout = 10)
                 except:
