@@ -423,9 +423,13 @@ def plot_phaseDiagram(Model = "Holland", Combined = None, P_units = "bar", T_uni
 
     f, a = plt.subplots(1,2, figsize = (10,6), gridspec_kw = {'width_ratios': [8,2]})
     a[1].axis("off")
-    im = a[0].pcolormesh(PT_Results['T_C'],
-                    PT_Results['P_bar'],
-                    PT_Results['PhaseNo.'], cmap = "Reds", zorder = 2, shading = 'auto')
+    # im = a[0].pcolormesh(PT_Results['T_C'],
+    #                 PT_Results['P_bar'],
+    #                 PT_Results['PhaseNo.'], cmap = "Reds", zorder = 2, shading = 'auto')
+    im = a[0].imshow(PT_Results['PhaseNo.'].T,
+                 extent=[np.nanmin(PT_Results['T_C']), np.nanmax(PT_Results['T_C']),
+                         np.nanmin(PT_Results['P_bar']), np.nanmax(PT_Results['P_bar'])],
+                 cmap="Reds", zorder=2, aspect='auto', origin='lower')
 
     #f.colorbar(im, ax = a[1])
 

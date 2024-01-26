@@ -357,10 +357,13 @@ def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid 
                 Res, index = qs[i]
                 if label is None:
                     Results['index = ' + str(index)] = Res
-                elif label == "P" or label == "pressure":
+                elif label == "P" or label == "pressure" or label == "P_bar":
                     Out[str(round(Res['Conditions']['pressure'].loc[0]))] = Res
-                elif label == "water" or label == "H2O":
-                    Out[str(round(Res['liquid1']['H2O'].loc[0], 2))] = Res
+                elif label == "water" or label == "H2O" or label == "H2O_Liq":
+                    if H2O_Liq is not None:
+                        Out[str(round(H2O_Liq[index], 2))] = Res
+                    else:
+                        Out[str(round(bulk.loc[index, "H2O_Liq"], 2))] = Res
                 elif label == "carbon" or label == "CO2":
                     Out[str(round(Res['liquid1']['CO2'].loc[0], 2))] = Res
                 elif label == "oxygen fugacity" or label == "fO2":
@@ -370,7 +373,7 @@ def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid 
                 elif label in list(comp.keys()):
                     Results[str(comp[label].loc[index])] = Res
 
-        if label == "P" or label == "pressure":
+        if label == "P" or label == "pressure" or label == "P_bar":
             # A = Out.copy()
             # B = [float(x) for x in A]
             O = sorted(Out)
@@ -379,14 +382,14 @@ def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid 
                 #     o = int(o)
                 Results['P = ' + o + ' bars'] = Out[o]
 
-        if label == "water" or label == "H2O":
+        if label == "water" or label == "H2O" or label == "H2O_Liq":
             # A = Out.copy()
             # B = [float(x) for x in A]
             O = sorted(Out)
             for o in O:
                 # if o % 1 == 0:
                 #     o = int(o)
-                Results['H2O = ' + o + ' wt%'] = Out[o]
+                Results['H2O_i = ' + o + ' wt%'] = Out[o]
 
         if label == "carbon" or label == "CO2":
             # A = Out.copy()

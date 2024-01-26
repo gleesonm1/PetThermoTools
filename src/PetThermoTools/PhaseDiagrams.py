@@ -151,6 +151,10 @@ def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar
                 T_path_C = T_path_C[:99]
                 P_path_bar = P_path_bar[:99]
 
+            if j % 2 > 0:
+                T_path_C = np.flip(T_path_C)
+                P_path_bar = np.flip(P_path_bar)
+
             p = Process(target = path, args = (q,i), kwargs = {'Model': Model, 'comp': comp, 'T_path_C': T_path_C, 'P_path_bar': P_path_bar, 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset})
 
             ps.append(p)
