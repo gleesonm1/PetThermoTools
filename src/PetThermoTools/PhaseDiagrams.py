@@ -8,9 +8,10 @@ import multiprocessing
 from multiprocessing import Queue
 from multiprocessing import Process
 from tqdm.notebook import tqdm, trange
+import random
 import time
 
-def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar = None, T_min_C = None, T_max_C = None, T_num = None, P_min_bar = None, P_max_bar = None, P_num = None, Fe3Fet_Liq = None, H2O_Liq = None, fO2_buffer = None, fO2_offset = None, i_max = 25):
+def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar = None, T_min_C = None, T_max_C = None, T_num = None, P_min_bar = None, P_max_bar = None, P_num = None, Fe3Fet_Liq = None, H2O_Liq = None, fO2_buffer = None, fO2_offset = None, i_max = 25, grid = True):
     """
     Calculate phase diagrams for igneous systems (rocks and magmas).
 
@@ -91,7 +92,10 @@ def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar
     if P_min_bar is not None:
         P_bar = np.linspace(P_min_bar, P_max_bar, P_num)
 
-    P, T = np.meshgrid(P_bar, T_C)
+    if grid is True:
+        P, T = np.meshgrid(P_bar, T_C)
+    else:
+        P, T = P_bar, T_C
 
     T_flat = np.round(T.flatten(),2)
     P_flat = np.round(P.flatten(),2)
@@ -147,13 +151,31 @@ def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar
             T_path_C = np.array(subarrays_T[i])#T_flat[i*A:(i+1)*A]
             P_path_bar = np.array(subarrays_P[i])#P_flat[i*A:(i+1)*A]
 
-            if len(T_path_C) > 100:
+            if len(T_path_C) > 150:
                 T_path_C = T_path_C[:99]
                 P_path_bar = P_path_bar[:99]
+
+            if "MELTS" in Model:
+                if j % 3 == 0:
+                    ed = (5*np.random.random())
+                    T_path_C = T_path_C[round(len(T_path_C)/ed):]
+                    P_path_bar = P_path_bar[round(len(P_path_bar)/ed):]
 
             if j % 2 > 0:
                 T_path_C = np.flip(T_path_C)
                 P_path_bar = np.flip(P_path_bar)
+
+            # if j > 5:
+            #     com = list(zip(T, P))
+
+            #     # Step 2: Randomize the order of the combined list
+            #     random.shuffle(com)
+
+            #     # Step 3: Separate the pairs back into two arrays
+            #     T_randomized, P_randomized = zip(*com)
+
+            #     T_path_C = np.array(T_randomized)
+            #     P_path_bar = np.array(P_randomized)
 
             p = Process(target = path, args = (q,i), kwargs = {'Model': Model, 'comp': comp, 'T_path_C': T_path_C, 'P_path_bar': P_path_bar, 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset})
 
@@ -174,7 +196,7 @@ def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar
                     print('Timeout Reached. Calculation will continue in a new process.')
                     first = False
                 try:
-                    ret = q.get(timeout = 10)
+                    ret = q.get(timeout = 30)
                 except:
                     ret = []
 
@@ -322,6 +344,184 @@ def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar
     Combined = Combined.dropna(subset = ['T_C'])
 
     return Combined
+
+def phaseDiagram_refine(Data = None, Model = None, bulk = None, Fe3Fet_Liq = None, H2O_Liq = None, fO2_buffer = None, fO2_offset = None, i_max = 25):
+    Combined = Data.copy()
+    # find existing T,P data
+    T_C = Combined['T_C'].unique()
+    P_bar = Combined['P_bar'].unique()
+
+    # calculate new T,P points
+    T_C_new = np.round(np.linspace(np.nanmin(T_C), np.nanmax(T_C), 2*len(T_C)-1),2)
+    P_bar_new = np.round(np.linspace(np.nanmin(P_bar), np.nanmax(P_bar), 2*len(P_bar)-1),2)
+
+    # set up the new T,P grid
+    T, P = np.meshgrid(T_C_new, P_bar_new)
+
+    # extract the phase information from the current dataframe
+    def combine_headers(row):
+        return ','.join([col[5:] for col in Combined.loc[:, Combined.columns.str.contains('mass')].columns if row[col] > 0.0 or pd.isna(row[col])])
+
+    # Apply the function to each row
+    Combined['PhaseResults'] = Combined.apply(combine_headers, axis=1).tolist()
+
+    ## find values that match T
+    # Convert Combined['T_C'] to a set of rounded unique values for faster lookup
+    unique_combined_T_C = set(np.round(Combined['T_C'].unique(), 2))
+    unique_combined_P_bar = set(np.round(Combined['P_bar'].unique(), 2))
+
+    # Flatten T and P and round their values
+    flattened_T = np.round(T.flatten(), 2)
+    flattened_P = np.round(P.flatten(), 2)
+
+    # Check for matches and print them
+    matching_values_T = [value for value in flattened_T if value in unique_combined_T_C]
+    matching_values_P = [value for value in flattened_P if value in unique_combined_P_bar]
+
+    matching_df = Data.copy()
+    T_C = []
+    P_bar = []
+    A = None
+    for i in range(len(flattened_T)):
+        if flattened_T[i] in unique_combined_T_C and flattened_P[i] in unique_combined_P_bar:
+            continue
+        elif flattened_T[i] in unique_combined_T_C and flattened_P[i] not in unique_combined_P_bar:
+            sorted_arr = np.sort(np.unique(flattened_P))
+            idx = np.searchsorted(sorted_arr, flattened_P[i])
+
+            below = sorted_arr[idx - 1]
+            above = sorted_arr[idx + 1]
+
+            if Combined['PhaseResults'].iloc[np.where((Combined['T_C'].values == flattened_T[i]) & (Combined['P_bar'].values == below))[0][0]] == Combined['PhaseResults'].iloc[np.where((Combined['T_C'].values == flattened_T[i]) & (Combined['P_bar'].values == above))[0][0]]:
+                if A is None:
+                    A = (matching_df.iloc[np.where((Combined['T_C'].values == flattened_T[i]) & (Combined['P_bar'].values == below))[0][0],:].values + matching_df.iloc[np.where((Combined['T_C'].values == flattened_T[i]) & (Combined['P_bar'].values == above))[0][0],:].values)/2
+                    A[0] = flattened_T[i]
+                    A[1] = flattened_P[i]
+                else:
+
+                    B = (matching_df.iloc[np.where((Combined['T_C'].values == flattened_T[i]) & (Combined['P_bar'].values == below))[0][0],:].values + matching_df.iloc[np.where((Combined['T_C'].values == flattened_T[i]) & (Combined['P_bar'].values == above))[0][0],:].values)/2
+                    B[0] = flattened_T[i]
+                    B[1] = flattened_P[i]
+                    A = np.vstack((A,B))
+
+            else:
+                T_C.append(flattened_T[i])
+                P_bar.append(flattened_P[i])
+        elif flattened_T[i] not in unique_combined_T_C and flattened_P[i] in unique_combined_P_bar:
+            sorted_arr = np.sort(np.unique(flattened_T))
+            idx = np.searchsorted(sorted_arr, flattened_T[i])
+
+            below = sorted_arr[idx - 1]
+            above = sorted_arr[idx + 1]
+
+            if Combined['PhaseResults'].iloc[np.where((Combined['T_C'].values == below) & (Combined['P_bar'].values == flattened_P[i]))[0][0]] == Combined['PhaseResults'].iloc[np.where((Combined['T_C'].values == above) & (Combined['P_bar'].values == flattened_P[i]))[0][0]]:
+                if A is None:
+                    A = (matching_df.iloc[np.where((Combined['T_C'].values == below) & (Combined['P_bar'].values == flattened_P[i]))[0][0],:].values + matching_df.iloc[np.where((Combined['T_C'].values == above) & (Combined['P_bar'].values == flattened_P[i]))[0][0],:].values)/2
+                    A[0] = flattened_T[i]
+                    A[1] = flattened_P[i]
+                else:
+
+                    B = (matching_df.iloc[np.where((Combined['T_C'].values == below) & (Combined['P_bar'].values == flattened_P[i]))[0][0],:].values + matching_df.iloc[np.where((Combined['T_C'].values == above) & (Combined['P_bar'].values == flattened_P[i]))[0][0],:].values)/2
+                    B[0] = flattened_T[i]
+                    B[1] = flattened_P[i]
+                    A = np.vstack((A,B))
+
+            else:
+                T_C.append(flattened_T[i])
+                P_bar.append(flattened_P[i])
+        else:
+            sorted_arr = np.sort(np.unique(flattened_T))
+            idx = np.searchsorted(sorted_arr, flattened_T[i])
+
+            below_T = sorted_arr[idx - 1]
+            above_T = sorted_arr[idx + 1]
+
+            sorted_arr = np.sort(np.unique(flattened_P))
+            idx = np.searchsorted(sorted_arr, flattened_P[i])
+
+            below_P = sorted_arr[idx - 1]
+            above_P = sorted_arr[idx + 1]
+
+            index_1 = np.where((Combined['T_C'].values == below_T) & (Combined['P_bar'].values == below_P))[0][0]
+            index_2 = np.where((Combined['T_C'].values == above_T) & (Combined['P_bar'].values == below_P))[0][0]
+            index_3 = np.where((Combined['T_C'].values == below_T) & (Combined['P_bar'].values == above_P))[0][0]
+            index_4 = np.where((Combined['T_C'].values == above_T) & (Combined['P_bar'].values == above_P))[0][0]
+
+            if Combined['PhaseResults'].loc[index_1] == Combined['PhaseResults'].loc[index_2] == Combined['PhaseResults'].loc[index_3] == Combined['PhaseResults'].loc[index_4]:
+                if A is None:
+                    A = (matching_df.iloc[index_1,:] + matching_df.iloc[index_2,:] + matching_df.iloc[index_3,:] + matching_df.iloc[index_4,:])/4
+                    A[0] = flattened_T[i]
+                    A[1] = flattened_P[i]
+                else:
+                    B = (matching_df.iloc[index_1,:] + matching_df.iloc[index_2,:] + matching_df.iloc[index_3,:] + matching_df.iloc[index_4,:])/4
+                    B[0] = flattened_T[i]
+                    B[1] = flattened_P[i]
+                    A = np.vstack((A,B))
+
+            else:
+                T_C.append(flattened_T[i])
+                P_bar.append(flattened_P[i])
+
+    B = matching_df.values
+
+    C = np.concatenate((A, B))
+
+    matching_df = pd.DataFrame(columns = list(matching_df.keys()), data = C)
+
+    matching_df['T_C'] = np.round(matching_df['T_C'], 2)
+    matching_df['P_bar'] = np.round(matching_df['P_bar'], 2)
+    matching_df = matching_df.sort_values(['T_C', 'P_bar'])
+    matching_df = matching_df.reset_index(drop = True)
+    matching_df = matching_df.dropna(subset = ['T_C'])
+
+    idx_add = np.where(matching_df['h'] == 0.0)[0]
+    
+    T_C = np.array(T_C)
+    P_bar = np.array(P_bar)
+
+    T_C = np.round(np.concatenate((T_C, matching_df.loc[idx_add,'T_C'].values)),2)
+    P_bar = np.round(np.concatenate((P_bar, matching_df.loc[idx_add,'P_bar'].values)),2)
+
+    matching_df = matching_df.loc[np.where(matching_df['h'] != 0.0)[0],:]
+    matching_df = matching_df.reset_index(drop = True)
+
+    New = phaseDiagram_calc(cores = 1, Model = Model, bulk = bulk, T_C = T_C, P_bar = P_bar, Fe3Fet_Liq = Fe3Fet_Liq, H2O_Liq = H2O_Liq, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, i_max = i_max, grid = False)
+
+    # A = New.values
+    # B = matching_df.values
+
+    # C = np.concatenate((A,B))
+
+    out = pd.concat([New,matching_df])
+
+    out['T_C'] = np.round(out['T_C'], 2)
+    out['P_bar'] = np.round(out['P_bar'], 2)
+    out = out.sort_values(['T_C', 'P_bar'])
+    out = out.reset_index(drop = True)
+    out = out.dropna(subset = ['T_C'])
+
+    return out
+
+def tidy_phaseDiagram(Data = None, Model = None, bulk = None, Fe3Fet_Liq = None, H2O_Liq = None, fO2_buffer = None, fO2_offset = None, i_max = 25):
+    Combined = Data.copy()
+    T_C = Combined.loc[np.where(Combined['h'] != 0.0)[0], 'T_C'].values
+    P_bar = Combined.loc[np.where(Combined['h'] != 0.0)[0], 'P_bar'].values
+
+    Combined = Combined.loc[np.where(Combined['h'] != 0.0)[0],:]
+    Combined = Combined.reset_index(drop = True)
+
+    New = phaseDiagram_calc(cores = 1, Model = Model, bulk = bulk, T_C = T_C, P_bar = P_bar, Fe3Fet_Liq = Fe3Fet_Liq, H2O_Liq = H2O_Liq, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, i_max = i_max, grid = False)
+
+    out = pd.concat([New,Combined])
+
+    out['T_C'] = np.round(out['T_C'], 2)
+    out['P_bar'] = np.round(out['P_bar'], 2)
+    out = out.sort_values(['T_C', 'P_bar'])
+    out = out.reset_index(drop = True)
+    out = out.dropna(subset = ['T_C'])
+
+    return out
+
 
 def phaseDiagram_eq(cores = None, Model = None, bulk = None, T_C = None, P_bar = None, T_min_C = None, T_max_C = None, T_num = None, P_min_bar = None, P_max_bar = None, P_num = None, Fe3Fet_Liq = None, H2O_Liq = None, fO2_buffer = None, fO2_offset = None, number_max = 50):
     """

@@ -1,5 +1,5 @@
 import numpy as np
-import pyMelt as m
+# import pyMelt as m
 
 # Saved compositions for use in PetThermoTools
 Compositions = {'KLB-1': {'SiO2_Liq': 44.48,
@@ -36,7 +36,3 @@ Compositions = {'KLB-1': {'SiO2_Liq': 44.48,
                         'H2O_Liq': 0.0,
                         'Fe3Fet_Liq': 0.18}}
 
-Lithologies = {'KLB-1': m.lithologies.matthews.klb1(),
-               'KG1': m.lithologies.matthews.kg1(),
-               'G2': m.lithologies.matthews.eclogite(),
-               'hz': m.lithologies.shorttle.harzburgite()}

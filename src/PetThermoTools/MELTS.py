@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import sys
 import time
-import pyMelt as m
+# import pyMelt as m
 
 def equilibrate_MELTS(Model = None, P_bar = None, T_C = None, comp = None, fO2_buffer = None, fO2_offset = None):
     Results = {}
@@ -1089,6 +1089,15 @@ def findSatPressure_MELTS(Model = None, T_C_init = None, P_bar_init = None, comp
     return out
 
 def AdiabaticDecompressionMelting_MELTS(Model = None, comp = None, Tp_C = None, P_path_bar = None, P_start_bar = None, P_end_bar = None, dp_bar = None, Frac = False, fO2_buffer = None, fO2_offset = None):
+    try:
+        import pyMelt as m     
+        Lithologies = {'KLB-1': m.lithologies.matthews.klb1(),
+                    'KG1': m.lithologies.matthews.kg1(),
+                    'G2': m.lithologies.matthews.eclogite(),
+                    'hz': m.lithologies.shorttle.harzburgite()}
+    except ImportError:
+        raise RuntimeError('You havent installed pyMelt or there is an error when importing pyMelt. pyMelt is currently required to estimate the starting point for the melting calculations.')
+
     Results = {}
 
     if comp is None:

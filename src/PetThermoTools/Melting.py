@@ -10,7 +10,7 @@ from multiprocessing import Process
 import time
 import sys
 from tqdm.notebook import tqdm, trange
-import pyMelt as m
+# import pyMelt as m
 
 def comp_check(comp_lith, Model, MELTS_filter, Fe3Fet):
     if type(comp_lith) == str:
@@ -48,6 +48,16 @@ def AdiabaticDecompressionMelting(cores = multiprocessing.cpu_count(),
                                   P_start_bar = 30000, P_end_bar = 5000, dp_bar = 200, 
                                   P_path_bar = None, Frac = False, prop = None, 
                                   fO2_buffer = None, fO2_offset = None, Fe3Fet = None, MELTS_filter = True):
+    
+    try:
+        import pyMelt as m
+        Lithologies = {'KLB-1': m.lithologies.matthews.klb1(),
+                    'KG1': m.lithologies.matthews.kg1(),
+                    'G2': m.lithologies.matthews.eclogite(),
+                    'hz': m.lithologies.shorttle.harzburgite()}
+    except ImportError:
+        raise RuntimeError('You havent installed pyMelt or there is an error when importing pyMelt. pyMelt is currently required to estimate the starting point for the melting calculations.')
+
     if bulk is not None and comp_lith_1 is None:
         comp_lith_1 = bulk
 
