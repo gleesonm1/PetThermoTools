@@ -12,7 +12,9 @@ from multiprocessing import Queue
 from multiprocessing import Process
 from tqdm.notebook import tqdm, trange
 
-def equilibrate_multi(cores = None, Model = None, bulk = None, T_C = None, P_bar = None, Fe3Fet_Liq = None, H2O_Liq = None, fO2_buffer = None, fO2_offset = None):
+def equilibrate_multi(cores = None, Model = None, bulk = None, T_C = None, P_bar = None, 
+                      Fe3Fet_Liq = None, H2O_Liq = None, fO2_buffer = None, fO2_offset = None,
+                      timeout = None):
     comp = bulk.copy()
 
     if Model is None:
@@ -73,11 +75,27 @@ def equilibrate_multi(cores = None, Model = None, bulk = None, T_C = None, P_bar
                 ps.append(p)
                 p.start()
 
+            if timeout is None:
+                TIMEOUT = 20
+            else:
+                TIMEOUT = timeout
+
+            start = time.time()
+            first = True
             for p in ps:
-                try:
-                    ret = q.get(timeout = 90)
-                except:
-                    ret = []
+                if time.time() - start < TIMEOUT - 10:
+                    try:
+                        ret = q.get(timeout = TIMEOUT - (time.time()-start) + 10)
+                    except:
+                        ret = []
+                else:
+                    if first == True:
+                        print('Timeout Reached - this likely indicates the calculation failed. \n You can try increasing the timeout limit using the "timeout" kwarg.')
+                        first = False
+                    try:
+                        ret = q.get(timeout = 10)
+                    except:
+                        ret = []
 
                 qs.append(ret)
 
@@ -98,12 +116,65 @@ def equilibrate_multi(cores = None, Model = None, bulk = None, T_C = None, P_bar
                     p.join()
                     p.terminate()
 
-        Output = {}
-        for i in range(len(qs)):
-            if len(qs[i])>0:
-                Results, index = qs[i]
+            # for p in ps:
+            #     try:
+            #         ret = q.get(timeout = 90)
+            #     except:
+            #         ret = []
 
-                Output[str(index)] = Results
+            #     qs.append(ret)
+
+            # TIMEOUT = 5
+            # start = time.time()
+            # for p in ps:
+            #     if p.is_alive():
+            #         while time.time() - start <= TIMEOUT:
+            #             if not p.is_alive():
+            #                 p.join()
+            #                 p.terminate()
+            #                 break
+            #             time.sleep(.1)
+            #         else:
+            #             p.terminate()
+            #             p.join(5)
+            #     else:
+            #         p.join()
+            #         p.terminate()
+
+        Output = {}
+        if len(qs) > 1:
+            for i in range(len(qs)):
+                if len(qs[i])>0:
+                    Results, index = qs[i]
+
+                    Output[str(index)] = Results
+
+            if "MELTS" in Model:
+                Output = stich(Output, multi = True, Model = "MELTS")
+
+            int_keys = list(map(int, Output.keys()))
+
+            # Determine the size of the resulting DataFrame
+            max_index = max(int_keys)
+
+            # Initialize an empty DataFrame with NaNs
+            all_columns = set()
+            for df in Output.values():
+                all_columns.update(df['All'].columns)
+            all_columns = list(all_columns)
+
+            Combined = pd.DataFrame(np.nan, index=range(max_index + 1), columns=all_columns)
+
+            # Populate the result DataFrame
+            for key, df in Output.items():
+                Combined.loc[int(key)] = df['All'].iloc[0]
+            
+        else:
+            if len(qs[0]) > 0:
+                Output, index = qs[0]
+            
+                if "MELTS" in Model:
+                    Output = stich(Output, Model = Model)
 
     if type(comp) != pd.core.frame.DataFrame:
         A = len(P_bar)//cores
@@ -127,11 +198,27 @@ def equilibrate_multi(cores = None, Model = None, bulk = None, T_C = None, P_bar
                 ps.append(p)
                 p.start()
 
+            if timeout is None:
+                TIMEOUT = 20
+            else:
+                TIMEOUT = timeout
+
+            start = time.time()
+            first = True
             for p in ps:
-                try:
-                    ret = q.get(timeout = 90)
-                except:
-                    ret = []
+                if time.time() - start < TIMEOUT - 10:
+                    try:
+                        ret = q.get(timeout = TIMEOUT - (time.time()-start) + 10)
+                    except:
+                        ret = []
+                else:
+                    if first == True:
+                        print('Timeout Reached - this likely indicates the calculation failed. \n You can try increasing the timeout limit using the "timeout" kwarg.')
+                        first = False
+                    try:
+                        ret = q.get(timeout = 10)
+                    except:
+                        ret = []
 
                 qs.append(ret)
 
@@ -162,6 +249,24 @@ def equilibrate_multi(cores = None, Model = None, bulk = None, T_C = None, P_bar
 
             if "MELTS" in Model:
                 Output = stich(Output, multi = True, Model = Model)
+
+            int_keys = list(map(int, Output.keys()))
+
+            # Determine the size of the resulting DataFrame
+            max_index = max(int_keys)
+
+            # Initialize an empty DataFrame with NaNs
+            all_columns = set()
+            for df in Output.values():
+                all_columns.update(df['All'].columns)
+            all_columns = list(all_columns)
+
+            Combined = pd.DataFrame(np.nan, index=range(max_index + 1), columns=all_columns)
+
+            # Populate the result DataFrame
+            for key, df in Output.items():
+                Combined.loc[int(key)] = df['All'].iloc[0]
+
         else:
             if len(qs[0]) > 0:
                 Output, index = qs[0]
@@ -169,7 +274,7 @@ def equilibrate_multi(cores = None, Model = None, bulk = None, T_C = None, P_bar
                 if "MELTS" in Model:
                     Output = stich(Output, Model = Model)
 
-    return Output
+    return Output, Combined
 
 def findCO2_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P_bar = None, Fe3Fet_Liq = None, H2O_Liq = None, fO2_buffer = None, fO2_offset = None):
 

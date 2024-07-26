@@ -227,8 +227,8 @@ def stich_work(Results = None, Order = None, Model = "MELTS", Frac_fluid = None,
     for R in SN:
         # if "_prop" not in R and R != "Conditions" and R!= "sys":
         if "MELTS" in Model:
-            Results[R]['FeOt'] = Results[R]['FeO'] + 71.844/(158.69/2)*Results[R]['Fe2O3']
-            Results[R]['Fe3Fet'] = (71.844/(159.69/2)*Results[R]['Fe2O3'])/Results[R]['FeOt']
+            Results[R].loc[:,'FeOt'] = Results[R].loc[:,'FeO'] + 71.844/(158.69/2)*Results[R].loc[:,'Fe2O3']
+            Results[R].loc[:,'Fe3Fet'] = (71.844/(159.69/2)*Results[R].loc[:,'Fe2O3'])/Results[R].loc[:,'FeOt']
             try:
                 Results[R][Results[R + '_prop']['mass'] == 0.0] = np.nan
             except:
