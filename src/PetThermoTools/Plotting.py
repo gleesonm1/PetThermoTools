@@ -345,7 +345,8 @@ def residualT_plot(Results = None, P_bar = None, phases = None, H2O_Liq = None, 
                         a[i][j].plot_surface(X_new, Y_new, z_plot, cmap = 'viridis')
                         a[i][j].set_zlim([0,50])
 
-def plot_phaseDiagram(Model = "Holland", Combined = None, P_units = "bar", T_units = "C", lines = None, T_C = None, P_bar = None):
+def plot_phaseDiagram(Model = "Holland", Combined = None, P_units = "bar", T_units = "C", 
+                      lines = None, T_C = None, P_bar = None, label = True):
     '''
     This function plots the phase diagrams based on the results obtained from thermodynamic models.
     The data should be organized in a pandas dataframe that contains two
@@ -452,21 +453,22 @@ def plot_phaseDiagram(Model = "Holland", Combined = None, P_units = "bar", T_uni
     cmap = plt.get_cmap('Reds')
     #cmap = cmap(np.linspace(1,0,len(np.unique(np.unique(Results['Phase'])))+1))
     cmap = cmap(np.linspace(1,0,len(C)+1))
-    for i in C: #np.unique(np.unique(Results['Phase'])):
+    for i in range(len(C)): #np.unique(np.unique(Results['Phase'])):
         # if len(Results['PhaseNo.'].values[np.where(Results['Phase'].values == i)]) > 1200:
-        #     T_print = np.nanmean(Results['T_C'][Results['Phase'] == i])
-        #     P_print = np.nanmean(Results['P_bar'][Results['Phase'] == i])
+        T_print = np.nanmedian(Results['T_C'][Results['Phase'] == C[i]])
+        P_print = np.nanmedian(Results['P_bar'][Results['Phase'] == C[i]])
         #
         #     p = np.polyfit(Results['T_C'][Results['Phase'] == i], Results['P_bar'][Results['Phase'] == i], 1)
         #
-        #     a[0].text(T_print, P_print, i,
-        #             horizontalalignment='center',
-        #             verticalalignment='center',
-        #         fontsize = 8,
-        #             rotation = p[0])
+        if label is not None:
+            a[0].text(T_print, P_print, str(round(i)),
+                    horizontalalignment='center',
+                    verticalalignment='center',
+                fontsize = 8)
 
-        a[1].plot(0,j, 'sk', markerfacecolor = cmap[j-1][0:3], ms = 10)
-        a[1].text(1, j-0.2, i, fontsize = 10)
+        a[1].plot(0,j, 'sk', markerfacecolor = 'w', mec = 'none', ms = 10)
+        a[1].text(1, j-0.2, str(round(i)) + '. ' + C[i], fontsize = 10)
+        # a[1].set_ylim([1.1,-0.1])
         j = j-1
 
     a[1].set_xlim([-0.2, 4])
