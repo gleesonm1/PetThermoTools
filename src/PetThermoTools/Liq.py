@@ -116,38 +116,18 @@ def equilibrate_multi(cores = None, Model = None, bulk = None, T_C = None, P_bar
                     p.join()
                     p.terminate()
 
-            # for p in ps:
-            #     try:
-            #         ret = q.get(timeout = 90)
-            #     except:
-            #         ret = []
-
-            #     qs.append(ret)
-
-            # TIMEOUT = 5
-            # start = time.time()
-            # for p in ps:
-            #     if p.is_alive():
-            #         while time.time() - start <= TIMEOUT:
-            #             if not p.is_alive():
-            #                 p.join()
-            #                 p.terminate()
-            #                 break
-            #             time.sleep(.1)
-            #         else:
-            #             p.terminate()
-            #             p.join(5)
-            #     else:
-            #         p.join()
-            #         p.terminate()
-
         Output = {}
+        Affinity = {}
         if len(qs) > 1:
             for i in range(len(qs)):
                 if len(qs[i])>0:
                     Results, index = qs[i]
 
-                    Output[str(index)] = Results
+                    try:
+                        Output[str(index)] = Results[0]
+                        Affinity[str(index)] = Results[1]
+                    except:
+                        continue
 
             if "MELTS" in Model:
                 Output = stich(Output, multi = True, Model = "MELTS")
@@ -157,21 +137,58 @@ def equilibrate_multi(cores = None, Model = None, bulk = None, T_C = None, P_bar
             # Determine the size of the resulting DataFrame
             max_index = max(int_keys)
 
-            # Initialize an empty DataFrame with NaNs
-            all_columns = set()
+            # Initialize an empty list to maintain column order
+            all_columns = []
+            seen_columns = set()
+
             for df in Output.values():
-                all_columns.update(df['All'].columns)
-            all_columns = list(all_columns)
+                for col in df['All'].columns:
+                    if col not in seen_columns:
+                        all_columns.append(col)
+                        seen_columns.add(col)
 
             Combined = pd.DataFrame(np.nan, index=range(max_index + 1), columns=all_columns)
 
             # Populate the result DataFrame
             for key, df in Output.items():
-                Combined.loc[int(key)] = df['All'].iloc[0]
+                try:
+                    Combined.loc[int(key)] = df['All'].iloc[0]
+                except:
+                    continue
+
+            # Affinity combined
+            int_keys = list(map(int, Affinity.keys()))
+
+            # Determine the size of the resulting DataFrame
+            max_index = max(int_keys)
+
+            # Initialize an empty list to maintain column order
+            all_columns = []
+            seen_columns = set()
+
+            for d in Affinity:
+                for col in Affinity[d]:
+                    if col not in seen_columns:
+                        all_columns.append(col)
+                        seen_columns.add(col)
+                
+                Affinity[d] = pd.Series(Affinity[d])
+
+            Af_Combined = pd.DataFrame(np.nan, index=range(max_index + 1), columns=all_columns)
+
+            # Populate the result DataFrame
+            for d in Affinity:
+                try:
+                    df = Affinity[d].to_frame().transpose()
+                    Af_Combined.loc[int(d)] = df.iloc[0]
+                except:
+                    continue
             
         else:
             if len(qs[0]) > 0:
-                Output, index = qs[0]
+                Results, index = qs[0]
+                Output = Results[0]
+                Affinity = Results[1]
             
                 if "MELTS" in Model:
                     Output = stich(Output, Model = Model)
@@ -240,41 +257,83 @@ def equilibrate_multi(cores = None, Model = None, bulk = None, T_C = None, P_bar
                     p.terminate()
 
         Output = {}
+        Affinity = {}
         if len(qs) > 1:
             for i in range(len(qs)):
                 if len(qs[i])>0:
                     Results, index = qs[i]
 
-                    Output[str(index)] = Results
+                    try:
+                        Output[str(index)] = Results[0]
+                        Affinity[str(index)] = Results[1]
+                    except:
+                        continue
 
             if "MELTS" in Model:
                 Output = stich(Output, multi = True, Model = Model)
 
+            # Output combined
             int_keys = list(map(int, Output.keys()))
 
             # Determine the size of the resulting DataFrame
             max_index = max(int_keys)
 
-            # Initialize an empty DataFrame with NaNs
-            all_columns = set()
+            # Initialize an empty list to maintain column order
+            all_columns = []
+            seen_columns = set()
+
             for df in Output.values():
-                all_columns.update(df['All'].columns)
-            all_columns = list(all_columns)
+                for col in df['All'].columns:
+                    if col not in seen_columns:
+                        all_columns.append(col)
+                        seen_columns.add(col)
 
             Combined = pd.DataFrame(np.nan, index=range(max_index + 1), columns=all_columns)
 
             # Populate the result DataFrame
             for key, df in Output.items():
-                Combined.loc[int(key)] = df['All'].iloc[0]
+                try:
+                    Combined.loc[int(key)] = df['All'].iloc[0]
+                except:
+                    continue
 
+            # Affinity combined
+            int_keys = list(map(int, Affinity.keys()))
+
+            # Determine the size of the resulting DataFrame
+            max_index = max(int_keys)
+
+            # Initialize an empty list to maintain column order
+            all_columns = []
+            seen_columns = set()
+
+            for d in Affinity:
+                for col in Affinity[d]:
+                    if col not in seen_columns:
+                        all_columns.append(col)
+                        seen_columns.add(col)
+                Affinity[d] = pd.Series(Affinity[d])
+
+            Af_Combined = pd.DataFrame(np.nan, index=range(max_index + 1), columns=all_columns)
+
+            # Populate the result DataFrame
+            for d in Affinity:
+                try:
+                    df = Affinity[d].to_frame().transpose()
+                    Af_Combined.loc[int(d)] = df.iloc[0]
+                except:
+                    continue
         else:
             if len(qs[0]) > 0:
                 Output, index = qs[0]
+                Output = Results[0]
+                Affinity = Results[1]
             
                 if "MELTS" in Model:
                     Output = stich(Output, Model = Model)
 
-    return Output, Combined
+    Affinity = Af_Combined.copy()
+    return Output, Combined, Affinity
 
 def findCO2_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P_bar = None, Fe3Fet_Liq = None, H2O_Liq = None, fO2_buffer = None, fO2_offset = None):
 
@@ -415,7 +474,7 @@ def findCO2_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P
 
     return T_Liq, H2O, CO2
 
-def findLiq_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P_bar = None, Fe3Fet_Liq = None, H2O_Liq = None, fO2_buffer = None, fO2_offset = None, CO2_return = None):
+def findLiq_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P_bar = None, Fe3Fet_Liq = None, H2O_Liq = None, fO2_buffer = None, fO2_offset = None, CO2_return = None, Affinity = False):
     '''
     Carry out multiple findLiq calculations in parallel.
 
@@ -454,11 +513,8 @@ def findLiq_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P
 
     Returns:
     ----------
-    T_Liq_C: np.ndarray
-        Array of liquidus temperatures.
-
-    H2O: np.ndarray
-        Array of melt H2O contents at the liquidus.
+    Results: dictionary (single input) or DataFrame
+        Record of liquidus temperature, liquidus phase, fluid saturation and normalized melt chemistry.
     '''
     comp = bulk.copy()
 
@@ -479,20 +535,14 @@ def findLiq_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P
         if type(comp) != dict:
             T_Liq = np.zeros(len(comp['SiO2_Liq'].values))
             T_in = np.zeros(len(comp['SiO2_Liq'].values))
-            H2O_melt = np.zeros(len(comp['SiO2_Liq'].values))
-            CO2_melt = np.zeros(len(comp['SiO2_Liq'].values))
             index = np.zeros(len(comp['SiO2_Liq'].values)) - 1
         else:
             T_Liq = np.zeros(len(P_bar))
             T_in = np.zeros(len(P_bar))
-            H2O_melt = np.zeros(len(P_bar))
-            CO2_melt = np.zeros(len(P_bar))
             index = np.zeros(len(P_bar)) - 1
     else:
         T_Liq = 0
         T_in = 0
-        H2O_melt = 0
-        CO2_melt = 0
         index = 0
 
     if T_initial_C is None:
@@ -542,17 +592,17 @@ def findLiq_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P
         for i in range(int(cores*j), int(cores*j + Group[j])):
             if type(comp) == dict:
                 if type(P_bar) == np.ndarray:
-                    p = Process(target = findLiq, args = (q, i), kwargs = {'Model': Model, 'P_bar': P_bar[i], 'T_initial_C': T_initial_C[i], 'comp': comp, 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset, 'CO2_return': CO2_return})
+                    p = Process(target = findLiq, args = (q, i), kwargs = {'Model': Model, 'P_bar': P_bar[i], 'T_initial_C': T_initial_C[i], 'comp': comp, 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset, 'CO2_return': CO2_return, 'Affinity': Affinity})
                 else:
-                    p = Process(target = findLiq, args = (q, i), kwargs = {'Model': Model, 'P_bar': P_bar, 'T_initial_C': T_initial_C[i], 'comp': comp, 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset, 'CO2_return': CO2_return})
+                    p = Process(target = findLiq, args = (q, i), kwargs = {'Model': Model, 'P_bar': P_bar, 'T_initial_C': T_initial_C[i], 'comp': comp, 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset, 'CO2_return': CO2_return, 'Affinity': Affinity})
             else:
                 if type(P_bar) == np.ndarray:
                     if len(comp['SiO2_Liq']) != len(P_bar):
                         raise Warning("The length of your composition and pressure variables are different. Please correct this before running the code.")
 
-                    p = Process(target = findLiq, args = (q, i), kwargs = {'Model': Model, 'P_bar': P_bar[i], 'T_initial_C': T_initial_C[i], 'comp': comp.loc[i].to_dict(), 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset, 'CO2_return': CO2_return})
+                    p = Process(target = findLiq, args = (q, i), kwargs = {'Model': Model, 'P_bar': P_bar[i], 'T_initial_C': T_initial_C[i], 'comp': comp.loc[i].to_dict(), 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset, 'CO2_return': CO2_return, 'Affinity': Affinity})
                 else:
-                    p = Process(target = findLiq, args = (q, i), kwargs = {'Model': Model, 'P_bar': P_bar, 'T_initial_C': T_initial_C[i], 'comp': comp.loc[i].to_dict(), 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset, 'CO2_return': CO2_return})
+                    p = Process(target = findLiq, args = (q, i), kwargs = {'Model': Model, 'P_bar': P_bar, 'T_initial_C': T_initial_C[i], 'comp': comp.loc[i].to_dict(), 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset, 'CO2_return': CO2_return, 'Affinity': Affinity})
 
             ps.append(p)
             p.start()
@@ -591,40 +641,67 @@ def findLiq_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P
                 p.join()
                 p.terminate()
 
+    Affin = {}
     if type(comp) != dict or type(P_bar) == np.ndarray:
         Results = pd.DataFrame(data = np.zeros((len(T_Liq), 17)), columns = ['T_Liq', 'liquidus_phase', 'fluid_saturated', 'SiO2', 'TiO2', 'Al2O3', 'Fe2O3', 'Cr2O3', 'FeO', 'MnO', 'MgO', 'CaO', 'Na2O', 'K2O', 'P2O5', 'H2O', 'CO2'])
         for i in range(len(qs)):
             if len(qs[i])>0:
-                Res, index, T_in[i] = qs[i]
-                for j in Res:
-                    Results.loc[index] = Res
+                if Affinity is True:
+                    Res, Af, index = qs[i]
+                    Affin[str(index)] = Af
+                else:
+                    Res, index = qs[i]
 
-        # H2O = np.zeros(len(T_Liq))
-        # CO2 = np.zeros(len(T_Liq))
-        # T_Liq_C = np.zeros(len(T_Liq))
-
-        # for i in range(len(index)):
-        #     if len(T_Liq[index == i]) > 0:
-        #         T_Liq_C[i] = T_Liq[index == i]
-        #         H2O[i] = H2O_melt[index == i]
-        #         CO2[i] = CO2_melt[index == i]
+                Results.loc[index,:] = Res
     else:
-        Results, index, T_in = qs[0]
+        if Affinity is True:
+            Results, Affin, index = qs[0]
+        else:
+            Results, index = qs[0]
 
     Res = comp_fix(Model = Model, comp = Results)
-    #Res = Res[['T_Liq', 'liquidus_phase', 'fluid_saturated', 'SiO2_Liq', 'TiO2_Liq', 'Al2O3_Liq', 'FeOt_Liq', 'MnO_Liq', 'MgO_Liq', 'CaO_Liq', 'Na2O_Liq', 'K2O_Liq', 'P2O5_Liq', 'H2O_Liq', 'CO2_Liq']]
-    #Res.rename(columns = {'T_Liq': 'T_C_Liq'})
     if type(Res) == dict:
         Res = pd.DataFrame.from_dict(Res, orient = "index").T
 
     Res = Res[['T_Liq', 'liquidus_phase', 'fluid_saturated', 
-       'SiO2_Liq', 'TiO2_Liq', 'Al2O3_Liq', 'FeOt_Liq','MnO_Liq', 'MgO_Liq', 'CaO_Liq',
+       'SiO2_Liq', 'TiO2_Liq', 'Al2O3_Liq', 'Cr2O3_Liq', 'FeOt_Liq','MnO_Liq', 'MgO_Liq', 'CaO_Liq',
        'Na2O_Liq', 'K2O_Liq', 'P2O5_Liq', 'H2O_Liq', 'CO2_Liq', 
-       'Fe3Fet_Liq', 'Fe2O3', 'Cr2O3', 'FeO', ]]
+       'Fe3Fet_Liq', 'Fe2O3', 'FeO', ]]
     
-    Res = Res.drop(columns = ['Fe2O3', 'Cr2O3', 'FeO'])
+    Res = Res.drop(columns = ['Fe2O3',  'FeO']) # 'Cr2O3',
 
-    return Res
+    if Affinity is True:
+        # Affinity combined
+        int_keys = list(map(int, Affin.keys()))
+
+        # Determine the size of the resulting DataFrame
+        max_index = max(int_keys)
+
+        # Initialize an empty list to maintain column order
+        all_columns = []
+        seen_columns = set()
+
+        for d in Affin:
+            for col in Affin[d]:
+                if col not in seen_columns:
+                    all_columns.append(col)
+                    seen_columns.add(col)
+            
+            Affin[d] = pd.Series(Affin[d])
+
+        Af_Combined = pd.DataFrame(np.nan, index=range(max_index + 1), columns=all_columns)
+
+        # Populate the result DataFrame
+        for d in Affin:
+            try:
+                df = Affin[d].to_frame().transpose()
+                Af_Combined.loc[int(d)] = df.iloc[0]
+            except:
+                continue
+        
+        return Res, Af_Combined
+    else:
+        return Res
 
 def findCO2(q, index, *, Model = None, P_bar = None, T_initial_C = None, comp = None, fO2_buffer = None, fO2_offset = None):
     T_Liq = 0
@@ -640,7 +717,7 @@ def findCO2(q, index, *, Model = None, P_bar = None, T_initial_C = None, comp = 
         #    q.put([T_Liq, H2O_Melt, CO2_Melt, index])
         #    return
 
-def findLiq(q, index,*, Model = None, P_bar = None, T_initial_C = None, comp = None, fO2_buffer = None, fO2_offset = None, CO2_return = None):
+def findLiq(q, index,*, Model = None, P_bar = None, T_initial_C = None, comp = None, fO2_buffer = None, fO2_offset = None, CO2_return = None, Affinity = False):
     '''
     Searches for the liquidus of a melt at the pressure specified. Multiple instances of findLiq are typically initiated in parallel.
 
@@ -682,14 +759,26 @@ def findLiq(q, index,*, Model = None, P_bar = None, T_initial_C = None, comp = N
 
     T_in = T_initial_C
 
+    
     if "MELTS" in Model:
         try:
-            Results = findLiq_MELTS(P_bar = P_bar, Model = Model, T_C_init = T_initial_C, comp = comp, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset)
+            if Affinity is True:
+                Results, Affin = findLiq_MELTS(P_bar = P_bar, Model = Model, T_C_init = T_initial_C, comp = comp, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, Affinity = Affinity)
+            else:
+                Results = findLiq_MELTS(P_bar = P_bar, Model = Model, T_C_init = T_initial_C, comp = comp, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, Affinity = Affinity)
 
-            q.put([Results, index, T_in])
+            if Affinity is True:
+                q.put([Results, Affin, index])
+            else:
+                q.put([Results, index])
             return
         except:
-            q.put([Results, index, T_in])
+            Results = {} #pd.DataFrame(data = np.zeros((1, 17)), columns = ['T_Liq', 'liquidus_phase', 'fluid_saturated', 'SiO2', 'TiO2', 'Al2O3', 'Fe2O3', 'Cr2O3', 'FeO', 'MnO', 'MgO', 'CaO', 'Na2O', 'K2O', 'P2O5', 'H2O', 'CO2'])
+            Affin = {}
+            if Affinity is True:
+                q.put([Results, Affin, index])
+            else:
+                q.put([Results, index])
             return
 
     if Model == "Holland":

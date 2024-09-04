@@ -10,7 +10,111 @@ import time
 import sys
 from tqdm.notebook import tqdm, trange
 
-def findSatPressure(cores = None, Model = None, bulk = None, T_C_init = None, P_bar_init = None, Fe3Fet_Liq = None, H2O_Liq = None, CO2_Liq = None, fO2_buffer = None, fO2_offset = None):
+def findSatPressure_multi(cores = multiprocessing.cpu_count(), Model = "MELTSv1.2.0", bulk = None, T_fixed_C = None, 
+                          P_bar_init = None, Fe3Fet_Liq = None, H2O_Liq = None, CO2_Liq = None, 
+                          fO2_buffer = None, fO2_offset = None):
+    
+    comp = bulk.copy()
+
+    if T_fixed_C is None:
+        raise Warning("Please specify a temperature.")
+
+    # ensure the bulk composition has the correct headers etc.
+    comp = comp_fix(Model = Model, comp = comp, Fe3Fet_Liq = Fe3Fet_Liq, H2O_Liq = H2O_Liq, CO2_Liq = CO2_Liq)
+
+    if type(comp) == dict:
+        if comp['H2O_Liq'] == 0.0 and "MELTS" in Model:
+            raise Warning("Adding small amounts of H$_{2}$O may improve the ability of MELTS to accurately reproduce the saturation of oxide minerals. Additionally, sufficient H$_{2}$O is required in the model for MELTS to predict the crystallisation of apatite, rather than whitlockite.")
+
+        if comp['Fe3Fet_Liq'] == 0.0 and "MELTS" in Model and fO2_buffer is None:
+            raise Warning("MELTS often fails to produce any results when no ferric Fe is included in the starting composition and an fO2 buffer is not set.")
+
+    if P_bar_init is None:
+        P_bar_init = np.zeros(len(comp['SiO2_Liq'])) + 2000
+
+    comp.loc[:, "Sample_ID_Liq"] = np.linspace(0,len(comp['SiO2_Liq'])-1, len(comp['SiO2_Liq']))
+    
+    if type(P_bar_init) == int or type(P_bar_init) == float:
+        P_bar_init = np.zeros(len(comp['SiO2_Liq'])) + P_bar_init
+    comp.loc[:, "P_bar"] = P_bar_init
+
+    if type(T_fixed_C) == int or type(T_fixed_C) == float:
+        T_fixed_C = np.zeros(len(comp['SiO2_Liq'])) + T_fixed_C
+    comp.loc[:, "T_fixed_C"] = T_fixed_C
+
+    if fO2_offset is None:
+        comp.loc[:, "fO2_offset"] = [None] * int(len(comp['SiO2_Liq']))
+    else:
+        if type(fO2_offset) == float or type(fO2_offset) == int:
+            fO2_offset = np.zeros(len(comp['SiO2_Liq'])) + fO2_offset
+        comp.loc[:, "fO2_offset"] = fO2_offset    
+    
+    splits = np.array_split(comp, cores)
+    Combined = None
+
+    qs = []
+    q = Queue()
+
+    ps = []
+    for i in range(cores):
+        df = splits[i].reset_index(drop=True)
+        p = Process(target = satP_multi, args = (q, i),
+                        kwargs = {'Model': Model, 'comp': df,
+                                'fO2_buffer': fO2_buffer})
+
+        ps.append(p)
+        p.start()
+
+    TIMEOUT = 20
+        
+    start = time.time()
+    for p in ps:
+        if time.time() - start < TIMEOUT - 10:
+            try:
+                ret = q.get(timeout = TIMEOUT - (time.time()-start) + 10)
+            except:
+                ret = []
+        else:
+            try:
+                ret = q.get(timeout = 10)
+            except:
+                ret = []
+
+        qs.append(ret)
+
+    TIMEOUT = 5
+    start = time.time()
+    for p in ps:
+        if p.is_alive():
+            while time.time() - start <= TIMEOUT:
+                if not p.is_alive():
+                    p.join()
+                    p.terminate()
+                    break
+                time.sleep(.1)
+            else:
+                p.terminate()
+                p.join(5)
+        else:
+            p.join()
+            p.terminate()
+
+    for i in range(len(qs)):
+        if len(qs[i]) > 0:
+            Res, index = qs[i]
+            if Combined is None:
+                Combined = Res.copy()
+            else:
+                Combined = pd.concat([Combined, Res])
+
+    Results = Combined.sort_values(by='Sample_ID_Liq')
+
+    # Reset index if needed
+    Results.reset_index(drop=True, inplace=True)
+
+    return Results
+
+def findSatPressure(cores = None, Model = None, bulk = None, T_C_init = None, T_fixed_C = None, P_bar_init = None, Fe3Fet_Liq = None, H2O_Liq = None, CO2_Liq = None, fO2_buffer = None, fO2_offset = None):
     """
     Calculates the saturation pressure of a specified composition in the liquid or melt phase. The function will return the saturation pressure of the liquid or melt as a pandas dataframe. If the saturation pressure cannot be calculated, the function will return an empty dataframe.
 
@@ -41,7 +145,7 @@ def findSatPressure(cores = None, Model = None, bulk = None, T_C_init = None, P_
 
     comp = bulk.copy()
 
-    if T_C_init is None:
+    if T_C_init is None and T_fixed_C is None:
         T_C_init = 1200
 
     if P_bar_init is None:
@@ -70,12 +174,13 @@ def findSatPressure(cores = None, Model = None, bulk = None, T_C_init = None, P_
     # specify the number of calculations to be performed in each sequence
     if type(comp) == dict:
         p = Process(target = satP, args = (q, 0),
-                    kwargs = {'Model': Model, 'comp': comp, 'T_C_init': T_C_init, 'P_bar_init': P_bar_init,
+                    kwargs = {'Model': Model, 'comp': comp, 'T_C_init': T_C_init,
+                              'T_fixed_C': T_fixed_C, 'P_bar_init': P_bar_init,
                             'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset})
 
         p.start()
         try:
-            ret = q.get(timeout = 180)
+            ret = q.get(timeout = 60)
         except:
             ret = []
 
@@ -116,8 +221,14 @@ def findSatPressure(cores = None, Model = None, bulk = None, T_C_init = None, P_
         L = np.sum(Group)
         if type(P_bar_init) == float or type(P_bar_init) == int:
             P_bar_init = np.zeros(int(L)) + P_bar_init
-        if type(T_C_init) == float or type(T_C_init) == int:
-            T_C_init = np.zeros(int(L)) + T_C_init
+        if T_fixed_C is None:
+            if type(T_C_init) == float or type(T_C_init) == int:
+                T_C_init = np.zeros(int(L)) + T_C_init
+            T_fixed_C = [None]*int(L)
+        else:
+            if type(T_fixed_C) == float or type(T_fixed_C) == int:
+                T_fixed_C = np.zeros(int(L)) + T_fixed_C
+            T_C_init = [None] * int(L)
         if fO2_offset is None:
             fO2_offset = [None] * int(L)
         else:
@@ -129,13 +240,14 @@ def findSatPressure(cores = None, Model = None, bulk = None, T_C_init = None, P_
 
             for i in range(int(cores*j), int(cores*j + Group[j])):
                 p = Process(target = satP, args = (q, i),
-                            kwargs = {'Model': Model, 'comp': comp.loc[i].to_dict(), 'T_C_init': T_C_init[i], 'P_bar_init': P_bar_init[i],
+                            kwargs = {'Model': Model, 'comp': comp.loc[i].to_dict(), 'T_C_init': T_C_init[i], 
+                                      'T_fixed_C': T_fixed_C[i], 'P_bar_init': P_bar_init[i],
                                     'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset[i]})
 
                 ps.append(p)
                 p.start()
 
-            TIMEOUT = 420
+            TIMEOUT = 20
             
             start = time.time()
             for p in ps:
@@ -169,31 +281,6 @@ def findSatPressure(cores = None, Model = None, bulk = None, T_C_init = None, P_
                     p.join()
                     p.terminate()
 
-            # for p in ps:
-            #     try:
-            #         ret = q.get(timeout = 180)
-            #     except:
-            #         ret = []
-
-            #     qs.append(ret)
-
-            # TIMEOUT = 5
-            # start = time.time()
-            # for p in ps:
-            #     if p.is_alive():
-            #         while time.time() - start <= TIMEOUT:
-            #             if not p.is_alive():
-            #                 p.join()
-            #                 p.terminate()
-            #                 break
-            #             time.sleep(.1)
-            #         else:
-            #             p.terminate()
-            #             p.join(5)
-            #     else:
-            #         p.join()
-            #         p.terminate()
-
         Res = pd.DataFrame(data = np.zeros((int(L),15)), columns = ['SiO2_Liq', 'TiO2_Liq', 'Al2O3_Liq', 'FeOt_Liq', 'MnO_Liq', 'MgO_Liq', 'CaO_Liq', 'Na2O_Liq', 'K2O_Liq', 'P2O5_Liq', 'H2O_Liq', 'CO2_Liq', 'Fe3Fet_Liq', 'P_bar', 'T_Liq'])
         for i in range(len(qs)):
             if len(qs[i]) > 0:
@@ -203,7 +290,7 @@ def findSatPressure(cores = None, Model = None, bulk = None, T_C_init = None, P_
         return Res
 
 
-def satP(q, index, *, Model = None, comp = None, T_C_init = None, P_bar_init = None, fO2_buffer = None, fO2_offset = None):
+def satP(q, index, *, Model = None, comp = None, T_C_init = None, T_fixed_C = None, P_bar_init = None, fO2_buffer = None, fO2_offset = None):
     """Find the saturation pressure for a given composition and temperature.
 
     This function calculates the volatile saturation pressure for a given composition using the MELTS models. The results are returned in the form of a tuple and added to the specified queue.
@@ -223,6 +310,14 @@ def satP(q, index, *, Model = None, comp = None, T_C_init = None, P_bar_init = N
     """
 
     if "MELTS" in Model:
-        Results = findSatPressure_MELTS(Model = Model, T_C_init = T_C_init, P_bar_init = P_bar_init, comp = comp, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset)
+        Results = findSatPressure_MELTS(Model = Model, T_C_init = T_C_init, T_fixed_C=T_fixed_C, P_bar_init = P_bar_init, comp = comp, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset)
         q.put([Results, index])
         return
+    
+def satP_multi(q, index, *, Model = None, comp = None, fO2_buffer = None):
+    if "MELTS" in Model:
+        Results = findSatPressure_MELTS_multi(Model = Model, comp = comp, fO2_buffer=fO2_buffer, fO2_offset=comp['fO2_offset'],
+                                              P_bar = comp['P_bar'], T_fixed_C=comp['T_fixed_C'])
+        q.put([Results, index])
+        return
+    

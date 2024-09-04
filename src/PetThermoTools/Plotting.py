@@ -346,7 +346,7 @@ def residualT_plot(Results = None, P_bar = None, phases = None, H2O_Liq = None, 
                         a[i][j].set_zlim([0,50])
 
 def plot_phaseDiagram(Model = "Holland", Combined = None, P_units = "bar", T_units = "C", 
-                      lines = None, T_C = None, P_bar = None, label = True):
+                      lines = None, T_C = None, P_bar = None, label = True, colormap = None):
     '''
     This function plots the phase diagrams based on the results obtained from thermodynamic models.
     The data should be organized in a pandas dataframe that contains two
@@ -404,7 +404,7 @@ def plot_phaseDiagram(Model = "Holland", Combined = None, P_units = "bar", T_uni
         B[np.where(Results['Phase'] == C[i])] = i
 
     Results['PhaseNo.'] = B
-    Results['PhaseNo.'][Results['Phase'] == "None"] = np.nan
+    Results.loc[Results['Phase'] == "None", 'PhaseNo.'] = np.nan
 
     PT_Results = {}
     PT_Results['T_C'] = Results['T_C'].values.reshape((len(T_C),len(P_bar)))
@@ -450,7 +450,11 @@ def plot_phaseDiagram(Model = "Holland", Combined = None, P_units = "bar", T_uni
 
     #j = len(np.unique(np.unique(Results['Phase'])))
     j = len(C)
-    cmap = plt.get_cmap('Reds')
+    if colormap is None:
+        cmap = plt.get_cmap('Reds')
+    else:
+        cmap = plt.get_cmap(colormap)
+
     #cmap = cmap(np.linspace(1,0,len(np.unique(np.unique(Results['Phase'])))+1))
     cmap = cmap(np.linspace(1,0,len(C)+1))
     for i in range(len(C)): #np.unique(np.unique(Results['Phase'])):
@@ -460,7 +464,7 @@ def plot_phaseDiagram(Model = "Holland", Combined = None, P_units = "bar", T_uni
         #
         #     p = np.polyfit(Results['T_C'][Results['Phase'] == i], Results['P_bar'][Results['Phase'] == i], 1)
         #
-        if label is not None:
+        if label is True:
             a[0].text(T_print, P_print, str(round(i)),
                     horizontalalignment='center',
                     verticalalignment='center',
@@ -527,4 +531,4 @@ def plot_phaseDiagram(Model = "Holland", Combined = None, P_units = "bar", T_uni
 
     plt.show()
 
-    return
+    return f, a

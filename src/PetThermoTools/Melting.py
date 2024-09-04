@@ -177,6 +177,15 @@ def AdiabaticMelt(q, index, *, Model = None, comp_1 = None, comp_2 = None, comp_
         return
     
     if Model == "pyMelt":
+        try:
+            import pyMelt as m
+            Lithologies = {'KLB-1': m.lithologies.matthews.klb1(),
+                        'KG1': m.lithologies.matthews.kg1(),
+                        'G2': m.lithologies.matthews.eclogite(),
+                        'hz': m.lithologies.shorttle.harzburgite()}
+        except ImportError:
+            raise RuntimeError('You havent installed pyMelt or there is an error when importing pyMelt. pyMelt is currently required to estimate the starting point for the melting calculations.')
+
         lith_1 = Lithologies[comp_1]
 
         if prop is None:
