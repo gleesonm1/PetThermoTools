@@ -14,7 +14,7 @@ from tqdm.notebook import tqdm, trange
 
 def equilibrate_multi(cores = None, Model = None, bulk = None, T_C = None, P_bar = None, 
                       Fe3Fet_Liq = None, H2O_Liq = None, fO2_buffer = None, fO2_offset = None,
-                      timeout = None):
+                      timeout = None, merge_on = None):
     comp = bulk.copy()
 
     if Model is None:
@@ -135,7 +135,8 @@ def equilibrate_multi(cores = None, Model = None, bulk = None, T_C = None, P_bar
             int_keys = list(map(int, Output.keys()))
 
             # Determine the size of the resulting DataFrame
-            max_index = max(int_keys)
+            # max_index = max(int_keys)
+            max_index = len(comp['SiO2_Liq'])
 
             # Initialize an empty list to maintain column order
             all_columns = []
@@ -147,7 +148,7 @@ def equilibrate_multi(cores = None, Model = None, bulk = None, T_C = None, P_bar
                         all_columns.append(col)
                         seen_columns.add(col)
 
-            Combined = pd.DataFrame(np.nan, index=range(max_index + 1), columns=all_columns)
+            Combined = pd.DataFrame(np.nan, index=range(max_index), columns=all_columns)
 
             # Populate the result DataFrame
             for key, df in Output.items():
@@ -160,7 +161,8 @@ def equilibrate_multi(cores = None, Model = None, bulk = None, T_C = None, P_bar
             int_keys = list(map(int, Affinity.keys()))
 
             # Determine the size of the resulting DataFrame
-            max_index = max(int_keys)
+            # max_index = max(int_keys)
+            max_index = len(comp['SiO2_Liq'])
 
             # Initialize an empty list to maintain column order
             all_columns = []
@@ -174,7 +176,7 @@ def equilibrate_multi(cores = None, Model = None, bulk = None, T_C = None, P_bar
                 
                 Affinity[d] = pd.Series(Affinity[d])
 
-            Af_Combined = pd.DataFrame(np.nan, index=range(max_index + 1), columns=all_columns)
+            Af_Combined = pd.DataFrame(np.nan, index=range(max_index), columns=all_columns)
 
             # Populate the result DataFrame
             for d in Affinity:
@@ -276,7 +278,8 @@ def equilibrate_multi(cores = None, Model = None, bulk = None, T_C = None, P_bar
             int_keys = list(map(int, Output.keys()))
 
             # Determine the size of the resulting DataFrame
-            max_index = max(int_keys)
+            # max_index = max(int_keys)
+            max_index = len(P_bar)
 
             # Initialize an empty list to maintain column order
             all_columns = []
@@ -288,7 +291,7 @@ def equilibrate_multi(cores = None, Model = None, bulk = None, T_C = None, P_bar
                         all_columns.append(col)
                         seen_columns.add(col)
 
-            Combined = pd.DataFrame(np.nan, index=range(max_index + 1), columns=all_columns)
+            Combined = pd.DataFrame(np.nan, index=range(max_index), columns=all_columns)
 
             # Populate the result DataFrame
             for key, df in Output.items():
@@ -301,7 +304,8 @@ def equilibrate_multi(cores = None, Model = None, bulk = None, T_C = None, P_bar
             int_keys = list(map(int, Affinity.keys()))
 
             # Determine the size of the resulting DataFrame
-            max_index = max(int_keys)
+            # max_index = max(int_keys)
+            max_index = len(P_bar)
 
             # Initialize an empty list to maintain column order
             all_columns = []
@@ -314,7 +318,7 @@ def equilibrate_multi(cores = None, Model = None, bulk = None, T_C = None, P_bar
                         seen_columns.add(col)
                 Affinity[d] = pd.Series(Affinity[d])
 
-            Af_Combined = pd.DataFrame(np.nan, index=range(max_index + 1), columns=all_columns)
+            Af_Combined = pd.DataFrame(np.nan, index=range(max_index), columns=all_columns)
 
             # Populate the result DataFrame
             for d in Affinity:
@@ -332,8 +336,21 @@ def equilibrate_multi(cores = None, Model = None, bulk = None, T_C = None, P_bar
                 if "MELTS" in Model:
                     Output = stich(Output, Model = Model)
 
-    Affinity = Af_Combined.copy()
-    return Output, Combined, Affinity
+    if merge_on is not None:
+        if type(merge_on) == str:
+            Combined.insert(0, merge_on, comp[merge_on])
+            # Af_Combined.insert(0, merge_on, comp[merge_on])
+        elif type(merge_on) == list:
+            j = 0
+            for i in merge_on:
+                Combined.insert(j, i, comp[i])
+                # Af_Combined.insert(j, i, comp[i])
+                j = j + 1
+
+    Af_Combined = Af_Combined.add_suffix('_affinity')
+    Combined = pd.concat([Combined, Af_Combined], axis = 1)
+    # Affinity = Af_Combined.copy()
+    return Combined
 
 def findCO2_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P_bar = None, Fe3Fet_Liq = None, H2O_Liq = None, fO2_buffer = None, fO2_offset = None):
 
@@ -474,47 +491,57 @@ def findCO2_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P
 
     return T_Liq, H2O, CO2
 
-def findLiq_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P_bar = None, Fe3Fet_Liq = None, H2O_Liq = None, fO2_buffer = None, fO2_offset = None, CO2_return = None, Affinity = False):
+def findLiq_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P_bar = None, Fe3Fet_Liq = None, H2O_Liq = None, CO2_Liq = None, fO2_buffer = None, fO2_offset = None, Affinity = False):
     '''
-    Carry out multiple findLiq calculations in parallel.
+    Perform multiple liquidus temperature (findLiq) calculations in parallel.
 
     Parameters:
     ----------
-    cores: int
-        number of processes to run in parallel. Default will be determined using Multiprocessing.cpu_count().
+    cores: int, optional
+        Number of processes to run in parallel. If not provided, the number of available CPU cores is used.
 
-    Model: string
-        "MELTS" or "Holland". Dictates whether MELTS or MAGEMin calculations are performed. Default "MELTS".
-        Version of melts can be specified "MELTSv1.0.2", "MELTSv1.1.0", "MELTSv1.2.0", or "pMELTS". Default "v.1.0.2".
+    Model: str, optional
+        The thermodynamic model to use for calculations: "MELTS..." or "Holland". 
+        If "MELTS..." is selected, the version needs to be specified (e.g., "MELTSv1.0.2", "MELTSv1.1.0", "MELTSv1.2.0", or "pMELTS").
+        Default is "MELTSv1.0.2".
 
     bulk: pd.DataFrame
-        Matrix containing all oxide values required for the calculations.
+        A dataframe containing the oxide compositions required for the calculations.
 
-    T_initial_C: float or np.ndarray
-        Initial 'guess' temperature for findLiq calculations (degrees C).
+    T_initial_C: float or np.ndarray, optional
+        Initial guess for the temperature in Celsius for the findLiq calculations. If not provided, the default is 1300°C.
 
     P_bar: float or np.ndarray
-        Single pressure or array of pressures equal to length of compositions in bulk. Specifies the pressure of calculation (bar).
+        Pressure (in bars) for the calculations. Can be a single value or an array with length matching the number of compositions in the bulk.
 
-    Fe3Fet_Liq: float or np.ndarray
-        Fe 3+/total ratio. If type(comp) == dict, and type(Fe3Fet_Liq) == np.ndarray a new DataFrame will be constructed with bulk compositions varying only in their Fe3Fet_Liq value. If comp is a pd.DataFrame, a single Fe3Fet_Liq value may be passed (float) and will be used as the Fe redox state for all starting compostions, or an array of Fe3Fet_Liq values, equal to the number of compositions specified in comp can specify a different Fe redox state for each sample. If None, the Fe redox state must be specified in the comp variable or an oxygen fugacity buffer must be chosen.
+    Fe3Fet_Liq: float or np.ndarray, optional
+        Fe³⁺/total Fe ratio in the liquid. If the composition is provided as a dictionary, this can be an array to vary the Fe³⁺/Fe ratio across compositions. 
+        If the composition is a DataFrame, a single value or array (matching the number of compositions) can be used. 
+        If not provided, the redox state must be defined elsewhere (e.g., via the fO2 buffer or directly in the bulk variable).
 
-    H2O_Liq: float or np.ndarray
-        H2O content of the initial melt phase. If type(comp) == dict, and type(H2O_Liq) = np.ndarray a new DataFrame will be constructed with bulk compositions varying only in their H2O_Liq value. If comp is a pd.DataFrame, a single H2O_Liq value may be passes (float) and will be used as the initial melt H2O content for all starting compositions. Alternatively, if an array of H2O_Liq values is passed, equal to the number of compositions specified in comp, a different initial melt H2O value will be passed for each sample. If None, H2O_Liq must be specified in the comp variable.
+    H2O_Liq: float or np.ndarray, optional
+        Initial water content in the liquid phase. Can be a single value for all compositions or an array with values for each composition. 
+        If not provided, H2O content must be included in the composition.
 
-    find_liquidus: True/False
-        If True, the calculations will start with a search for the melt liquidus temperature. Default is False.
+    CO2_Liq: float or np.ndarray, optional
+        Initial CO₂ content in the liquid phase. Like H2O_Liq, this can be a single value or an array matching the number of compositions.
 
-    fO2_buffer: string
-        If the oxygen fugacity of the system is to be buffered during crystallisation/decompression, then an offset to a known buffer must be specified. Here the user can define the known buffer as either "FMQ" or "NNO".
+    fO2_buffer: str, optional
+        Oxygen fugacity buffer to control oxidation states during crystallization or decompression. Options include "FMQ" (Fayalite-Magnetite-Quartz) or "NNO" (Nickel-Nickel Oxide).
 
-    fO2_offset: float or np.ndarray
-        Offset from the buffer spcified in fO2_buffer (log units).
+    fO2_offset: float or np.ndarray, optional
+        Offset from the specified fO2 buffer (in log units). Can be a single value or an array.
+
+    Affinity: bool, optional
+        If True, the function will return additional information related to chemical affinity (interaction between phases) during crystallization. Default is False.
 
     Returns:
     ----------
-    Results: dictionary (single input) or DataFrame
-        Record of liquidus temperature, liquidus phase, fluid saturation and normalized melt chemistry.
+    Res: pd.DataFrame
+        DataFrame containing liquidus temperature, liquidus phase, fluid saturation, and normalized melt chemistry.
+
+    Af_Combined: pd.DataFrame, optional
+        If Affinity is True, an additional DataFrame containing chemical affinity data for each sample is returned.
     '''
     comp = bulk.copy()
 
@@ -529,7 +556,7 @@ def findLiq_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P
         comp = comp.to_dict()
 
     # ensure the bulk composition has the correct headers etc.
-    comp = comp_fix(Model = Model, comp = comp, Fe3Fet_Liq = Fe3Fet_Liq, H2O_Liq = H2O_Liq)
+    comp = comp_fix(Model = Model, comp = comp, Fe3Fet_Liq = Fe3Fet_Liq, H2O_Liq = H2O_Liq, CO2_Liq = CO2_Liq)
 
     if type(comp) != dict or type(P_bar) == np.ndarray:
         if type(comp) != dict:
@@ -592,17 +619,17 @@ def findLiq_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P
         for i in range(int(cores*j), int(cores*j + Group[j])):
             if type(comp) == dict:
                 if type(P_bar) == np.ndarray:
-                    p = Process(target = findLiq, args = (q, i), kwargs = {'Model': Model, 'P_bar': P_bar[i], 'T_initial_C': T_initial_C[i], 'comp': comp, 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset, 'CO2_return': CO2_return, 'Affinity': Affinity})
+                    p = Process(target = findLiq, args = (q, i), kwargs = {'Model': Model, 'P_bar': P_bar[i], 'T_initial_C': T_initial_C[i], 'comp': comp, 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset, 'Affinity': Affinity})
                 else:
-                    p = Process(target = findLiq, args = (q, i), kwargs = {'Model': Model, 'P_bar': P_bar, 'T_initial_C': T_initial_C[i], 'comp': comp, 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset, 'CO2_return': CO2_return, 'Affinity': Affinity})
+                    p = Process(target = findLiq, args = (q, i), kwargs = {'Model': Model, 'P_bar': P_bar, 'T_initial_C': T_initial_C[i], 'comp': comp, 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset, 'Affinity': Affinity})
             else:
                 if type(P_bar) == np.ndarray:
                     if len(comp['SiO2_Liq']) != len(P_bar):
                         raise Warning("The length of your composition and pressure variables are different. Please correct this before running the code.")
 
-                    p = Process(target = findLiq, args = (q, i), kwargs = {'Model': Model, 'P_bar': P_bar[i], 'T_initial_C': T_initial_C[i], 'comp': comp.loc[i].to_dict(), 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset, 'CO2_return': CO2_return, 'Affinity': Affinity})
+                    p = Process(target = findLiq, args = (q, i), kwargs = {'Model': Model, 'P_bar': P_bar[i], 'T_initial_C': T_initial_C[i], 'comp': comp.loc[i].to_dict(), 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset, 'Affinity': Affinity})
                 else:
-                    p = Process(target = findLiq, args = (q, i), kwargs = {'Model': Model, 'P_bar': P_bar, 'T_initial_C': T_initial_C[i], 'comp': comp.loc[i].to_dict(), 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset, 'CO2_return': CO2_return, 'Affinity': Affinity})
+                    p = Process(target = findLiq, args = (q, i), kwargs = {'Model': Model, 'P_bar': P_bar, 'T_initial_C': T_initial_C[i], 'comp': comp.loc[i].to_dict(), 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset, 'Affinity': Affinity})
 
             ps.append(p)
             p.start()
@@ -717,7 +744,7 @@ def findCO2(q, index, *, Model = None, P_bar = None, T_initial_C = None, comp = 
         #    q.put([T_Liq, H2O_Melt, CO2_Melt, index])
         #    return
 
-def findLiq(q, index,*, Model = None, P_bar = None, T_initial_C = None, comp = None, fO2_buffer = None, fO2_offset = None, CO2_return = None, Affinity = False):
+def findLiq(q, index,*, Model = None, P_bar = None, T_initial_C = None, comp = None, fO2_buffer = None, fO2_offset = None, Affinity = False):
     '''
     Searches for the liquidus of a melt at the pressure specified. Multiple instances of findLiq are typically initiated in parallel.
 

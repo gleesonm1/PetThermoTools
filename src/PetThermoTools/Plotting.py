@@ -161,7 +161,7 @@ def residualT_plot(Results = None, P_bar = None, phases = None, H2O_Liq = None, 
         T_cut_C = 12
 
     if phases is None:
-        phases = ['quartz1', 'plagioclase1', 'k-feldspar1']
+        phases = ['quartz1', 'plagioclase1', 'alkali-feldspar1']
 
     if H2O_Liq is None and Fe3Fet_Liq is None:
         if len(phases) == 3:

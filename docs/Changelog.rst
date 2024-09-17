@@ -37,3 +37,13 @@ Version 0.2.5 (January 11th, 2024)
 ================================
 Liquidus code updated to accept single (integer or float) inputs for initial temperature guess.
 Path/crysatllization and degassing codes now return cumulate sum of fractionated phases - e.g., Results['Mass']['olivine1_cumsum']
+
+Version 0.2.13 (September 17th 2024)
+================================
+New installation guide for PetThermoTools and alphaMELTS for Python added.
+equilibrate_multi now only returns one variable - a DataFrame containing all information about the calculation including the affinity of undersaturated phases.
+A new approach to solving volatile saturation pressures has been added but has not been thoroughly tested.
+Release for alphaMELTS workshop at GSA connects 2024.
+pyMAGEMINcalc v0.0.7 https://github.com/gleesonm1/pyMAGEMINcalc/archive/refs/tags/v0.0.7.zip
+MAGEMinCalc v0.2.22 https://github.com/gleesonm1/MAGEMinCalc/archive/refs/tags/v0.3.2.zip 
+MAGEMin_C v1.3.5 (tested up to v1.5.0) https://github.com/ComputationalThermodynamics/MAGEMin_C.jl/archive/refs/tags/v1.3.5.zip 

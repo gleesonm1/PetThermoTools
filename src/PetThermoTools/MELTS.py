@@ -2,7 +2,6 @@ import numpy as np
 import pandas as pd
 import sys
 import time
-# import pyMelt as m
 
 def equilibrate_MELTS(Model = None, P_bar = None, T_C = None, comp = None, fO2_buffer = None, fO2_offset = None):
     Results = {}
@@ -847,7 +846,7 @@ def path_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid = None, 
     else:
         length = len(P)
 
-    Results['Conditions'] = pd.DataFrame(data = np.zeros((length, 7)), columns = ['temperature', 'pressure', 'h', 's', 'v', 'dvdp', 'logfO2'])
+    Results['Conditions'] = pd.DataFrame(data = np.zeros((length, 8)), columns = ['temperature', 'pressure', 'h', 's', 'v', 'mass', 'dvdp', 'logfO2'])
     Results['liquid1'] = pd.DataFrame(data = np.zeros((length, 14)), columns = ['SiO2', 'TiO2', 'Al2O3', 'Fe2O3', 'Cr2O3', 'FeO', 'MnO', 'MgO', 'CaO', 'Na2O', 'K2O', 'P2O5', 'H2O', 'CO2'])
     Results['liquid1_prop'] = pd.DataFrame(data = np.zeros((length, 4)), columns = ['h', 'mass', 'v', 'rho'])
 

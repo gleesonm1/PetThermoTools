@@ -355,81 +355,115 @@ def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid 
         for i in range(len(qs)):
             if len(qs[i]) > 0:
                 Res, index = qs[i]
-                if label is None:
-                    Results['index = ' + str(index)] = Res
-                elif label == "P" or label == "pressure" or label == "P_bar":
-                    Out[str(round(Res['Conditions']['pressure'].loc[0]))] = Res
-                elif label == "water" or label == "H2O" or label == "H2O_Liq":
-                    if H2O_Liq is not None:
-                        Out[str(round(H2O_Liq[index], 2))] = Res
-                    else:
-                        Out[str(round(bulk.loc[index, "H2O_Liq"], 2))] = Res
-                elif label == "carbon" or label == "CO2":
-                    Out[str(round(Res['liquid1']['CO2'].loc[0], 2))] = Res
-                elif label == "oxygen fugacity" or label == "fO2":
-                    Out[str(round(fO2_offset[index], 2))] = Res
-                elif label == "Fe redox" or label == "Fe3Fet" or label == "Fe3Fet_Liq":
-                    Out[str[round(Res['liquid1']['FeO'].loc[0]/(Res['liquid1']['FeO'].loc[0] + (71.844/(159.69/2))*Res['liquid1']['Fe2O3'].loc[0]),2)]] = Res
-                elif label in list(comp.keys()):
-                    Results[str(comp[label].loc[index])] = Res
+                # if label is None:
+                Results['index = ' + str(index)] = Res
+                # elif label == "P" or label == "pressure" or label == "P_bar":
+                #     Out[str(round(Res['Conditions']['pressure'].loc[0]))] = Res
+                # elif label == "water" or label == "H2O" or label == "H2O_Liq":
+                #     if H2O_Liq is not None:
+                #         Out[str(round(H2O_Liq[index], 2))] = Res
+                #     else:
+                #         Out[str(round(bulk.loc[index, "H2O_Liq"], 2))] = Res
+                # elif label == "carbon" or label == "CO2":
+                #     Out[str(round(Res['liquid1']['CO2'].loc[0], 2))] = Res
+                # elif label == "oxygen fugacity" or label == "fO2":
+                #     Out[str(round(fO2_offset[index], 2))] = Res
+                # elif label == "Fe redox" or label == "Fe3Fet" or label == "Fe3Fet_Liq":
+                #     Out[str[round(Res['liquid1']['FeO'].loc[0]/(Res['liquid1']['FeO'].loc[0] + (71.844/(159.69/2))*Res['liquid1']['Fe2O3'].loc[0]),2)]] = Res
+                # elif label in list(comp.keys()):
+                #     Results[str(comp[label].loc[index])] = Res
 
-        if label == "P" or label == "pressure" or label == "P_bar":
-            # A = Out.copy()
-            # B = [float(x) for x in A]
-            O = sorted(Out)
-            for o in O:
-                # if o % 1 == 0:
-                #     o = int(o)
-                Results['P = ' + o + ' bars'] = Out[o]
+        # if label == "P" or label == "pressure" or label == "P_bar":
+        #     # A = Out.copy()
+        #     # B = [float(x) for x in A]
+        #     O = sorted(Out)
+        #     for o in O:
+        #         # if o % 1 == 0:
+        #         #     o = int(o)
+        #         Results['P = ' + o + ' bars'] = Out[o]
 
-        if label == "water" or label == "H2O" or label == "H2O_Liq":
-            # A = Out.copy()
-            # B = [float(x) for x in A]
-            O = sorted(Out)
-            for o in O:
-                # if o % 1 == 0:
-                #     o = int(o)
-                Results['H2O_i = ' + o + ' wt%'] = Out[o]
+        # if label == "water" or label == "H2O" or label == "H2O_Liq":
+        #     # A = Out.copy()
+        #     # B = [float(x) for x in A]
+        #     O = sorted(Out)
+        #     for o in O:
+        #         # if o % 1 == 0:
+        #         #     o = int(o)
+        #         Results['H2O_i = ' + o + ' wt%'] = Out[o]
 
-        if label == "carbon" or label == "CO2":
-            # A = Out.copy()
-            # B = [float(x) for x in A]
-            O = sorted(B)
-            for o in O:
-                # if o % 1 == 0:
-                #     o = int(o)
-                Results['CO2 = ' + str(o) + ' wt%'] = Out[str[o]]
+        # # if label == "carbon" or label == "CO2":
+        # #     # A = Out.copy()
+        # #     # B = [float(x) for x in A]
+        # #     O = sorted(B)
+        # #     for o in O:
+        # #         # if o % 1 == 0:
+        # #         #     o = int(o)
+        # #         Results['CO2 = ' + str(o) + ' wt%'] = Out[str[o]]
 
-        if label == "oxygen fugacity" or label == "fO2":
-            # A = Out.copy()
-            # B = [float(x) for x in A]
-            O = sorted(B)
-            for o in O:
-                # if o % 1 == 0:
-                #     o = int(o)
+        # if label == "oxygen fugacity" or label == "fO2":
+        #     # A = Out.copy()
+        #     # B = [float(x) for x in A]
+        #     O = sorted(B)
+        #     for o in O:
+        #         # if o % 1 == 0:
+        #         #     o = int(o)
 
-                # if o > 0.0:
-                #     Results[fO2_buffer + ' +' + str(o)] = out[str(o)]
-                # else:
-                Results[fO2_buffer + ' ' + str(o)] = Out[str[o]]
+        #         # if o > 0.0:
+        #         #     Results[fO2_buffer + ' +' + str(o)] = out[str(o)]
+        #         # else:
+        #         Results[fO2_buffer + ' ' + str(o)] = Out[str[o]]
 
-        if label == "Fe redox" or label == "Fe3Fet_Liq" or label == 'Fe3Fet':
-            # A = Out.copy()
-            # B = [float(x) for x in A]
-            O = sorted(B)
-            for o in O:
-                # if o % 1 == 0:
-                #     o = int(o)
-                Results['Fe3/Fet = ' + str(o)] = Out[str[o]]
+        # if label == "Fe redox" or label == "Fe3Fet_Liq" or label == 'Fe3Fet':
+        #     # A = Out.copy()
+        #     # B = [float(x) for x in A]
+        #     O = sorted(B)
+        #     for o in O:
+        #         # if o % 1 == 0:
+        #         #     o = int(o)
+        #         Results['Fe3/Fet = ' + str(o)] = Out[str[o]]
 
-        if print_label is not None:
-            print(Results.keys())
+        # if print_label is not None:
+        #     print(Results.keys())
+
 
         #if "MELTS" in Model:
         Results = stich(Results, multi = True, Model = Model, Frac_fluid = Frac_fluid, Frac_solid = Frac_solid)
 
-        return Results
+        
+        for r in Results:
+            i = int(r.split('=')[1].strip())
+            if type(comp) == dict:
+                Results[r]['Input'] = {'Model': Model, 'comp': comp, 'Frac_solid': Frac_solid, 'Frac_fluid': Frac_fluid,
+                                    'T_C': T_C[i], 'T_path_C': T_path_C[i], 'T_start_C': T_start_C[i], 'T_end_C': T_end_C[i], 'dt_C': dt_C[i],
+                                    'P_bar': P_bar[i], 'P_path_bar': P_path_bar[i], 'P_start_bar': P_start_bar[i], 'P_end_bar': P_end_bar[i], 'dp_bar': dp_bar[i],
+                                    'isenthalpic': isenthalpic, 'isentropic': isentropic, 'isochoric': isochoric, 'find_liquidus': find_liquidus,
+                                    'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset[i], 'fluid_sat': fluid_sat, 'Crystallinity_limit': Crystallinity_limit}
+            else:
+                Results[r]['Input'] = {'Model': Model, 'comp': comp.loc[i].to_dict(), 'Frac_solid': Frac_solid, 'Frac_fluid': Frac_fluid,
+                                    'T_C': T_C[i], 'T_path_C': T_path_C[i], 'T_start_C': T_start_C[i], 'T_end_C': T_end_C[i], 'dt_C': dt_C[i],
+                                    'P_bar': P_bar[i], 'P_path_bar': P_path_bar[i], 'P_start_bar': P_start_bar[i], 'P_end_bar': P_end_bar[i], 'dp_bar': dp_bar[i],
+                                    'isenthalpic': isenthalpic, 'isentropic': isentropic, 'isochoric': isochoric, 'find_liquidus': find_liquidus,
+                                    'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset[i], 'fluid_sat': fluid_sat, 'Crystallinity_limit': Crystallinity_limit}
+        
+        if label is not None:
+            new_out = label_results(Results,label)
+            return new_out
+        else:
+            return Results
 
+def label_results(Result,label):
+    Results = Result.copy()
+    new_out = {}
+    if  label == "CO2":
+        for r in Results:
+            new_out['CO2 = ' + str(Results[r]['Input']['comp']['CO2_Liq']) + ' wt%'] = Results[r].copy()
+        new_out = dict(sorted(new_out.items(), key=lambda x: float(x[0].split('=')[1].split(' ')[1])))
+    elif label == "pressure" or label == "P" or label == "P_bar":
+        for r in Results:
+            new_out['P = ' + str(Results[r]['Input']['P_bar']) + ' bars'] = Results[r].copy()
+        new_out = dict(sorted(new_out.items(), key=lambda x: float(x[0].split('=')[1].split(' ')[1])))
+    
+    return new_out
 
 
 def path(q, index, *, Model = None, comp = None, Frac_solid = None, Frac_fluid = None, T_C = None, T_path_C = None, T_start_C = None, T_end_C = None, dt_C = None, P_bar = None, P_path_bar = None, P_start_bar = None, P_end_bar = None, dp_bar = None, isenthalpic = None, isentropic = None, isochoric = None, find_liquidus = None, fO2_buffer = None, fO2_offset = None, fluid_sat = None, Crystallinity_limit = None):

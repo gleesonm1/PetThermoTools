@@ -7,11 +7,12 @@ Welcome to PetThermoTools's documentation!
 =================================================
 
 .. toctree::
-   :maxdepth: 3
+   :maxdepth: 4
    :caption: Getting Started:
 
    introduction
-   installation
+   Installation/InstallationGuide
+   Using_MAGEMin
    available_functions_pdf
 
 .. importing_data

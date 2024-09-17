@@ -137,7 +137,7 @@ def find_mineral_cosaturation(cores = None, Model = None, bulk = None, phases = 
         T_cut_C = 10
 
     if phases is None:
-        phases = ['quartz1', 'k-feldspar1', 'plagioclase1']
+        phases = ['quartz1', 'alkali-feldspar1', 'plagioclase1']
 
     # create main output dictionary
     Results = {}

@@ -234,6 +234,13 @@ def stich_work(Results = None, Order = None, Model = "MELTS", Frac_fluid = None,
             except:
                 Results[R][Results[R + '_prop']['Mass'] == 0.0] = np.nan
             Results[R] = Results[R][Order]
+            if R == "fluid1":
+                El = ['SiO2', 'TiO2', 'Al2O3', 'Cr2O3', 'FeO', 'Fe2O3', 'FeOt', 'Fe3Fet',
+                      'MnO','MgO', 'CaO', 'Na2O', 'K2O', 'P2O5']
+                for e in El:
+                    Results[R] = Results[R].drop(columns = e)
+                Results[R].loc[:,'X_H2O_mol'] = (Results[R].loc[:, 'H2O']/18)/(Results[R].loc[:, 'H2O']/18 + Results[R].loc[:, 'CO2']/44)
+                Results[R].loc[:,'X_CO2_mol'] = 1 - Results[R].loc[:, 'X_H2O_mol']
         else:
             Results[R] = Results[R].rename(columns = {'FeO': 'FeOt'})
             Tot = Results[R].sum(axis = 1)

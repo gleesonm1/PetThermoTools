@@ -41,25 +41,3 @@ or a Jupyter environment:
 
    !pip install "https://github.com/gleesonm1/pyMAGEMINcalc/archive/refs/tags/v0.0.7.zip"
 
-
-Updating
-========
-
-To upgrade to the most recent version of PetThermoTools, type the following into terminal:
-
-.. code-block:: python
-
-   pip install PetThermoTools --upgrade
-
-Or in your Jupyter environment:
-
-.. code-block:: python
-
-   !pip install PetThermoTools --upgrade
-
-
-For maximum reproducability, you should state which version of PetThermoTools you are using. If you have imported PetThermoTools as M, you can find this using:
-
-.. code-block:: python
-
-    M.__version__
