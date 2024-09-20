@@ -8,6 +8,15 @@ import importlib
 
 
 def install_alphaMELTS(chip="Linux", file_location = None):
+    '''
+    Download, extract, and add the alphaMELTS for Python files to the Python path.
+    Either store the files in the current working directory or (using the file_location kwarg) add them to a location of your choice.
+    chip - string variable with 4 options based on OS and chip type.
+        'Apple' - M1, M2, M3 etc. chips for MacOS
+        'Intel4Mac' - older MacBooks etc. that use an Intel chip.
+        'Windows' - windows operating systems
+        'Linux' - Default.
+    '''
     try:
         from meltsdynamic import meltsdynamic
         print('alphaMELTS already installed and added to Python path')
