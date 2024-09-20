@@ -12,6 +12,8 @@ from subprocess import Popen, PIPE
 import Thermobar as pt
 from os import path
 
+# test installation script
+from PetThermoTools.Installation import *
 # General functions that are used across multiple types of calculations
 from PetThermoTools.GenFuncs import *
 # Plotting functions that are used in multiple types of calculations

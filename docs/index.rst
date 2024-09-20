@@ -11,7 +11,7 @@ Welcome to PetThermoTools's documentation!
    :caption: Getting Started:
 
    introduction
-   Installation/InstallationGuide
+   Installation/InstallationScript
    Using_MAGEMin
    available_functions_pdf
 

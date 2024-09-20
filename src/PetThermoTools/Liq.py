@@ -14,7 +14,7 @@ from tqdm.notebook import tqdm, trange
 
 def equilibrate_multi(cores = None, Model = None, bulk = None, T_C = None, P_bar = None, 
                       Fe3Fet_Liq = None, H2O_Liq = None, fO2_buffer = None, fO2_offset = None,
-                      timeout = None, merge_on = None):
+                      timeout = None, copy_columns = None):
     comp = bulk.copy()
 
     if Model is None:
@@ -336,13 +336,13 @@ def equilibrate_multi(cores = None, Model = None, bulk = None, T_C = None, P_bar
                 if "MELTS" in Model:
                     Output = stich(Output, Model = Model)
 
-    if merge_on is not None:
-        if type(merge_on) == str:
-            Combined.insert(0, merge_on, comp[merge_on])
-            # Af_Combined.insert(0, merge_on, comp[merge_on])
-        elif type(merge_on) == list:
+    if copy_columns is not None:
+        if type(copy_columns) == str:
+            Combined.insert(0, copy_columns, comp[copy_columns])
+            # Af_Combined.insert(0, copy_columns, comp[copy_columns])
+        elif type(copy_columns) == list:
             j = 0
-            for i in merge_on:
+            for i in copy_columns:
                 Combined.insert(j, i, comp[i])
                 # Af_Combined.insert(j, i, comp[i])
                 j = j + 1

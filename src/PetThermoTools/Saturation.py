@@ -12,7 +12,7 @@ from tqdm.notebook import tqdm, trange
 
 def findSatPressure_multi(cores = multiprocessing.cpu_count(), Model = "MELTSv1.2.0", bulk = None, T_fixed_C = None, 
                           P_bar_init = None, Fe3Fet_Liq = None, H2O_Liq = None, CO2_Liq = None, 
-                          fO2_buffer = None, fO2_offset = None, merge_on = None):
+                          fO2_buffer = None, fO2_offset = None, copy_columns = None):
     
     comp = bulk.copy()
 
@@ -116,7 +116,7 @@ def findSatPressure_multi(cores = multiprocessing.cpu_count(), Model = "MELTSv1.
 
 def findSatPressure(cores = None, Model = None, bulk = None, T_C_init = None, T_fixed_C = None, 
                     P_bar_init = None, Fe3Fet_Liq = None, H2O_Liq = None, CO2_Liq = None, 
-                    fO2_buffer = None, fO2_offset = None, merge_on = None):
+                    fO2_buffer = None, fO2_offset = None, copy_columns = None):
     """
     Calculates the saturation pressure of a specified composition in the liquid or melt phase. The function will return the saturation pressure of the liquid or melt as a pandas dataframe. If the saturation pressure cannot be calculated, the function will return an empty dataframe.
 
@@ -289,13 +289,13 @@ def findSatPressure(cores = None, Model = None, bulk = None, T_C_init = None, T_
                 Results, index = qs[i]
                 Res.loc[index] = Results
 
-        if merge_on is not None:
-            if type(merge_on) == str:
-                Res.insert(0, merge_on, comp[merge_on])
-                # Af_Combined.insert(0, merge_on, comp[merge_on])
-            elif type(merge_on) == list:
+        if copy_columns is not None:
+            if type(copy_columns) == str:
+                Res.insert(0, copy_columns, comp[copy_columns])
+                # Af_Combined.insert(0, copy_columns, comp[copy_columns])
+            elif type(copy_columns) == list:
                 j = 0
-                for i in merge_on:
+                for i in copy_columns:
                     Res.insert(j, i, comp[i])
                     # Af_Combined.insert(j, i, comp[i])
                     j = j + 1
