@@ -466,6 +466,13 @@ def label_results(Result,label):
         for r in Results:
             new_out['fO2 = ' + Results[r]['Input']['fO2_buffer'] + ' ' + str(round(Results[r]['Input']['fO2_offset'],2))] = Results[r].copy()
         new_out = dict(sorted(new_out.items(), key=lambda x: float(x[0].split('=')[1].split(' ')[2])))
+    elif label == 'H2O':
+        for r in Results:
+            new_out['H2O = ' + str(Results[r]['Input']['comp']['H2O_Liq']) + ' wt%'] = Results[r].copy()
+        new_out = dict(sorted(new_out.items(), key=lambda x: float(x[0].split('=')[1].split(' ')[1])))
+    
+    if len(new_out) == 0:
+        new_out = Results.copy()
     
     return new_out
 
