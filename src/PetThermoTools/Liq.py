@@ -13,8 +13,8 @@ from multiprocessing import Process
 from tqdm.notebook import tqdm, trange
 
 def equilibrate_multi(cores = None, Model = None, bulk = None, T_C = None, P_bar = None, 
-                      Fe3Fet_Liq = None, H2O_Liq = None, fO2_buffer = None, fO2_offset = None,
-                      timeout = None, copy_columns = None):
+                      Fe3Fet_Liq = None, H2O_Liq = None, CO2_Liq = None, fO2_buffer = None, fO2_offset = None,
+                      timeout = None, copy_columns = None, Suppress = None):
     comp = bulk.copy()
 
     if Model is None:
@@ -31,7 +31,7 @@ def equilibrate_multi(cores = None, Model = None, bulk = None, T_C = None, P_bar
         comp = comp.to_dict()
 
     # ensure the bulk composition has the correct headers etc.
-    comp = comp_fix(Model = Model, comp = comp, Fe3Fet_Liq = Fe3Fet_Liq, H2O_Liq = H2O_Liq)
+    comp = comp_fix(Model = Model, comp = comp, Fe3Fet_Liq = Fe3Fet_Liq, H2O_Liq = H2O_Liq, CO2_Liq=CO2_Liq)
 
     if type(comp) == dict:
         if comp['H2O_Liq'] == 0.0 and "MELTS" in Model:
@@ -70,7 +70,7 @@ def equilibrate_multi(cores = None, Model = None, bulk = None, T_C = None, P_bar
         for j in tqdm(range(len(Group))):
             ps = []
             for i in range(int(cores*j), int(cores*j + Group[j])):
-                p = Process(target = equilibrate, args = (q, i), kwargs = {'Model': Model, 'P_bar': P_bar[i], 'T_C': T_C[i], 'comp': comp.loc[i].to_dict(), 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset})
+                p = Process(target = equilibrate, args = (q, i), kwargs = {'Model': Model, 'P_bar': P_bar[i], 'T_C': T_C[i], 'comp': comp.loc[i].to_dict(), 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset, 'Suppress': Suppress})
 
                 ps.append(p)
                 p.start()
@@ -212,7 +212,7 @@ def equilibrate_multi(cores = None, Model = None, bulk = None, T_C = None, P_bar
         for j in tqdm(range(len(Group))):
             ps = []
             for i in range(int(cores*j), int(cores*j + Group[j])):
-                p = Process(target = equilibrate, args = (q, i), kwargs = {'Model': Model, 'P_bar': P_bar[i], 'T_C': T_C[i], 'comp': comp, 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset})
+                p = Process(target = equilibrate, args = (q, i), kwargs = {'Model': Model, 'P_bar': P_bar[i], 'T_C': T_C[i], 'comp': comp, 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset, 'Suppress': Suppress})
 
                 ps.append(p)
                 p.start()
@@ -491,7 +491,8 @@ def findCO2_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P
 
     return T_Liq, H2O, CO2
 
-def findLiq_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P_bar = None, Fe3Fet_Liq = None, H2O_Liq = None, CO2_Liq = None, fO2_buffer = None, fO2_offset = None, Affinity = False):
+def findLiq_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P_bar = None, 
+                  Fe3Fet_Liq = None, H2O_Liq = None, CO2_Liq = None, fO2_buffer = None, fO2_offset = None, Affinity = False):
     '''
     Perform multiple liquidus temperature (findLiq) calculations in parallel.
 
@@ -818,7 +819,7 @@ def findLiq(q, index,*, Model = None, P_bar = None, T_initial_C = None, comp = N
         #    q.put([T_Liq, H2O_Melt, index, T_in])
         #    return
 
-def equilibrate(q, i,*, Model = None, P_bar = None, T_C = None, comp = None, fO2_buffer = None, fO2_offset = None):
-    Res = equilibrate_MELTS(Model = Model, P_bar = P_bar, T_C = T_C, comp = comp, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset)
+def equilibrate(q, i,*, Model = None, P_bar = None, T_C = None, comp = None, fO2_buffer = None, fO2_offset = None, Suppress = None):
+    Res = equilibrate_MELTS(Model = Model, P_bar = P_bar, T_C = T_C, comp = comp, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, Suppress = Suppress)
     q.put([Res, i])
     return

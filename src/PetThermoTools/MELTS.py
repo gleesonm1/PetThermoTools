@@ -3,7 +3,7 @@ import pandas as pd
 import sys
 import time
 
-def equilibrate_MELTS(Model = None, P_bar = None, T_C = None, comp = None, fO2_buffer = None, fO2_offset = None):
+def equilibrate_MELTS(Model = None, P_bar = None, T_C = None, comp = None, fO2_buffer = None, fO2_offset = None, Suppress = None):
     Results = {}
     Affinity = {}
 
@@ -25,12 +25,29 @@ def equilibrate_MELTS(Model = None, P_bar = None, T_C = None, comp = None, fO2_b
     elif Model == "MELTSv1.2.0":
         melts = MELTSdynamic(4)
 
-    melts.engine.setSystemProperties("Suppress", "rutile")
-    melts.engine.setSystemProperties("Suppress", "tridymite")
-
     melts.engine.setBulkComposition(bulk)
     melts.engine.pressure = P_bar
     melts.engine.temperature = T_C
+
+    if Suppress is None:
+        melts.engine.setSystemProperties("Suppress", "rutile")
+        melts.engine.setSystemProperties("Suppress", "tridymite")
+    else:
+        if Suppress == "All":
+            melts.engine.pressure = np.random.normal(P_bar, P_bar/10)
+            melts.engine.temperature = T_C + 500
+            # melts.engine.setBulkComposition(bulk)
+            PL = melts.engine.calcSaturationState()
+            for p in PL:
+                if p != "fluid":
+                    if p != "water":
+                        melts.engine.setSystemProperties("Suppress", p)
+        else:
+            for p in Suppress:
+                melts.engine.setSystemProperties("Suppress", p)
+
+        melts.engine.pressure = P_bar
+        melts.engine.temperature = T_C
 
     length = 1
 

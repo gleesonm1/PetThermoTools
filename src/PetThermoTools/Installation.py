@@ -7,7 +7,7 @@ import sysconfig
 import importlib
 
 
-def install_alphaMELTS(chip="Linux", file_location = None):
+def install_alphaMELTS(chip="Linux", file_location = None, admin = False):
     '''
     Download, extract, and add the alphaMELTS for Python files to the Python path.
     Either store the files in the current working directory or (using the file_location kwarg) add them to a location of your choice.
@@ -76,51 +76,52 @@ def install_alphaMELTS(chip="Linux", file_location = None):
             sys.exit(1)
             return
         
-        # Add the extracted directory to the Python path
-        if file_location is None:
-            sys.path.append(os.path.join(extract_path, zip_path[:-4]))
-        else:
-            if chip == "Apple":
-                sys.path.append(os.path.join(extract_path,"alphamelts-py-2.3.1-macos-arm64"))
-            elif chip == "Intel4Mac":
-                sys.path.append(os.path.join(extract_path,"alphamelts-py-2.3.1-macos-x86_64"))
-            elif chip == "Windows":
-                sys.path.append(os.path.join(extract_path,"alphamelts-py-2.3.1-win64"))
+        if admin is True:
+            # Add the extracted directory to the Python path
+            if file_location is None:
+                sys.path.append(os.path.join(extract_path, zip_path[:-4]))
             else:
-                sys.path.append(os.path.join(extract_path,"alphamelts-py-2.3.1-linux"))
+                if chip == "Apple":
+                    sys.path.append(os.path.join(extract_path,"alphamelts-py-2.3.1-macos-arm64"))
+                elif chip == "Intel4Mac":
+                    sys.path.append(os.path.join(extract_path,"alphamelts-py-2.3.1-macos-x86_64"))
+                elif chip == "Windows":
+                    sys.path.append(os.path.join(extract_path,"alphamelts-py-2.3.1-win64"))
+                else:
+                    sys.path.append(os.path.join(extract_path,"alphamelts-py-2.3.1-linux"))
 
-        try:
-            import meltsdynamic
-            importlib.reload(meltsdynamic)
-            from meltsdynamic import MELTSdynamic
-            print('Download and Extraction of alphaMELTS for Python files is successful.')
-        except:
-            print('Error: alphaMELTS for Python not installed correctly.')
-            return
-        
-        # get current working directory
-        cwd = os.getcwd()
+            try:
+                import meltsdynamic
+                importlib.reload(meltsdynamic)
+                from meltsdynamic import MELTSdynamic
+                print('Download and Extraction of alphaMELTS for Python files is successful.')
+            except:
+                print('Error: alphaMELTS for Python not installed correctly.')
+                return
+            
+            # get current working directory
+            cwd = os.getcwd()
 
-        # Get site-packages path
-        site_packages_path = sysconfig.get_paths()["purelib"]
+            # Get site-packages path
+            site_packages_path = sysconfig.get_paths()["purelib"]
 
-        # Define pth file path and custom path
-        pth_file_path = os.path.join(site_packages_path, "my_MELTS_path.pth")
-        if file_location is None:
-            custom_path = os.path.join(cwd, extract_path, zip_path[:-4])
-        else:
-            custom_path = os.path.join(zip_path[:-4])
+            # Define pth file path and custom path
+            pth_file_path = os.path.join(site_packages_path, "my_MELTS_path.pth")
+            if file_location is None:
+                custom_path = os.path.join(cwd, extract_path, zip_path[:-4])
+            else:
+                custom_path = os.path.join(zip_path[:-4])
 
-        # Normalize paths before writing
-        custom_path = os.path.normpath(custom_path)
+            # Normalize paths before writing
+            custom_path = os.path.normpath(custom_path)
 
-        # Write to the .pth file with error handling
-        try:
-            with open(pth_file_path, "w") as f:
-                f.write(custom_path)
-        except Exception as e:
-            print(f"Error writing to .pth file: {e}")
-            sys.exit(1)
+            # Write to the .pth file with error handling
+            try:
+                with open(pth_file_path, "w") as f:
+                    f.write(custom_path)
+            except Exception as e:
+                print(f"Error writing to .pth file: {e}")
+                sys.exit(1)
 
         return
     
