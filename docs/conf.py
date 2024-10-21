@@ -20,9 +20,9 @@ sys.path.insert(0, os.path.abspath('..'))
 
 # -- Project information -----------------------------------------------------
 
-project = 'Thermobar'
-copyright = '2021, Penny Wieser'
-author = 'Penny Wieser'
+project = 'PetThermoTools'
+copyright = '2024, Matthew Gleeson'
+author = 'Matthew Gleeson'
 
 # The short X.Y version
 version = ''
@@ -39,7 +39,7 @@ sys.path.insert(0, os.path.abspath('..'))
 
 # If your documentation needs a minimal Sphinx version, state it here.
 #
-# needs_sphinx = '1.0'
+needs_sphinx = '8.0'
 
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
@@ -70,7 +70,7 @@ bibtex_reference_style = 'author_year'
 # Some change in dependencies made us need to replace `var` with
 # `env.config.html_context['var']`.
 nbsphinx_prolog = r"""
-{% set docname = 'docs/' + str(env.doc2path(env.docname, base=None))[len(env.docname):] %}
+{% set docname = 'docs/' + env.doc2path(env.docname, base=None) %}
 {% set git_ref = 'main' if not env.config.html_context['READTHEDOCS'] else
                  env.config.html_context['github_version']
                  if '.' not in env.config.html_context['current_version'] else
@@ -79,13 +79,13 @@ nbsphinx_prolog = r"""
 
     <div class="admonition note">
       <p>This page was generated from
-        <a class="reference external" href="https://github.com/PennyWieser/Thermobar/blob/{{ git_ref|e }}/{{ docname|e }}">{{ docname|e }}</a>.
+        <a class="reference external" href="https://github.com/gleesonm1/PetThermoTools/blob/{{ git_ref|e }}/{{ docname|e }}">{{ docname|e }}</a>.
 
             Interactive online version:
-            <a href="https://mybinder.org/v2/gh/PennyWieser/Thermobar/{{ git_ref|e }}?filepath={{ docname|e }}"><img alt="Binder badge" src="https://mybinder.org/badge_logo.svg" style="vertical-align:text-bottom"></a>.
+            <a href="https://mybinder.org/v2/gh/gleesonm1/PetThermoTools/{{ git_ref|e }}?filepath={{ docname|e }}"><img alt="Binder badge" src="https://mybinder.org/badge_logo.svg" style="vertical-align:text-bottom"></a>.
     </p>
     <p>
-    <a class="reference download internal" download="" href="https://github.com/PennyWieser/Thermobar/blob/{{ git_ref|e }}/{{ docname|e }}"><code class="xref download docutils literal notranslate"><span class="pre">Python</span> <span class="pre">Notebook</span> <span class="pre">Download</span></code></a>
+    <a class="reference download internal" download="" href="https://github.com/gleesonm1/PetThermoTools/blob/{{ git_ref|e }}/{{ docname|e }}"><code class="xref download docutils literal notranslate"><span class="pre">Python</span> <span class="pre">Notebook</span> <span class="pre">Download</span></code></a>
       </p>
       <script>
         if (document.location.host) {
@@ -170,7 +170,7 @@ html_static_path = ['_static']
 # -- Options for HTMLHelp output ---------------------------------------------
 
 # Output file base name for HTML help builder.
-htmlhelp_basename = 'Thermobardoc'
+htmlhelp_basename = 'PetThermoTools'
 
 
 # -- Options for LaTeX output ------------------------------------------------
@@ -197,8 +197,8 @@ latex_elements = {
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
-    (master_doc, 'Thermobar.tex', 'Thermobar Documentation',
-     'Penny Wieser', 'manual'),
+    (master_doc, 'PetThermoTools.tex', 'PetThermoTools Documentation',
+     'Matthew Gleeson', 'manual'),
 ]
 
 
@@ -207,7 +207,7 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    (master_doc, 'Thermobar', 'Thermobar Documentation',
+    (master_doc, 'PetThermoTools', 'PetThermoTools Documentation',
      [author], 1)
 ]
 
@@ -218,8 +218,8 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-    (master_doc, 'Thermobar', 'Thermobar Documentation',
-     author, 'Thermobar', 'One line description of project.',
+    (master_doc, 'PetThermoTools', 'PetThermoTools Documentation',
+     author, 'PetThermoTools', 'One line description of project.',
      'Miscellaneous'),
 ]
 
