@@ -33,11 +33,11 @@ or within a Jupyter environment:
 
 .. code-block:: python
 
-   pip install "https://github.com/gleesonm1/pyMAGEMINcalc/archive/refs/tags/v0.0.7.zip"
+   pip install "https://github.com/gleesonm1/pyMAGEMINcalc/archive/refs/tags/v0.0.8.zip"
 
 or a Jupyter environment:
 
 .. code-block:: python
 
-   !pip install "https://github.com/gleesonm1/pyMAGEMINcalc/archive/refs/tags/v0.0.7.zip"
+   !pip install "https://github.com/gleesonm1/pyMAGEMINcalc/archive/refs/tags/v0.0.8.zip"
 
