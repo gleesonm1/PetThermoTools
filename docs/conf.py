@@ -69,8 +69,8 @@ bibtex_reference_style = 'author_year'
 # This is processed by Jinja2 and inserted before each notebook
 # Some change in dependencies made us need to replace `var` with
 # `env.config.html_context['var']`.
-nbsphinx_prolog = r"""
 # {% set docname = 'docs/' + env.doc2path(env.docname, base=None) %}
+nbsphinx_prolog = r"""
 {% set docname = 'docs/' + os.fspath(env.doc2path(env.docname, base=None)) %}
 {% set git_ref = 'main' if not env.config.html_context['READTHEDOCS'] else
                  env.config.html_context['github_version']
