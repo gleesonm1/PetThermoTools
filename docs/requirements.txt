@@ -2,13 +2,4 @@ sphinx_rtd_theme>=0.5.0
 ipython
 sphinxcontrib-bibtex>=2.3.0
 nbsphinx==0.8.12
-pandas
-numpy
-matplotlib
-scikit-learn
-scipy
-julia
-tinynumpy
-shapely
-Thermobar
-pyMelt
+ipykernel
