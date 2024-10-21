@@ -7,7 +7,9 @@ Before any calculations can be performed using the MAGEMin software you must hav
 - Next, users should run Julia and enter the following commands:
 
 - import Pkg 
+
 - using Pkg 
+
 - Pkg.add(url = "https://github.com/gleesonm1/MAGEMinCalc")
 
 - Once this has been done, users need to open Python and install Julia within the Python environment via pip. This can be done in the terminal:
@@ -33,13 +35,13 @@ or within a Jupyter environment:
 
 .. code-block:: python
 
-   pip install "https://github.com/gleesonm1/pyMAGEMINcalc/archive/refs/tags/v0.0.7.zip"
+   pip install "https://github.com/gleesonm1/pyMAGEMINcalc/archive/refs/tags/v0.0.8.zip"
 
 or a Jupyter environment:
 
 .. code-block:: python
 
-   !pip install "https://github.com/gleesonm1/pyMAGEMINcalc/archive/refs/tags/v0.0.7.zip"
+   !pip install "https://github.com/gleesonm1/pyMAGEMINcalc/archive/refs/tags/v0.0.8.zip"
 
 
 Updating

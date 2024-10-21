@@ -105,6 +105,11 @@ def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid 
         Dictionary where each entry represents the results of a single calculation. Within the dictionary each single calculation is reported as a series of pandas DataFrames, displaying the composition and thermodynamic properties of each phase.
 
     '''
+    try:
+        from meltsdynamic import MELTSdynamic
+    except:
+        Warning('alphaMELTS for Python files are not on the python path. \n Please add these files to the path running \n import sys \n sys.path.append(r"insert_your_path_to_melts_here") \n You are looking for the location of the meltsdynamic.py file')
+
 
     if Frac_solid is False:
         Frac_solid = None

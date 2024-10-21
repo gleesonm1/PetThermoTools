@@ -37,7 +37,7 @@ Names_MM = {'liq': '_Liq',
             'cpx': '_Cpx',
             'opx': '_Opx',
             'g': '_Grt',
-            'pl4t': '_Plag',
+            'fsp': '_Plag',
             'spn': '_Sp'}
 
 def comp_fix(Model = None, comp = None, Fe3Fet_Liq = None, H2O_Liq = None, CO2_Liq = None):

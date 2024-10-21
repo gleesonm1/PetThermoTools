@@ -45,7 +45,7 @@ equilibrate_multi now only returns one variable - a DataFrame containing all inf
 A new approach to solving volatile saturation pressures has been added but has not been thoroughly tested.
 Release for alphaMELTS workshop at GSA connects 2024.
 pyMAGEMINcalc v0.0.7 https://github.com/gleesonm1/pyMAGEMINcalc/archive/refs/tags/v0.0.7.zip
-MAGEMinCalc v0.2.22 https://github.com/gleesonm1/MAGEMinCalc/archive/refs/tags/v0.3.2.zip 
+MAGEMinCalc v0.3.2 https://github.com/gleesonm1/MAGEMinCalc/archive/refs/tags/v0.3.2.zip 
 MAGEMin_C v1.3.5 (tested up to v1.5.0) https://github.com/ComputationalThermodynamics/MAGEMin_C.jl/archive/refs/tags/v1.3.5.zip 
 
 Version 0.2.18 (October 10th 2024)
@@ -53,3 +53,11 @@ Version 0.2.18 (October 10th 2024)
 Updated installation guide for PetThermoTools with admin issues noted.
 Update to equilibrate_multi to allow users to 'turn off' solid phases as requested.
 Other minor bugs fixed.
+
+Version 0.2.20 (October 20th 2024)
+================================
+Update to equilibrate_multi function to allow calculations with Holland et al. (2018) thermodynamic model.
+Input code on ptt import to determine whether alphaMELTS files are in the Python path.
+pyMAGEMINcalc v0.0.8 https://github.com/gleesonm1/pyMAGEMINcalc/archive/refs/tags/v0.0.8.zip
+MAGEMinCalc v0.3.4 https://github.com/gleesonm1/MAGEMinCalc/archive/refs/tags/v0.3.4.zip 
+MAGEMin_C v1.3.5 (tested up to v1.5.0) https://github.com/ComputationalThermodynamics/MAGEMin_C.jl/archive/refs/tags/v1.3.5.zip 

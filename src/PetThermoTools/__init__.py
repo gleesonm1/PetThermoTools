@@ -12,6 +12,11 @@ from subprocess import Popen, PIPE
 import Thermobar as pt
 from os import path
 
+try:
+    from meltsdynamic import MELTSdynamic
+except:
+    print('alphaMELTS for Python files are not on the python path. \n Please add these files to the path running \n import sys \n sys.path.append(r"insert_your_path_to_melts_here") \n You are looking for the location of the meltsdynamic.py file')
+
 # test installation script
 from PetThermoTools.Installation import *
 # General functions that are used across multiple types of calculations

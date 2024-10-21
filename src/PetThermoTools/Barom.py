@@ -76,6 +76,10 @@ def find_mineral_cosaturation(cores = None, Model = None, bulk = None, phases = 
     Results: Dict
         Dictionary containing information regarding the saturation temperature of each phase and the residuals between the different phases
     '''
+    try:
+        from meltsdynamic import MELTSdynamic
+    except:
+        Warning('alphaMELTS for Python files are not on the python path. \n Please add these files to the path running \n import sys \n sys.path.append(r"insert_your_path_to_melts_here") \n You are looking for the location of the meltsdynamic.py file')
 
     T_step_C = dt_C
     dt_C = T_maxdrop_C 

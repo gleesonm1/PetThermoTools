@@ -15,6 +15,12 @@ from tqdm.notebook import tqdm, trange
 def equilibrate_multi(cores = None, Model = None, bulk = None, T_C = None, P_bar = None, 
                       Fe3Fet_Liq = None, H2O_Liq = None, CO2_Liq = None, fO2_buffer = None, fO2_offset = None,
                       timeout = None, copy_columns = None, Suppress = None):
+    
+    try:
+        from meltsdynamic import MELTSdynamic
+    except:
+        Warning('alphaMELTS for Python files are not on the python path. \n Please add these files to the path running \n import sys \n sys.path.append(r"insert_your_path_to_melts_here") \n You are looking for the location of the meltsdynamic.py file')
+
     comp = bulk.copy()
 
     if Model is None:
@@ -22,6 +28,7 @@ def equilibrate_multi(cores = None, Model = None, bulk = None, T_C = None, P_bar
 
     if Model == "Holland":
         import pyMAGEMINcalc as MM
+        print('pyMAGEMinCalc version: ' + str(MM.__version__))
 
     if cores is None:
         cores = multiprocessing.cpu_count()
@@ -53,306 +60,328 @@ def equilibrate_multi(cores = None, Model = None, bulk = None, T_C = None, P_bar
         else:
             T_C = np.array([T_C])
 
-    if type(comp) == pd.core.frame.DataFrame:
-        A = len(P_bar)//cores
-        B = len(P_bar) % cores
+    if "MELTS" in Model:
+        if type(comp) == pd.core.frame.DataFrame:
+            A = len(P_bar)//cores
+            B = len(P_bar) % cores
 
-        if A > 0:
-            Group = np.zeros(A) + cores
-            if B > 0:
-                Group = np.append(Group, B)
-        else:
-            Group = np.array([B])
-
-        qs = []
-        q = Queue()
-
-        for j in tqdm(range(len(Group))):
-            ps = []
-            for i in range(int(cores*j), int(cores*j + Group[j])):
-                p = Process(target = equilibrate, args = (q, i), kwargs = {'Model': Model, 'P_bar': P_bar[i], 'T_C': T_C[i], 'comp': comp.loc[i].to_dict(), 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset, 'Suppress': Suppress})
-
-                ps.append(p)
-                p.start()
-
-            if timeout is None:
-                TIMEOUT = 20
+            if A > 0:
+                Group = np.zeros(A) + cores
+                if B > 0:
+                    Group = np.append(Group, B)
             else:
-                TIMEOUT = timeout
+                Group = np.array([B])
 
-            start = time.time()
-            first = True
-            for p in ps:
-                if time.time() - start < TIMEOUT - 10:
-                    try:
-                        ret = q.get(timeout = TIMEOUT - (time.time()-start) + 10)
-                    except:
-                        ret = []
+            qs = []
+            q = Queue()
+
+            for j in tqdm(range(len(Group))):
+                ps = []
+                for i in range(int(cores*j), int(cores*j + Group[j])):
+                    p = Process(target = equilibrate, args = (q, i), kwargs = {'Model': Model, 'P_bar': P_bar[i], 'T_C': T_C[i], 'comp': comp.loc[i].to_dict(), 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset, 'Suppress': Suppress})
+
+                    ps.append(p)
+                    p.start()
+
+                if timeout is None:
+                    TIMEOUT = 20
                 else:
-                    if first == True:
-                        print('Timeout Reached - this likely indicates the calculation failed. \n You can try increasing the timeout limit using the "timeout" kwarg.')
-                        first = False
-                    try:
-                        ret = q.get(timeout = 10)
-                    except:
-                        ret = []
+                    TIMEOUT = timeout
 
-                qs.append(ret)
-
-            TIMEOUT = 5
-            start = time.time()
-            for p in ps:
-                if p.is_alive():
-                    while time.time() - start <= TIMEOUT:
-                        if not p.is_alive():
-                            p.join()
-                            p.terminate()
-                            break
-                        time.sleep(.1)
+                start = time.time()
+                first = True
+                for p in ps:
+                    if time.time() - start < TIMEOUT - 10:
+                        try:
+                            ret = q.get(timeout = TIMEOUT - (time.time()-start) + 10)
+                        except:
+                            ret = []
                     else:
+                        if first == True:
+                            print('Timeout Reached - this likely indicates the calculation failed. \n You can try increasing the timeout limit using the "timeout" kwarg.')
+                            first = False
+                        try:
+                            ret = q.get(timeout = 10)
+                        except:
+                            ret = []
+
+                    qs.append(ret)
+
+                TIMEOUT = 5
+                start = time.time()
+                for p in ps:
+                    if p.is_alive():
+                        while time.time() - start <= TIMEOUT:
+                            if not p.is_alive():
+                                p.join()
+                                p.terminate()
+                                break
+                            time.sleep(.1)
+                        else:
+                            p.terminate()
+                            p.join(5)
+                    else:
+                        p.join()
                         p.terminate()
-                        p.join(5)
-                else:
-                    p.join()
-                    p.terminate()
 
-        Output = {}
-        Affinity = {}
-        if len(qs) > 1:
-            for i in range(len(qs)):
-                if len(qs[i])>0:
-                    Results, index = qs[i]
+            Output = {}
+            Affinity = {}
+            if len(qs) > 1:
+                for i in range(len(qs)):
+                    if len(qs[i])>0:
+                        Results, index = qs[i]
 
+                        try:
+                            Output[str(index)] = Results[0]
+                            Affinity[str(index)] = Results[1]
+                        except:
+                            continue
+
+                if "MELTS" in Model:
+                    Output = stich(Output, multi = True, Model = "MELTS")
+
+                int_keys = list(map(int, Output.keys()))
+
+                # Determine the size of the resulting DataFrame
+                # max_index = max(int_keys)
+                max_index = len(comp['SiO2_Liq'])
+
+                # Initialize an empty list to maintain column order
+                all_columns = []
+                seen_columns = set()
+
+                for df in Output.values():
+                    for col in df['All'].columns:
+                        if col not in seen_columns:
+                            all_columns.append(col)
+                            seen_columns.add(col)
+
+                Combined = pd.DataFrame(np.nan, index=range(max_index), columns=all_columns)
+
+                # Populate the result DataFrame
+                for key, df in Output.items():
                     try:
-                        Output[str(index)] = Results[0]
-                        Affinity[str(index)] = Results[1]
+                        Combined.loc[int(key)] = df['All'].iloc[0]
                     except:
                         continue
 
-            if "MELTS" in Model:
-                Output = stich(Output, multi = True, Model = "MELTS")
+                # Affinity combined
+                int_keys = list(map(int, Affinity.keys()))
 
-            int_keys = list(map(int, Output.keys()))
+                # Determine the size of the resulting DataFrame
+                # max_index = max(int_keys)
+                max_index = len(comp['SiO2_Liq'])
 
-            # Determine the size of the resulting DataFrame
-            # max_index = max(int_keys)
-            max_index = len(comp['SiO2_Liq'])
+                # Initialize an empty list to maintain column order
+                all_columns = []
+                seen_columns = set()
 
-            # Initialize an empty list to maintain column order
-            all_columns = []
-            seen_columns = set()
+                for d in Affinity:
+                    for col in Affinity[d]:
+                        if col not in seen_columns:
+                            all_columns.append(col)
+                            seen_columns.add(col)
+                    
+                    Affinity[d] = pd.Series(Affinity[d])
 
-            for df in Output.values():
-                for col in df['All'].columns:
-                    if col not in seen_columns:
-                        all_columns.append(col)
-                        seen_columns.add(col)
+                Af_Combined = pd.DataFrame(np.nan, index=range(max_index), columns=all_columns)
 
-            Combined = pd.DataFrame(np.nan, index=range(max_index), columns=all_columns)
-
-            # Populate the result DataFrame
-            for key, df in Output.items():
-                try:
-                    Combined.loc[int(key)] = df['All'].iloc[0]
-                except:
-                    continue
-
-            # Affinity combined
-            int_keys = list(map(int, Affinity.keys()))
-
-            # Determine the size of the resulting DataFrame
-            # max_index = max(int_keys)
-            max_index = len(comp['SiO2_Liq'])
-
-            # Initialize an empty list to maintain column order
-            all_columns = []
-            seen_columns = set()
-
-            for d in Affinity:
-                for col in Affinity[d]:
-                    if col not in seen_columns:
-                        all_columns.append(col)
-                        seen_columns.add(col)
+                # Populate the result DataFrame
+                for d in Affinity:
+                    try:
+                        df = Affinity[d].to_frame().transpose()
+                        Af_Combined.loc[int(d)] = df.iloc[0]
+                    except:
+                        continue
                 
-                Affinity[d] = pd.Series(Affinity[d])
-
-            Af_Combined = pd.DataFrame(np.nan, index=range(max_index), columns=all_columns)
-
-            # Populate the result DataFrame
-            for d in Affinity:
-                try:
-                    df = Affinity[d].to_frame().transpose()
-                    Af_Combined.loc[int(d)] = df.iloc[0]
-                except:
-                    continue
-            
-        else:
-            if len(qs[0]) > 0:
-                Results, index = qs[0]
-                Output = Results[0]
-                Affinity = Results[1]
-            
-                if "MELTS" in Model:
-                    Output = stich(Output, Model = Model)
-
-    if type(comp) != pd.core.frame.DataFrame:
-        A = len(P_bar)//cores
-        B = len(P_bar) % cores
-
-        if A > 0:
-            Group = np.zeros(A) + cores
-            if B > 0:
-                Group = np.append(Group, B)
-        else:
-            Group = np.array([B])
-
-        qs = []
-        q = Queue()
-
-        for j in tqdm(range(len(Group))):
-            ps = []
-            for i in range(int(cores*j), int(cores*j + Group[j])):
-                p = Process(target = equilibrate, args = (q, i), kwargs = {'Model': Model, 'P_bar': P_bar[i], 'T_C': T_C[i], 'comp': comp, 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset, 'Suppress': Suppress})
-
-                ps.append(p)
-                p.start()
-
-            if timeout is None:
-                TIMEOUT = 20
             else:
-                TIMEOUT = timeout
+                if len(qs[0]) > 0:
+                    Results, index = qs[0]
+                    Output = Results[0]
+                    Affinity = Results[1]
+                
+                    if "MELTS" in Model:
+                        Output = stich(Output, Model = Model)
 
-            start = time.time()
-            first = True
-            for p in ps:
-                if time.time() - start < TIMEOUT - 10:
-                    try:
-                        ret = q.get(timeout = TIMEOUT - (time.time()-start) + 10)
-                    except:
-                        ret = []
+        if type(comp) != pd.core.frame.DataFrame:
+            A = len(P_bar)//cores
+            B = len(P_bar) % cores
+
+            if A > 0:
+                Group = np.zeros(A) + cores
+                if B > 0:
+                    Group = np.append(Group, B)
+            else:
+                Group = np.array([B])
+
+            qs = []
+            q = Queue()
+
+            for j in tqdm(range(len(Group))):
+                ps = []
+                for i in range(int(cores*j), int(cores*j + Group[j])):
+                    p = Process(target = equilibrate, args = (q, i), kwargs = {'Model': Model, 'P_bar': P_bar[i], 'T_C': T_C[i], 'comp': comp, 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset, 'Suppress': Suppress})
+
+                    ps.append(p)
+                    p.start()
+
+                if timeout is None:
+                    TIMEOUT = 20
                 else:
-                    if first == True:
-                        print('Timeout Reached - this likely indicates the calculation failed. \n You can try increasing the timeout limit using the "timeout" kwarg.')
-                        first = False
-                    try:
-                        ret = q.get(timeout = 10)
-                    except:
-                        ret = []
+                    TIMEOUT = timeout
 
-                qs.append(ret)
-
-            TIMEOUT = 5
-            start = time.time()
-            for p in ps:
-                if p.is_alive():
-                    while time.time() - start <= TIMEOUT:
-                        if not p.is_alive():
-                            p.join()
-                            p.terminate()
-                            break
-                        time.sleep(.1)
+                start = time.time()
+                first = True
+                for p in ps:
+                    if time.time() - start < TIMEOUT - 10:
+                        try:
+                            ret = q.get(timeout = TIMEOUT - (time.time()-start) + 10)
+                        except:
+                            ret = []
                     else:
+                        if first == True:
+                            print('Timeout Reached - this likely indicates the calculation failed. \n You can try increasing the timeout limit using the "timeout" kwarg.')
+                            first = False
+                        try:
+                            ret = q.get(timeout = 10)
+                        except:
+                            ret = []
+
+                    qs.append(ret)
+
+                TIMEOUT = 5
+                start = time.time()
+                for p in ps:
+                    if p.is_alive():
+                        while time.time() - start <= TIMEOUT:
+                            if not p.is_alive():
+                                p.join()
+                                p.terminate()
+                                break
+                            time.sleep(.1)
+                        else:
+                            p.terminate()
+                            p.join(5)
+                    else:
+                        p.join()
                         p.terminate()
-                        p.join(5)
-                else:
-                    p.join()
-                    p.terminate()
 
-        Output = {}
-        Affinity = {}
-        if len(qs) > 1:
-            for i in range(len(qs)):
-                if len(qs[i])>0:
-                    Results, index = qs[i]
+            Output = {}
+            Affinity = {}
+            if len(qs) > 1:
+                for i in range(len(qs)):
+                    if len(qs[i])>0:
+                        Results, index = qs[i]
 
+                        try:
+                            Output[str(index)] = Results[0]
+                            Affinity[str(index)] = Results[1]
+                        except:
+                            continue
+
+                if "MELTS" in Model:
+                    Output = stich(Output, multi = True, Model = Model)
+
+                # Output combined
+                int_keys = list(map(int, Output.keys()))
+
+                # Determine the size of the resulting DataFrame
+                # max_index = max(int_keys)
+                max_index = len(P_bar)
+
+                # Initialize an empty list to maintain column order
+                all_columns = []
+                seen_columns = set()
+
+                for df in Output.values():
+                    for col in df['All'].columns:
+                        if col not in seen_columns:
+                            all_columns.append(col)
+                            seen_columns.add(col)
+
+                Combined = pd.DataFrame(np.nan, index=range(max_index), columns=all_columns)
+
+                # Populate the result DataFrame
+                for key, df in Output.items():
                     try:
-                        Output[str(index)] = Results[0]
-                        Affinity[str(index)] = Results[1]
+                        Combined.loc[int(key)] = df['All'].iloc[0]
                     except:
                         continue
 
-            if "MELTS" in Model:
-                Output = stich(Output, multi = True, Model = Model)
+                # Affinity combined
+                int_keys = list(map(int, Affinity.keys()))
 
-            # Output combined
-            int_keys = list(map(int, Output.keys()))
+                # Determine the size of the resulting DataFrame
+                # max_index = max(int_keys)
+                max_index = len(P_bar)
 
-            # Determine the size of the resulting DataFrame
-            # max_index = max(int_keys)
-            max_index = len(P_bar)
+                # Initialize an empty list to maintain column order
+                all_columns = []
+                seen_columns = set()
 
-            # Initialize an empty list to maintain column order
-            all_columns = []
-            seen_columns = set()
+                for d in Affinity:
+                    for col in Affinity[d]:
+                        if col not in seen_columns:
+                            all_columns.append(col)
+                            seen_columns.add(col)
+                    Affinity[d] = pd.Series(Affinity[d])
 
-            for df in Output.values():
-                for col in df['All'].columns:
-                    if col not in seen_columns:
-                        all_columns.append(col)
-                        seen_columns.add(col)
+                Af_Combined = pd.DataFrame(np.nan, index=range(max_index), columns=all_columns)
 
-            Combined = pd.DataFrame(np.nan, index=range(max_index), columns=all_columns)
+                # Populate the result DataFrame
+                for d in Affinity:
+                    try:
+                        df = Affinity[d].to_frame().transpose()
+                        Af_Combined.loc[int(d)] = df.iloc[0]
+                    except:
+                        continue
+            else:
+                if len(qs[0]) > 0:
+                    Output, index = qs[0]
+                    Output = Results[0]
+                    Affinity = Results[1]
+                
+                    if "MELTS" in Model:
+                        Output = stich(Output, Model = Model)
 
-            # Populate the result DataFrame
-            for key, df in Output.items():
-                try:
-                    Combined.loc[int(key)] = df['All'].iloc[0]
-                except:
-                    continue
+        if copy_columns is not None:
+            if type(copy_columns) == str:
+                Combined.insert(0, copy_columns, comp[copy_columns])
+                # Af_Combined.insert(0, copy_columns, comp[copy_columns])
+            elif type(copy_columns) == list:
+                j = 0
+                for i in copy_columns:
+                    Combined.insert(j, i, comp[i])
+                    # Af_Combined.insert(j, i, comp[i])
+                    j = j + 1
 
-            # Affinity combined
-            int_keys = list(map(int, Affinity.keys()))
+        Af_Combined = Af_Combined.add_suffix('_affinity')
+        Combined = pd.concat([Combined, Af_Combined], axis = 1)
+        # Affinity = Af_Combined.copy()
+        return Combined
+    else:
+        Output = MM.equilibrate_multi(P_bar = P_bar, T_C = T_C, comp = comp)
+        Combined = stich(Output, Model = Model)
 
-            # Determine the size of the resulting DataFrame
-            # max_index = max(int_keys)
-            max_index = len(P_bar)
+        if copy_columns is not None:
+            if type(copy_columns) == str:
+                Combined['All'].insert(0, copy_columns, comp[copy_columns])
+                # Af_Combined.insert(0, copy_columns, comp[copy_columns])
+            elif type(copy_columns) == list:
+                j = 0
+                for i in copy_columns:
+                    Combined['All'].insert(j, i, comp[i])
+                    # Af_Combined.insert(j, i, comp[i])
+                    j = j + 1
 
-            # Initialize an empty list to maintain column order
-            all_columns = []
-            seen_columns = set()
-
-            for d in Affinity:
-                for col in Affinity[d]:
-                    if col not in seen_columns:
-                        all_columns.append(col)
-                        seen_columns.add(col)
-                Affinity[d] = pd.Series(Affinity[d])
-
-            Af_Combined = pd.DataFrame(np.nan, index=range(max_index), columns=all_columns)
-
-            # Populate the result DataFrame
-            for d in Affinity:
-                try:
-                    df = Affinity[d].to_frame().transpose()
-                    Af_Combined.loc[int(d)] = df.iloc[0]
-                except:
-                    continue
-        else:
-            if len(qs[0]) > 0:
-                Output, index = qs[0]
-                Output = Results[0]
-                Affinity = Results[1]
-            
-                if "MELTS" in Model:
-                    Output = stich(Output, Model = Model)
-
-    if copy_columns is not None:
-        if type(copy_columns) == str:
-            Combined.insert(0, copy_columns, comp[copy_columns])
-            # Af_Combined.insert(0, copy_columns, comp[copy_columns])
-        elif type(copy_columns) == list:
-            j = 0
-            for i in copy_columns:
-                Combined.insert(j, i, comp[i])
-                # Af_Combined.insert(j, i, comp[i])
-                j = j + 1
-
-    Af_Combined = Af_Combined.add_suffix('_affinity')
-    Combined = pd.concat([Combined, Af_Combined], axis = 1)
-    # Affinity = Af_Combined.copy()
-    return Combined
+        return Combined['All']
 
 def findCO2_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P_bar = None, Fe3Fet_Liq = None, H2O_Liq = None, fO2_buffer = None, fO2_offset = None):
+
+    try:
+        from meltsdynamic import MELTSdynamic
+    except:
+        Warning('alphaMELTS for Python files are not on the python path. \n Please add these files to the path running \n import sys \n sys.path.append(r"insert_your_path_to_melts_here") \n You are looking for the location of the meltsdynamic.py file')
 
     comp = bulk.copy()
 
@@ -544,6 +573,11 @@ def findLiq_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P
     Af_Combined: pd.DataFrame, optional
         If Affinity is True, an additional DataFrame containing chemical affinity data for each sample is returned.
     '''
+    try:
+        from meltsdynamic import MELTSdynamic
+    except:
+        Warning('alphaMELTS for Python files are not on the python path. \n Please add these files to the path running \n import sys \n sys.path.append(r"insert_your_path_to_melts_here") \n You are looking for the location of the meltsdynamic.py file')
+
     comp = bulk.copy()
 
     if Model is None:
