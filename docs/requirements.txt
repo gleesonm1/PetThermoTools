@@ -1,5 +1,5 @@
 sphinx_rtd_theme>=0.5.0
 ipython
-sphinxcontrib-bibtex>=2.3.0
-nbsphinx==0.8.12
+sphinxcontrib-bibtex
+nbsphinx
 ipykernel
