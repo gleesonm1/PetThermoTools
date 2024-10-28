@@ -97,7 +97,7 @@ def equilibrate_multi(cores = None, Model = None, bulk = None, T_C = None, P_bar
                         except:
                             ret = []
                     else:
-                        if first == True:
+                        if first is True:
                             print('Timeout Reached - this likely indicates the calculation failed. \n You can try increasing the timeout limit using the "timeout" kwarg.')
                             first = False
                         try:
@@ -239,7 +239,7 @@ def equilibrate_multi(cores = None, Model = None, bulk = None, T_C = None, P_bar
                         except:
                             ret = []
                     else:
-                        if first == True:
+                        if first is True:
                             print('Timeout Reached - this likely indicates the calculation failed. \n You can try increasing the timeout limit using the "timeout" kwarg.')
                             first = False
                         try:
