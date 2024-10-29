@@ -3,6 +3,14 @@ import pandas as pd
 import sys
 import time
 
+import os
+try:
+    # If we are on VICTOR...
+    if os.path.exists('/home/jovyan/shared/Models/alphaMELTS'):
+        sys.path.append('/home/jovyan/shared/Models/alphaMELTS')
+except:
+    raise Exception("Could not set path to alphaMELTS")
+
 def equilibrate_MELTS(Model = None, P_bar = None, T_C = None, comp = None, fO2_buffer = None, fO2_offset = None, Suppress = None):
     Results = {}
     Affinity = {}
