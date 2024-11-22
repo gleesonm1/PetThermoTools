@@ -9,7 +9,11 @@ import matplotlib.pyplot as plt
 # import subprocess
 # import glob
 from subprocess import Popen, PIPE
-import Thermobar as pt
+try:
+    import Thermobar as pt
+except:
+    print('Thermobar import not successful. This is likely due to your numpy version. \n If you are using numpy version > 2 this is currently incompatible with Thermobar.')
+
 from os import path
 
 try:
