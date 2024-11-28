@@ -3,14 +3,6 @@ import pandas as pd
 import sys
 import time
 
-# import os
-# try:
-#     # If we are on VICTOR...
-#     if os.path.exists('/home/jovyan/shared/Models/alphaMELTS'):
-#         sys.path.append('/home/jovyan/shared/Models/alphaMELTS')
-# except:
-#     raise Exception("Could not set path to alphaMELTS")
-
 def equilibrate_MELTS(Model = None, P_bar = None, T_C = None, comp = None, fO2_buffer = None, fO2_offset = None, Suppress = None):
     Results = {}
     Affinity = {}
@@ -560,6 +552,137 @@ def findLiq_MELTS(P_bar = None, Model = None, T_C_init = None, comp = None, melt
             return Results, melts
         else:
             return Results
+        
+def supCalc_MELTS(Model = "MELTSv1.0.2", comp = None, phase = None, T_C = None, P_bar = None,
+             fO2_buffer = None, fO2_offset = None, 
+             melts = None):
+
+    if type(comp) == pd.core.frame.DataFrame: # simplest scenario - one calculation per bulk composition imported
+        L = len(comp['SiO2_Liq'])
+    else:
+        if type(P_bar) == np.ndarray: #one calculation per P loaded
+            L = len(P_bar)
+        elif type(T_C) == np.ndarray: # one calculation per T loaded.
+            L = len(T_C)
+        elif type(fO2_offset) == np.ndarray or type(fO2_offset) == list: # one calculation per fO2 loaded.
+            L = len(fO2_offset)
+        else:
+            L = -1
+
+    if melts is None:
+        if Model is None or Model == "MELTSv1.0.2":
+            melts = MELTSdynamic(1)
+        elif Model == "pMELTS":
+            melts = MELTSdynamic(2)
+        elif Model == "MELTSv1.1.0":
+            melts = MELTSdynamic(3)
+        elif Model == "MELTSv1.2.0":
+            melts = MELTSdynamic(4)
+
+    if L == -1:
+        melts.engine.temperature = T_C
+        melts.engine.temperature = P_bar
+
+        if fO2_buffer is not None:
+            if fO2_offset is None:
+                melts.engine.setSystemProperties(["Log fO2 Path: " + fO2_buffer])
+            else:
+                melts.engine.setSystemProperties(["Log fO2 Path: " + fO2_buffer, "Log fO2 Offset: " + str(fO2_offset)])
+
+        bulk = [comp['SiO2_Liq'], comp['TiO2_Liq'], comp['Al2O3_Liq'], comp['Fe3Fet_Liq']*((159.59/2)/71.844)*comp['FeOt_Liq'], comp['Cr2O3_Liq'], (1 - comp['Fe3Fet_Liq'])*comp['FeOt_Liq'], comp['MnO_Liq'], comp['MgO_Liq'], 0.0, 0.0, comp['CaO_Liq'], comp['Na2O_Liq'], comp['K2O_Liq'], comp['P2O5_Liq'], comp['H2O_Liq'], comp['CO2_Liq'], 0.0, 0.0, 0.0]
+
+        melts.engine.calcPhaseProperties(phase, bulk)
+        melts.engine.calcEndMemberProperties(phase, melts.engine.dispComposition[phase])
+
+        properties = ['g', 'h', 's', 'v', 'cp', 'dcpdt',
+              'dvdt', 'dpdt', 'd2vdt2', 'd2vdtdp',
+              'd2vdp2', 'molwt', 'rho', 'mass']
+        results = np.empty(len(properties))  # Creates an array of the same length as the list
+        # Populate the NumPy array
+        for idx, prop in enumerate(properties):
+            results[idx] = melts.engine.getProperty(prop, phase)
+
+        oxides = ['SiO2', 'TiO2', 'Al2O3', 'Cr2O3', 'Fe2O3', 'MnO', 'MgO', 'CaO', 'Na2O', 'K2O', 'P2O5', 'H2O', 'CO2']
+        conc = np.empty(len(oxides))
+        for idx, i in enumerate(oxides):
+            conc[idx] = melts.engine.getProperty('dispComposition', phase, i)
+
+        endmembers = melts.endMemberFormulas[phase]
+        thermo = ['activity', 'activity0', 'mu','mu0', 'X']
+        thermo_properties = []
+        thermodynamics = np.empty(len(endmembers)*len(thermo))
+        idx = 0
+        for i in thermo:
+            for j in endmembers:
+                thermo_properties.append(i+'_'+j)
+                thermodynamics[idx] = melts.engine.getProperty(i, phase, j)
+                idx = idx + 1
+
+        Output = {'Properties': pd.Series(index = properties, data = results), 
+                'Composition': pd.Series(index = oxides, data = conc),
+                'Thermodynamics': pd.Series(index = thermo_properties, data = thermodynamics)}
+    else:
+        if type(T_C) == float or type(T_C) == int:
+            T_C = np.zeros(L) + T_C
+        if type(P_bar) == float or type(P_bar) == int:
+            P_bar = np.zeros(L) + P_bar
+        if fO2_offset is None:
+            fO2_offset = [None]*L
+        
+        properties = ['g', 'h', 's', 'v', 'cp', 'dcpdt',
+                'dvdt', 'dpdt', 'd2vdt2', 'd2vdtdp',
+                'd2vdp2', 'molwt', 'rho', 'mass']
+        results = np.empty((L,len(properties)))
+        
+        oxides = ['SiO2', 'TiO2', 'Al2O3', 'Cr2O3', 'Fe2O3', 'MnO', 'MgO', 'CaO', 'Na2O', 'K2O', 'P2O5', 'H2O', 'CO2']
+        conc = np.empty((L,len(oxides)))
+
+        endmembers = None
+
+        for l in range(L):
+            melts.engine.temperature = T_C[l]
+            melts.engine.temperature = P_bar[l]
+
+            if fO2_buffer is not None:
+                if fO2_offset[l] is None:
+                    melts.engine.setSystemProperties(["Log fO2 Path: " + fO2_buffer])
+                else:
+                    melts.engine.setSystemProperties(["Log fO2 Path: " + fO2_buffer, "Log fO2 Offset: " + str(fO2_offset[l])])
+
+            if type(comp) == dict:
+                bulk = [comp['SiO2_Liq'], comp['TiO2_Liq'], comp['Al2O3_Liq'], comp['Fe3Fet_Liq']*((159.59/2)/71.844)*comp['FeOt_Liq'], comp['Cr2O3_Liq'], (1 - comp['Fe3Fet_Liq'])*comp['FeOt_Liq'], comp['MnO_Liq'], comp['MgO_Liq'], 0.0, 0.0, comp['CaO_Liq'], comp['Na2O_Liq'], comp['K2O_Liq'], comp['P2O5_Liq'], comp['H2O_Liq'], comp['CO2_Liq'], 0.0, 0.0, 0.0]
+            else:
+                bulk = [comp.loc[l,'SiO2_Liq'], comp.loc[l,'TiO2_Liq'], comp.loc[l,'Al2O3_Liq'], comp.loc[l,'Fe3Fet_Liq']*((159.59/2)/71.844)*comp.loc[l,'FeOt_Liq'], comp.loc[l,'Cr2O3_Liq'], (1 - comp.loc[l,'Fe3Fet_Liq'])*comp.loc[l,'FeOt_Liq'], comp.loc[l,'MnO_Liq'], comp.loc[l,'MgO_Liq'], 0.0, 0.0, comp.loc[l,'CaO_Liq'], comp.loc[l,'Na2O_Liq'], comp.loc[l,'K2O_Liq'], comp.loc[l,'P2O5_Liq'], comp.loc[l,'H2O_Liq'], comp.loc[l,'CO2_Liq'], 0.0, 0.0, 0.0]
+
+            melts.engine.calcPhaseProperties(phase, bulk)
+            melts.engine.calcEndMemberProperties(phase, melts.engine.dispComposition[phase])
+
+            # Populate the NumPy array
+            for idx, prop in enumerate(properties):
+                results[l,idx] = melts.engine.getProperty(prop, phase)
+
+            for idx, i in enumerate(oxides):
+                conc[l,idx] = melts.engine.getProperty('dispComposition', phase, i)
+
+            if endmembers is None:
+                endmembers = melts.endMemberFormulas[phase]
+                thermo_properties = []
+                thermo = ['activity', 'activity0', 'mu','mu0', 'X']
+                thermodynamics = np.empty((L,len(endmembers)*len(thermo)))
+
+            idx = 0
+            for i in thermo:
+                for j in endmembers:
+                    if l == 0:
+                        thermo_properties.append(i+'_'+j)
+                    thermodynamics[l,idx] = melts.engine.getProperty(i, phase, j)
+                    idx = idx + 1
+
+        Output = {'Properties': pd.DataFrame(columns = properties, data = results), 
+                'Composition': pd.DataFrame(columns = oxides, data = conc),
+                'Thermodynamics': pd.DataFrame(columns = thermo_properties, data = thermodynamics)}
+    
+    return Output
 
 def phaseSat_MELTS(Model = None, comp = None, phases = None, T_initial_C = None, T_step_C = None, dt_C = None, P_bar = None, H2O_Liq = None, fO2_buffer = None, fO2_offset = None):
     '''

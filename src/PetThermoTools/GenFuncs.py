@@ -3,7 +3,7 @@ import pandas as pd
 # from PetThermoTools.Barom import *
 # from PetThermoTools.Liq import *
 # from PetThermoTools.Crystallise import *
-# from PetThermoTools.MELTS import *
+from PetThermoTools.MELTS import *
 # try:
 #     from PetThermoTools.Holland import *
 # except:
@@ -39,6 +39,24 @@ Names_MM = {'liq': '_Liq',
             'g': '_Grt',
             'fsp': '_Plag',
             'spn': '_Sp'}
+
+def supCalc(Model = "MELTSv1.0.2", bulk = None, phase = None, T_C = None, P_bar = None,
+             Fe3Fet_Liq = None, H2O_Liq = None, CO2_Liq = None, fO2_buffer = None, fO2_offset = None, 
+             melts = None):
+    
+    comp = bulk.copy()
+
+    if type(comp) == pd.core.series.Series:
+        comp = comp.to_dict()
+    
+    comp = comp_fix(Model = Model, comp = comp, H2O_Liq = H2O_Liq, CO2_Liq = CO2_Liq, Fe3Fet_Liq = Fe3Fet_Liq)
+
+    Results = supCalc_MELTS(Model = "MELTSv1.0.2", comp = comp, phase = phase, T_C = T_C, P_bar = P_bar,
+             fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, 
+             melts = melts)
+    
+    return Results
+
 
 def comp_fix(Model = None, comp = None, Fe3Fet_Liq = None, H2O_Liq = None, CO2_Liq = None):
     '''
