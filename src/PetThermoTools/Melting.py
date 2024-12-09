@@ -45,7 +45,7 @@ def comp_check(comp_lith, Model, MELTS_filter, Fe3Fet):
 def AdiabaticDecompressionMelting(cores = multiprocessing.cpu_count(), 
                                   Model = "pMELTS", bulk = "KLB-1", comp_lith_1 = None, 
                                   comp_lith_2 = None, comp_lith_3 = None, Tp_C = 1350, Tp_Method = "pyMelt",
-                                  P_start_bar = 30000, P_end_bar = 5000, dp_bar = 200, 
+                                  P_start_bar = 30000, P_end_bar = 2000, dp_bar = 200, 
                                   P_path_bar = None, Frac = False, prop = None, 
                                   fO2_buffer = None, fO2_offset = None, Fe3Fet = None, MELTS_filter = True):
     

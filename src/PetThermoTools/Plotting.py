@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 from shapely.geometry import MultiPoint, Point, Polygon
 import matplotlib.pyplot as plt
+from matplotlib import cm
 from PetThermoTools.GenFuncs import *
 
 def harker(Results = None, x_axis = None, y_axis = None, phase = None, line_style = None, line_color = None, data = None, d_color = None, d_marker = None, label = None):
@@ -344,6 +345,69 @@ def residualT_plot(Results = None, P_bar = None, phases = None, H2O_Liq = None, 
 
                         a[i][j].plot_surface(X_new, Y_new, z_plot, cmap = 'viridis')
                         a[i][j].set_zlim([0,50])
+
+def phase_plot(Results = None, y_axis = None, x_axis = None, 
+               phases = ['Liq','Ol', 'Opx', 'Cpx', 'Sp', 'Grt'], cmap = "Reds",
+               title = None, figsize = None):
+    
+    if type(Results) != list:
+        f, a = plt.subplots(1,1, figsize = (5, 8))
+        c = cm.get_cmap(cmap, len(phases))
+        x = c(np.arange(0,1,1/len(phases)))
+
+        PhaseList = {}
+        for idx, p in enumerate(phases):
+            PhaseList[p] = x[idx]
+
+        Stop = np.zeros(len(Results['All']['P_bar']))
+        for idx, p in enumerate(phases):
+            a.fill_betweenx(Results['All']['P_bar'], Stop, 
+                            x2= Stop + Results['All']['Mass_' + p], alpha = 0.75, color = PhaseList[p], lw = 0)
+
+            Stop = Stop + Results['All']['Mass_'+p]
+
+        a.set_ylabel('Pressure (bars)')
+        a.set_xlabel('Mass (g)')
+
+        a.set_xlim([0,np.nanmax(Stop)])
+        a.set_ylim([np.nanmax(Results['All']['P_bar']), np.nanmin(Results['All']['P_bar'])])
+    else:
+        if figsize is None:
+            figsize = (10,2*len(Results))
+
+        f, a = plt.subplots(len(Results), 1, figsize = figsize, sharex = True)
+        c = cm.get_cmap(cmap, len(phases))
+        x = c(np.arange(0,1,1/len(phases)))
+
+        PhaseList = {}
+        for idx, p in enumerate(phases):
+            PhaseList[p] = x[idx]
+
+        for i in range(len(Results)):
+            Stop = np.zeros(len(Results[i]['All']['P_bar']))
+            for idx, p in enumerate(phases):
+                a[i].fill_between(Results[i]['All']['P_bar'], Stop, 
+                                y2= Stop + Results[i]['All']['mass_' + p], alpha = 0.75, color = PhaseList[p], lw = 0,
+                                label = p)
+
+                Stop = Stop + Results[i]['All']['mass_'+p]
+
+            if i == len(Results)-1:
+                a[i].set_xlabel('Pressure (bars)')
+                a[i].legend(loc = "lower right")
+            a[i].set_ylabel('Mass Fraction')
+
+            a[i].set_ylim([0,np.nanmax(Stop)])
+            a[i].set_xlim([np.nanmin(Results[i]['All']['P_bar']), np.nanmax(Results[i]['All']['P_bar'])])
+
+
+            if title is not None:
+                if type(title) != list:
+                    a[i].set_title(title)
+                else:
+                    a[i].set_title(title[i])
+
+    return f, a
 
 def plot_phaseDiagram(Model = "Holland", Combined = None, P_units = "bar", T_units = "C", 
                       lines = None, T_C = None, P_bar = None, label = True, colormap = None):

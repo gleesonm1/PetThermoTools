@@ -2,7 +2,12 @@ import numpy as np
 import pandas as pd
 from PetThermoTools.Path import *
 
-def isobaric_crystallisation(Model = None, bulk = None, Frac_solid = None, Frac_fluid = None, T_path_C = None, T_start_C = None, T_end_C = None, dt_C = None, P_bar = None, Fe3Fet_Liq = None, H2O_Liq = None, CO2_Liq = None, find_liquidus = None, fO2_buffer = None, fO2_offset = None, label = None, Crystallinity_limit = None, fluid_sat = None, timeout = None):
+def isobaric_crystallisation(Model = None, bulk = None, Frac_solid = None, Frac_fluid = None, 
+                             T_path_C = None, T_start_C = None, T_end_C = None, dt_C = None, 
+                             P_bar = None, Fe3Fet_Liq = None, H2O_Liq = None, CO2_Liq = None, 
+                             find_liquidus = None, fO2_buffer = None, fO2_offset = None, 
+                             label = None, Crystallinity_limit = None, fluid_sat = None, timeout = None,
+                             Suppress = ['rutile', 'tridymite'], Suppress_except=False):
     '''
     Simulates isobaric crystallization paths by calling the `multi_path` function, which computes the phase equilibria between solid, liquid, and fluid phases under specified conditions.
 
@@ -57,11 +62,21 @@ def isobaric_crystallisation(Model = None, bulk = None, Frac_solid = None, Frac_
     '''
     comp = bulk.copy()
 
-    Results = multi_path(Model = Model, bulk = comp, Frac_solid = Frac_solid, Frac_fluid = Frac_fluid, T_path_C = T_path_C, T_start_C = T_start_C, T_end_C = T_end_C, dt_C = dt_C, P_bar = P_bar, Fe3Fet_Liq = Fe3Fet_Liq, H2O_Liq = H2O_Liq, CO2_Liq = CO2_Liq, find_liquidus = find_liquidus, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, label = label, Crystallinity_limit = Crystallinity_limit, fluid_sat = fluid_sat, timeout = timeout)
+    Results = multi_path(Model = Model, bulk = comp, Frac_solid = Frac_solid, Frac_fluid = Frac_fluid, 
+                         T_path_C = T_path_C, T_start_C = T_start_C, T_end_C = T_end_C, dt_C = dt_C, 
+                         P_bar = P_bar, Fe3Fet_Liq = Fe3Fet_Liq, H2O_Liq = H2O_Liq, CO2_Liq = CO2_Liq, 
+                         find_liquidus = find_liquidus, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, 
+                         label = label, Crystallinity_limit = Crystallinity_limit, fluid_sat = fluid_sat, 
+                         timeout = timeout, Suppress = Suppress, Suppress_except=Suppress_except)
 
     return Results
 
-def isochoric_crystallisation(Model = None, bulk = None, Frac_solid = None, Frac_fluid = None, T_path_C = None, T_start_C = None, T_end_C = None, dt_C = None, P_bar = None, Fe3Fet_Liq = None, H2O_Liq = None, CO2_Liq = None, find_liquidus = None, fO2_buffer = None, fO2_offset = None, label = None, Crystallinity_limit = None, fluid_sat = None, timeout = None):
+def isochoric_crystallisation(Model = None, bulk = None, Frac_solid = None, Frac_fluid = None, 
+                              T_path_C = None, T_start_C = None, T_end_C = None, dt_C = None, 
+                              P_bar = None, Fe3Fet_Liq = None, H2O_Liq = None, CO2_Liq = None, 
+                              find_liquidus = None, fO2_buffer = None, fO2_offset = None, 
+                              label = None, Crystallinity_limit = None, fluid_sat = None, 
+                              timeout = None, Suppress = ['rutile', 'tridymite'], Suppress_except=False):
     '''
     Computes isochorics crystallization paths using the multi_path function,which
     computes the phase equilibria between solid, liquid and fluid phases.
@@ -122,7 +137,12 @@ def isochoric_crystallisation(Model = None, bulk = None, Frac_solid = None, Frac
     '''
     comp = bulk.copy()
 
-    Results = multi_path(Model = Model, bulk = comp, Frac_solid = Frac_solid, Frac_fluid = Frac_fluid, T_path_C = T_path_C, T_start_C = T_start_C, T_end_C = T_end_C, dt_C = dt_C, P_bar = P_bar, Fe3Fet_Liq = Fe3Fet_Liq, H2O_Liq = H2O_Liq, CO2_Liq=CO2_Liq, find_liquidus = find_liquidus, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, label = label, Crystallinity_limit = Crystallinity_limit, fluid_sat = fluid_sat, timeout = timeout, isochoric = True)
+    Results = multi_path(Model = Model, bulk = comp, Frac_solid = Frac_solid, Frac_fluid = Frac_fluid, 
+                         T_path_C = T_path_C, T_start_C = T_start_C, T_end_C = T_end_C, dt_C = dt_C, 
+                         P_bar = P_bar, Fe3Fet_Liq = Fe3Fet_Liq, H2O_Liq = H2O_Liq, CO2_Liq=CO2_Liq, 
+                         find_liquidus = find_liquidus, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, 
+                         label = label, Crystallinity_limit = Crystallinity_limit, fluid_sat = fluid_sat, 
+                         timeout = timeout, isochoric = True, Suppress = Suppress, Suppress_except=Suppress_except)
 
     return Results
 

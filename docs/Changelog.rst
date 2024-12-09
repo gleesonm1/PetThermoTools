@@ -61,3 +61,13 @@ Input code on ptt import to determine whether alphaMELTS files are in the Python
 pyMAGEMINcalc v0.0.8 https://github.com/gleesonm1/pyMAGEMINcalc/archive/refs/tags/v0.0.8.zip
 MAGEMinCalc v0.3.4 https://github.com/gleesonm1/MAGEMinCalc/archive/refs/tags/v0.3.4.zip 
 MAGEMin_C v1.3.5 (tested up to v1.5.0) https://github.com/ComputationalThermodynamics/MAGEMin_C.jl/archive/refs/tags/v1.3.5.zip 
+
+
+Version 0.2.25 (November 28th 2024)
+=====================================
+New 'supCalc' function added to work as a supplemental calculator
+Automatically adds alphaMELTS for Python files to path if working in VICTOR.
+Fixed other minor bugs.
+pyMAGEMINcalc v0.0.8 https://github.com/gleesonm1/pyMAGEMINcalc/archive/refs/tags/v0.0.8.zip
+MAGEMinCalc v0.3.4 https://github.com/gleesonm1/MAGEMinCalc/archive/refs/tags/v0.3.4.zip 
+MAGEMin_C v1.3.5 (tested up to v1.5.9) https://github.com/ComputationalThermodynamics/MAGEMin_C.jl/archive/refs/tags/v1.3.5.zip 

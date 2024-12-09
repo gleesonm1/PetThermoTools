@@ -3,7 +3,8 @@ import pandas as pd
 import sys
 import time
 
-def equilibrate_MELTS(Model = None, P_bar = None, T_C = None, comp = None, fO2_buffer = None, fO2_offset = None, Suppress = None):
+def equilibrate_MELTS(Model = None, P_bar = None, T_C = None, comp = None, 
+                      fO2_buffer = None, fO2_offset = None, Suppress = None):
     Results = {}
     Affinity = {}
 
@@ -581,7 +582,7 @@ def supCalc_MELTS(Model = "MELTSv1.0.2", comp = None, phase = None, T_C = None, 
 
     if L == -1:
         melts.engine.temperature = T_C
-        melts.engine.temperature = P_bar
+        melts.engine.pressure = P_bar
 
         if fO2_buffer is not None:
             if fO2_offset is None:
@@ -641,7 +642,7 @@ def supCalc_MELTS(Model = "MELTSv1.0.2", comp = None, phase = None, T_C = None, 
 
         for l in range(L):
             melts.engine.temperature = T_C[l]
-            melts.engine.temperature = P_bar[l]
+            melts.engine.pressure = P_bar[l]
 
             if fO2_buffer is not None:
                 if fO2_offset[l] is None:
@@ -800,7 +801,12 @@ def phaseSat_MELTS(Model = None, comp = None, phases = None, T_initial_C = None,
 
     return Results
 
-def path_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid = None, T_C = None, T_path_C = None, T_start_C = None, T_end_C = None, dt_C = None, P_bar = None, P_path_bar = None, P_start_bar = None, P_end_bar = None, dp_bar = None, isenthalpic = None, isentropic = None, isochoric = None, find_liquidus = None, fO2_buffer = None, fO2_offset = None, fluid_sat = None, Crystallinity_limit = None):
+def path_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid = None, 
+               T_C = None, T_path_C = None, T_start_C = None, T_end_C = None, dt_C = None, 
+               P_bar = None, P_path_bar = None, P_start_bar = None, P_end_bar = None, dp_bar = None, 
+               isenthalpic = None, isentropic = None, isochoric = None, find_liquidus = None, 
+               fO2_buffer = None, fO2_offset = None, fluid_sat = None, Crystallinity_limit = None, 
+               Suppress = ['rutile', 'tridymite'], Suppress_except=False):
     '''
     Perform a single  calculation in MELTS. WARNING! Running this function directly from the command land/jupyter notebook will initiate the MELTS C library in the main python process. Once this has been initiated the MELTS C library cannot be re-loaded and failures during the calculation will likely cause a terminal error to occur.
 
@@ -901,11 +907,39 @@ def path_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid = None, 
     elif Model == "MELTSv1.2.0":
         melts = MELTSdynamic(4)
 
-    melts.engine.setSystemProperties("Suppress", "rutile")
-    melts.engine.setSystemProperties("Suppress", "tridymite")
-
     bulk = [comp['SiO2_Liq'], comp['TiO2_Liq'], comp['Al2O3_Liq'], comp['Fe3Fet_Liq']*((159.59/2)/71.844)*comp['FeOt_Liq'], comp['Cr2O3_Liq'], (1- comp['Fe3Fet_Liq'])*comp['FeOt_Liq'], comp['MnO_Liq'], comp['MgO_Liq'], 0.0, 0.0, comp['CaO_Liq'], comp['Na2O_Liq'], comp['K2O_Liq'], comp['P2O5_Liq'], comp['H2O_Liq'], comp['CO2_Liq'], 0.0, 0.0, 0.0]
     bulk = list(100*np.array(bulk)/np.sum(bulk))
+
+    if Suppress_except is False:
+        if Suppress == "All":
+            melts.engine.pressure = np.random.normal(500, 500/10)
+            melts.engine.temperature = 1200 + 200
+            melts.engine.setBulkComposition(bulk)
+            PL = melts.engine.calcSaturationState()
+            for p in PL:
+                if p != "fluid":
+                    if p != "water":
+                        melts.engine.setSystemProperties("Suppress", p)
+        else:
+            if type(Suppress) == list:
+                for p in Suppress:
+                    melts.engine.setSystemProperties("Suppress", p)
+            else:
+                melts.engine.setSystemProperties("Suppress", Suppress)
+    else:
+        melts.engine.pressure = np.random.normal(500, 500/10)
+        melts.engine.temperature = 1200 + 200
+        melts.engine.setBulkComposition(bulk)
+        PL = melts.engine.calcSaturationState()
+        for p in PL:
+            if p != "fluid":
+                if p != "water":
+                    if type(Suppress) == list:
+                        if p not in Suppress:
+                            melts.engine.setSystemProperties("Suppress", p)
+                    else:
+                        if p != Suppress:
+                            melts.engine.setSystemProperties("Suppress", p)
 
     if find_liquidus is not None:
         if P_path_bar is not None:
