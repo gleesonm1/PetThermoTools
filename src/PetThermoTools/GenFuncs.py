@@ -32,13 +32,19 @@ Names = {'liquid1': '_Liq',
         'apatite1': '_Apa',
         'apatite2': '_Apa2'}
 
-Names_MM = {'liq': '_Liq',
-            'ol': '_Ol',
-            'cpx': '_Cpx',
-            'opx': '_Opx',
-            'g': '_Grt',
-            'fsp': '_Plag',
-            'spn': '_Sp'}
+Names_MM = {'liq1': '_Liq',
+            'ol1': '_Ol',
+            'ol2': '_Ol2',
+            'cpx1': '_Cpx',
+            'cpx2': '_Cpx2',
+            'opx1': '_Opx',
+            'opx2': '_Opx2',
+            'g1': '_Grt',
+            'g2': '_Grt2',
+            'fsp1': '_Plag',
+            'fsp2': '_Plag2',
+            'spn1': '_Sp',
+            'spn2': '_Sp2'}
 
 def supCalc(Model = "MELTSv1.0.2", bulk = None, phase = None, T_C = None, P_bar = None,
              Fe3Fet_Liq = None, H2O_Liq = None, CO2_Liq = None, fO2_buffer = None, fO2_offset = None, 
@@ -335,6 +341,25 @@ def stich_work(Results = None, Order = None, Model = "MELTS", Frac_fluid = None,
                         Results[R] = Results[R].add_suffix('_' + R[:-5])
                     else:
                         Results[R] = Results[R].add_suffix('_' + R)
+    # for R in Results:
+    #     if R != "Conditions" and R != "sys":
+    #         if "MELTS" in Model:
+    #             if R in Names:  # Check for exact match in Names
+    #                 Results[R] = Results[R].add_suffix(Names[R])                
+    #             else:
+    #                 if '_prop' in R:
+    #                     Results[R] = Results[R].add_suffix('_' + R[:-5])
+    #                 else:
+    #                     Results[R] = Results[R].add_suffix('_' + R)
+    #         else:
+    #             if R in Names_MM:  # Check for exact match in Names_MM
+    #                 Results[R] = Results[R].add_suffix(Names_MM[R])
+    #             else:       
+    #                 if '_prop' in R:
+    #                     Results[R] = Results[R].add_suffix('_' + R[:-5])
+    #                 else:
+    #                     Results[R] = Results[R].add_suffix('_' + R)
+
 
             Results_All = pd.concat([Results_All, Results[R]], axis = 1)
 
