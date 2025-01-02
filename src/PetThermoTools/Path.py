@@ -327,7 +327,7 @@ def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid 
                 p.start()
 
             if timeout is None:
-                TIMEOUT = 120
+                TIMEOUT = 240
             else:
                 TIMEOUT = timeout
 

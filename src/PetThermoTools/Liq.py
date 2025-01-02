@@ -625,145 +625,148 @@ def findLiq_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P
             else:
                 T_initial_C = np.array([T_initial_C])
             
+    if "MELTS" in Model:
 
+        if cores is None:
+            cores = multiprocessing.cpu_count()
 
-    if cores is None:
-        cores = multiprocessing.cpu_count()
-
-    if type(P_bar) == np.ndarray:
-        A = len(P_bar)//cores
-        B = len(P_bar) % cores
-    elif type(P_bar) != np.ndarray and type(comp) == dict:
-        A = 0
-        B = 1
-    else:
-        A = len(comp['SiO2_Liq'])//cores
-        B = len(comp['SiO2_Liq']) % cores
-
-    if A > 0:
-        Group = np.zeros(A) + cores
-        if B > 0:
-            Group = np.append(Group, B)
-    else:
-        Group = np.array([B])
-
-    qs = []
-    q = Queue()
-    for j in tqdm(range(len(Group))):
-        ps = []
-        for i in range(int(cores*j), int(cores*j + Group[j])):
-            if type(comp) == dict:
-                if type(P_bar) == np.ndarray:
-                    p = Process(target = findLiq, args = (q, i), kwargs = {'Model': Model, 'P_bar': P_bar[i], 'T_initial_C': T_initial_C[i], 'comp': comp, 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset, 'Affinity': Affinity})
-                else:
-                    p = Process(target = findLiq, args = (q, i), kwargs = {'Model': Model, 'P_bar': P_bar, 'T_initial_C': T_initial_C[i], 'comp': comp, 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset, 'Affinity': Affinity})
-            else:
-                if type(P_bar) == np.ndarray:
-                    if len(comp['SiO2_Liq']) != len(P_bar):
-                        raise Warning("The length of your composition and pressure variables are different. Please correct this before running the code.")
-
-                    p = Process(target = findLiq, args = (q, i), kwargs = {'Model': Model, 'P_bar': P_bar[i], 'T_initial_C': T_initial_C[i], 'comp': comp.loc[i].to_dict(), 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset, 'Affinity': Affinity})
-                else:
-                    p = Process(target = findLiq, args = (q, i), kwargs = {'Model': Model, 'P_bar': P_bar, 'T_initial_C': T_initial_C[i], 'comp': comp.loc[i].to_dict(), 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset, 'Affinity': Affinity})
-
-            ps.append(p)
-            p.start()
-
-        TIMEOUT = 60
-
-        start = time.time()
-        for p in ps:
-            if time.time() - start < TIMEOUT - 10:
-                try:
-                    ret = q.get(timeout = TIMEOUT - (time.time()-start) + 10)
-                except:
-                    ret = []
-            else:
-                try:
-                    ret = q.get(timeout = 10)
-                except:
-                    ret = []
-
-            qs.append(ret)
-
-        TIMEOUT = 5
-        start = time.time()
-        for p in ps:
-            if p.is_alive():
-                while time.time() - start <= TIMEOUT:
-                    if not p.is_alive():
-                        p.join()
-                        p.terminate()
-                        break
-                    time.sleep(.1)
-                else:
-                    p.terminate()
-                    p.join(5)
-            else:
-                p.join()
-                p.terminate()
-
-    Affin = {}
-    if type(comp) != dict or type(P_bar) == np.ndarray:
-        Results = pd.DataFrame(data = np.zeros((len(T_Liq), 17)), columns = ['T_Liq', 'liquidus_phase', 'fluid_saturated', 'SiO2', 'TiO2', 'Al2O3', 'Fe2O3', 'Cr2O3', 'FeO', 'MnO', 'MgO', 'CaO', 'Na2O', 'K2O', 'P2O5', 'H2O', 'CO2'])
-        for i in range(len(qs)):
-            if len(qs[i])>0:
-                if Affinity is True:
-                    Res, Af, index = qs[i]
-                    Affin[str(index)] = Af
-                else:
-                    Res, index = qs[i]
-
-                Results.loc[index,:] = Res
-    else:
-        if Affinity is True:
-            Results, Affin, index = qs[0]
+        if type(P_bar) == np.ndarray:
+            A = len(P_bar)//cores
+            B = len(P_bar) % cores
+        elif type(P_bar) != np.ndarray and type(comp) == dict:
+            A = 0
+            B = 1
         else:
-            Results, index = qs[0]
+            A = len(comp['SiO2_Liq'])//cores
+            B = len(comp['SiO2_Liq']) % cores
 
-    Res = comp_fix(Model = Model, comp = Results)
-    if type(Res) == dict:
-        Res = pd.DataFrame.from_dict(Res, orient = "index").T
+        if A > 0:
+            Group = np.zeros(A) + cores
+            if B > 0:
+                Group = np.append(Group, B)
+        else:
+            Group = np.array([B])
 
-    Res = Res[['T_Liq', 'liquidus_phase', 'fluid_saturated', 
-       'SiO2_Liq', 'TiO2_Liq', 'Al2O3_Liq', 'Cr2O3_Liq', 'FeOt_Liq','MnO_Liq', 'MgO_Liq', 'CaO_Liq',
-       'Na2O_Liq', 'K2O_Liq', 'P2O5_Liq', 'H2O_Liq', 'CO2_Liq', 
-       'Fe3Fet_Liq', 'Fe2O3', 'FeO', ]]
-    
-    Res = Res.drop(columns = ['Fe2O3',  'FeO']) # 'Cr2O3',
+        qs = []
+        q = Queue()
+        for j in tqdm(range(len(Group))):
+            ps = []
+            for i in range(int(cores*j), int(cores*j + Group[j])):
+                if type(comp) == dict:
+                    if type(P_bar) == np.ndarray:
+                        p = Process(target = findLiq, args = (q, i), kwargs = {'Model': Model, 'P_bar': P_bar[i], 'T_initial_C': T_initial_C[i], 'comp': comp, 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset, 'Affinity': Affinity})
+                    else:
+                        p = Process(target = findLiq, args = (q, i), kwargs = {'Model': Model, 'P_bar': P_bar, 'T_initial_C': T_initial_C[i], 'comp': comp, 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset, 'Affinity': Affinity})
+                else:
+                    if type(P_bar) == np.ndarray:
+                        if len(comp['SiO2_Liq']) != len(P_bar):
+                            raise Warning("The length of your composition and pressure variables are different. Please correct this before running the code.")
 
-    if Affinity is True:
-        # Affinity combined
-        int_keys = list(map(int, Affin.keys()))
+                        p = Process(target = findLiq, args = (q, i), kwargs = {'Model': Model, 'P_bar': P_bar[i], 'T_initial_C': T_initial_C[i], 'comp': comp.loc[i].to_dict(), 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset, 'Affinity': Affinity})
+                    else:
+                        p = Process(target = findLiq, args = (q, i), kwargs = {'Model': Model, 'P_bar': P_bar, 'T_initial_C': T_initial_C[i], 'comp': comp.loc[i].to_dict(), 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset, 'Affinity': Affinity})
 
-        # Determine the size of the resulting DataFrame
-        max_index = max(int_keys)
+                ps.append(p)
+                p.start()
 
-        # Initialize an empty list to maintain column order
-        all_columns = []
-        seen_columns = set()
+            TIMEOUT = 60
 
-        for d in Affin:
-            for col in Affin[d]:
-                if col not in seen_columns:
-                    all_columns.append(col)
-                    seen_columns.add(col)
-            
-            Affin[d] = pd.Series(Affin[d])
+            start = time.time()
+            for p in ps:
+                if time.time() - start < TIMEOUT - 10:
+                    try:
+                        ret = q.get(timeout = TIMEOUT - (time.time()-start) + 10)
+                    except:
+                        ret = []
+                else:
+                    try:
+                        ret = q.get(timeout = 10)
+                    except:
+                        ret = []
 
-        Af_Combined = pd.DataFrame(np.nan, index=range(max_index + 1), columns=all_columns)
+                qs.append(ret)
 
-        # Populate the result DataFrame
-        for d in Affin:
-            try:
-                df = Affin[d].to_frame().transpose()
-                Af_Combined.loc[int(d)] = df.iloc[0]
-            except:
-                continue
+            TIMEOUT = 5
+            start = time.time()
+            for p in ps:
+                if p.is_alive():
+                    while time.time() - start <= TIMEOUT:
+                        if not p.is_alive():
+                            p.join()
+                            p.terminate()
+                            break
+                        time.sleep(.1)
+                    else:
+                        p.terminate()
+                        p.join(5)
+                else:
+                    p.join()
+                    p.terminate()
+
+        Affin = {}
+        if type(comp) != dict or type(P_bar) == np.ndarray:
+            Results = pd.DataFrame(data = np.zeros((len(T_Liq), 17)), columns = ['T_Liq', 'liquidus_phase', 'fluid_saturated', 'SiO2', 'TiO2', 'Al2O3', 'Fe2O3', 'Cr2O3', 'FeO', 'MnO', 'MgO', 'CaO', 'Na2O', 'K2O', 'P2O5', 'H2O', 'CO2'])
+            for i in range(len(qs)):
+                if len(qs[i])>0:
+                    if Affinity is True:
+                        Res, Af, index = qs[i]
+                        Affin[str(index)] = Af
+                    else:
+                        Res, index = qs[i]
+
+                    Results.loc[index,:] = Res
+        else:
+            if Affinity is True:
+                Results, Affin, index = qs[0]
+            else:
+                Results, index = qs[0]
+
+        Res = comp_fix(Model = Model, comp = Results)
+        if type(Res) == dict:
+            Res = pd.DataFrame.from_dict(Res, orient = "index").T
+
+        Res = Res[['T_Liq', 'liquidus_phase', 'fluid_saturated', 
+        'SiO2_Liq', 'TiO2_Liq', 'Al2O3_Liq', 'Cr2O3_Liq', 'FeOt_Liq','MnO_Liq', 'MgO_Liq', 'CaO_Liq',
+        'Na2O_Liq', 'K2O_Liq', 'P2O5_Liq', 'H2O_Liq', 'CO2_Liq', 
+        'Fe3Fet_Liq', 'Fe2O3', 'FeO', ]]
         
-        return Res, Af_Combined
+        Res = Res.drop(columns = ['Fe2O3',  'FeO']) # 'Cr2O3',
+
+        if Affinity is True:
+            # Affinity combined
+            int_keys = list(map(int, Affin.keys()))
+
+            # Determine the size of the resulting DataFrame
+            max_index = max(int_keys)
+
+            # Initialize an empty list to maintain column order
+            all_columns = []
+            seen_columns = set()
+
+            for d in Affin:
+                for col in Affin[d]:
+                    if col not in seen_columns:
+                        all_columns.append(col)
+                        seen_columns.add(col)
+                
+                Affin[d] = pd.Series(Affin[d])
+
+            Af_Combined = pd.DataFrame(np.nan, index=range(max_index + 1), columns=all_columns)
+
+            # Populate the result DataFrame
+            for d in Affin:
+                try:
+                    df = Affin[d].to_frame().transpose()
+                    Af_Combined.loc[int(d)] = df.iloc[0]
+                except:
+                    continue
+            
+            return Res, Af_Combined
+        else:
+            return Res
     else:
-        return Res
+        T_Liq = MM.findLiq_multi(P_bar = P_bar, T_initial_C = T_initial_C, comp = comp)
+        return T_Liq
 
 def findCO2(q, index, *, Model = None, P_bar = None, T_initial_C = None, comp = None, fO2_buffer = None, fO2_offset = None):
     T_Liq = 0
