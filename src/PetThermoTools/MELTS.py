@@ -88,11 +88,11 @@ def equilibrate_MELTS(Model = None, P_bar = None, T_C = None, comp = None,
 
     for R in Results['Conditions']:
         if R == 'temperature':
-            Results['Conditions'][R].loc[0] = melts.engine.temperature
+            Results['Conditions'].loc[0,R] = melts.engine.temperature
         elif R == 'pressure':
-            Results['Conditions'][R].loc[0] = melts.engine.pressure
+            Results['Conditions'].loc[0,R] = melts.engine.pressure
         else:
-            Results['Conditions'][R].loc[0] = melts.engine.getProperty(R, 'bulk')
+            Results['Conditions'].loc[0,R] = melts.engine.getProperty(R, 'bulk')
 
     for phase in PhaseList:
         if phase not in list(Results.keys()):
@@ -100,7 +100,7 @@ def equilibrate_MELTS(Model = None, P_bar = None, T_C = None, comp = None,
             Results[phase + '_prop'] = pd.DataFrame(data = np.zeros((length, 5)), columns = ['g','h', 'mass', 'v', 'rho'])
 
         for el in Results[phase]:
-            Results[phase][el].loc[0] = melts.engine.getProperty('dispComposition', phase, el)
+            Results[phase].loc[0,el] = melts.engine.getProperty('dispComposition', phase, el)
 
         for pr in Results[phase + '_prop']:
             Results[phase + '_prop'][pr].loc[0] = melts.engine.getProperty(pr, phase)

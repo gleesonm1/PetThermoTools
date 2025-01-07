@@ -336,13 +336,18 @@ def equilibrate_multi(cores = None, Model = None, bulk = None, T_C = None, P_bar
                     except:
                         continue
             else:
-                if len(qs[0]) > 0:
-                    Output, index = qs[0]
-                    Output = Results[0]
-                    Affinity = Results[1]
-                
-                    if "MELTS" in Model:
-                        Output = stich(Output, Model = Model)
+                # try:
+                Results, index = qs[0]
+                Output = Results[0]
+                Affinity = pd.DataFrame([Results[1]])
+                Af_Combined = Affinity.copy()
+            
+                if "MELTS" in Model:
+                    Output = stich(Output, Model = Model)
+
+                Combined = Output['All'].copy()
+                # except:
+                #     return Output
 
         if copy_columns is not None:
             if type(copy_columns) == str:
