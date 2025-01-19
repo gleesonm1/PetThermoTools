@@ -148,12 +148,22 @@ def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar
         j = j + 1
 
         for i in range(cores):
+            # if "MELTS" in Model:
             T_path_C = np.array(subarrays_T[i])#T_flat[i*A:(i+1)*A]
             P_path_bar = np.array(subarrays_P[i])#P_flat[i*A:(i+1)*A]
+            # else:
+            #     T_path_C = subarrays_T[i]
+            #     P_path_bar = subarrays_P[i]
 
-            if len(T_path_C) > 150:
-                T_path_C = T_path_C[:99]
-                P_path_bar = P_path_bar[:99]
+
+            if "MELTS" in Model:
+                if len(T_path_C) > 150:
+                    T_path_C = T_path_C[:99]
+                    P_path_bar = P_path_bar[:99]
+            else:
+                if len(T_path_C) > 300:
+                    T_path_C = T_path_C[:249]
+                    P_path_bar = P_path_bar[:249]
 
             if "MELTS" in Model:
                 if j % 3 == 0:
@@ -164,6 +174,10 @@ def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar
             if j % 2 > 0:
                 T_path_C = np.flip(T_path_C)
                 P_path_bar = np.flip(P_path_bar)
+
+            # if "MELTS" not in Model:
+            #     T_path_C = T_path_C.tolist()
+            #     P_path_bar = P_path_bar.tolist()
 
             # if j > 5:
             #     com = list(zip(T, P))
@@ -182,7 +196,11 @@ def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar
             ps.append(p)
             p.start()
 
-        TIMEOUT = 120
+        if "MELTS" in Model:
+            TIMEOUT = 240
+        else:
+            TIMEOUT = 900
+
         start = time.time()
         first = True
         for p in ps:

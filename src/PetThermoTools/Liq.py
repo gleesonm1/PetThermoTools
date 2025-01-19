@@ -15,20 +15,21 @@ from tqdm.notebook import tqdm, trange
 def equilibrate_multi(cores = None, Model = None, bulk = None, T_C = None, P_bar = None, 
                       Fe3Fet_Liq = None, H2O_Liq = None, CO2_Liq = None, fO2_buffer = None, fO2_offset = None,
                       timeout = None, copy_columns = None, Suppress = None):
-    
-    try:
-        from meltsdynamic import MELTSdynamic
-    except:
-        Warning('alphaMELTS for Python files are not on the python path. \n Please add these files to the path running \n import sys \n sys.path.append(r"insert_your_path_to_melts_here") \n You are looking for the location of the meltsdynamic.py file')
+
+    if "MELTS" in Model:
+        try:
+            from meltsdynamic import MELTSdynamic
+        except:
+            Warning('alphaMELTS for Python files are not on the python path. \n Please add these files to the path running \n import sys \n sys.path.append(r"insert_your_path_to_melts_here") \n You are looking for the location of the meltsdynamic.py file')
 
     comp = bulk.copy()
 
     if Model is None:
         Model = "MELTSv1.0.2"
 
-    if Model == "Holland":
-        import pyMAGEMINcalc as MM
-        print('pyMAGEMinCalc version: ' + str(MM.__version__))
+    # if Model == "Holland":
+    #     import pyMAGEMINcalc as MM
+    #     print('pyMAGEMinCalc version: ' + str(MM.__version__))
 
     if cores is None:
         cores = multiprocessing.cpu_count()
@@ -365,7 +366,22 @@ def equilibrate_multi(cores = None, Model = None, bulk = None, T_C = None, P_bar
         # Affinity = Af_Combined.copy()
         return Combined
     else:
-        Output = MM.equilibrate_multi(P_bar = P_bar, T_C = T_C, comp = comp)
+        import julia
+        from julia.api import Julia
+        jl = Julia(compiled_modules=False)
+        from julia import MAGEMinCalc
+        # Output = MM.equilibrate_multi(P_bar = P_bar, T_C = T_C, comp = comp)
+        
+        comp['O'] = comp['Fe3Fet_Liq']*(((159.59/2)/71.844)*comp['FeOt_Liq'] - comp['FeOt_Liq'])
+
+        if Model == "Weller2024":
+            bulk = comp[['SiO2_Liq', 'Al2O3_Liq', 'CaO_Liq', 'MgO_Liq', 'FeOt_Liq', 'K2O_Liq', 'Na2O_Liq', 'TiO2_Liq', 'O', 'Cr2O3_Liq']].astype(float).values
+        else:
+            bulk = comp[['SiO2_Liq', 'Al2O3_Liq', 'CaO_Liq', 'MgO_Liq', 'FeOt_Liq', 'K2O_Liq', 'Na2O_Liq', 'TiO2_Liq', 'O', 'Cr2O3_Liq', 'H2O_Liq']].astype(float).values
+
+        print(np.shape(bulk))
+
+        Output = MAGEMinCalc.equilibrate(bulk = bulk, P_kbar = P_bar/1000.0, T_C = T_C, fo2_buffer = fO2_buffer, fo2_offset = fO2_offset, Model = Model)
         Combined = stich(Output, Model = Model)
 
         if copy_columns is not None:
@@ -801,7 +817,7 @@ def findLiq(q, index,*, Model = None, P_bar = None, T_initial_C = None, comp = N
 
     Model: string
         "MELTS" or "Holland". Dictates whether MELTS or MAGEMin calculations are performed. Default "MELTS".
-        Version of melts can be specified by additing "v1.0.1", "v1.1.0", "v1.2.0", or "p" to "MELTS". Default "v.1.0.1".
+        Version of melts can be specified by additing "v1.0.2", "v1.1.0", "v1.2.0", or "p" to "MELTS". Default "v.1.0.2".
 
     P_bar: float
         Specifies the pressure of the calculation (bar).

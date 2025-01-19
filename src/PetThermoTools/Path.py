@@ -145,6 +145,10 @@ def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid 
             if fO2_buffer != "FMQ":
                 raise Warning("fO2 buffer specified is not an allowed input. This argument can only be 'FMQ' or 'NNO' \n if you want to offset from these buffers use the 'fO2_offset' argument.")
 
+    if "MELTS" not in Model:
+        if fO2_buffer == "FMQ":
+            fO2_buffer = "qfm"
+
     # ensure the bulk composition has the correct headers etc.
     comp = comp_fix(Model = Model, comp = comp, Fe3Fet_Liq = Fe3Fet_Liq, H2O_Liq = H2O_Liq, CO2_Liq = CO2_Liq)
 
@@ -620,12 +624,23 @@ def path(q, index, *, Model = None, comp = None, Frac_solid = None, Frac_fluid =
 
         return
 
-    if Model == "Holland":
-        import pyMAGEMINcalc as MM
-        try:
-            Results = MM.path(comp = comp, Frac_solid = Frac_solid, Frac_fluid = Frac_fluid, T_C = T_C, T_path_C = T_path_C, T_start_C = T_start_C, T_end_C = T_end_C, dt_C = dt_C, P_bar = P_bar, P_path_bar = P_path_bar, P_start_bar = P_start_bar, P_end_bar = P_end_bar, dp_bar = dp_bar, find_liquidus = find_liquidus, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset)
-            q.put([Results, index])
-        except:
-            q.put([])
-        return
+    if "MELTS" not in Model:
+        import julia
+        from julia.api import Julia
+        jl = Julia(compiled_modules=False)
+        from julia import MAGEMinCalc
+        # import pyMAGEMINcalc as MM
+        # try:
+            # Results = MM.path(Model = Model, comp = comp, Frac_solid = Frac_solid, Frac_fluid = Frac_fluid, T_C = T_C, T_path_C = T_path_C, T_start_C = T_start_C, T_end_C = T_end_C, dt_C = dt_C, P_bar = P_bar, P_path_bar = P_path_bar, P_start_bar = P_start_bar, P_end_bar = P_end_bar, dp_bar = dp_bar, find_liquidus = find_liquidus, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset)
+        if Frac_solid is None:
+            Frac_solid = False
+            
+        Results = MAGEMinCalc.path(comp = comp, T_start_C = T_start_C, T_end_C = T_end_C, dt_C = dt_C,
+                                    T_C = T_C, P_start_bar = P_start_bar, P_end_bar = P_end_bar, dp_bar = dp_bar,
+                                    P_bar = P_bar, T_path_C = T_path_C, P_path_bar = P_path_bar, frac_xtal = Frac_solid,
+                                    Model = Model, fo2_buffer = fO2_buffer, fo2_offset = fO2_offset, find_liquidus = find_liquidus)
+        q.put([Results, index])
+        # except:
+        #     q.put([])
+        # return
 

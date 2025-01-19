@@ -71,3 +71,11 @@ Fixed other minor bugs.
 pyMAGEMINcalc v0.0.8 https://github.com/gleesonm1/pyMAGEMINcalc/archive/refs/tags/v0.0.8.zip
 MAGEMinCalc v0.3.4 https://github.com/gleesonm1/MAGEMinCalc/archive/refs/tags/v0.3.4.zip 
 MAGEMin_C v1.3.5 (tested up to v1.5.9) https://github.com/ComputationalThermodynamics/MAGEMin_C.jl/archive/refs/tags/v1.3.5.zip 
+
+
+Version 0.2.30 (January 16th 2025)
+====================================
+Updates to MAGEMinCalc that allow greater integration with PetThermoTools and reduce the dependency on the pyMAGEMINcalc package.
+Fixes to minor bugs included output of single equilibrium calculations.
+MAGEMin_C v1.6.9 https://github.com/ComputationalThermodynamics/MAGEMin_C.jl/archive/refs/tags/v1.6.9.zip
+MAGEMinCalc v0.3.8 https://github.com/gleesonm1/MAGEMinCalc/archive/refs/tags/v0.3.8.zip 
