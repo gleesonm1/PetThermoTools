@@ -148,12 +148,12 @@ def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar
         j = j + 1
 
         for i in range(cores):
-            # if "MELTS" in Model:
-            T_path_C = np.array(subarrays_T[i])#T_flat[i*A:(i+1)*A]
-            P_path_bar = np.array(subarrays_P[i])#P_flat[i*A:(i+1)*A]
-            # else:
-            #     T_path_C = subarrays_T[i]
-            #     P_path_bar = subarrays_P[i]
+            if "MELTS" in Model:
+                T_path_C = T_flat[i*A:(i+1)*A]
+                P_path_bar = P_flat[i*A:(i+1)*A]
+            else:
+                T_path_C = np.array(subarrays_T[i])
+                P_path_bar = np.array(subarrays_P[i])
 
 
             if "MELTS" in Model:
@@ -191,7 +191,12 @@ def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar
             #     T_path_C = np.array(T_randomized)
             #     P_path_bar = np.array(P_randomized)
 
-            p = Process(target = path, args = (q,i), kwargs = {'Model': Model, 'comp': comp, 'T_path_C': T_path_C, 'P_path_bar': P_path_bar, 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset})
+            p = Process(target = path, args = (q,i), kwargs = {'Model': Model, 'comp': comp, 
+                                                               'T_path_C': T_path_C, 
+                                                               'P_path_bar': P_path_bar, 
+                                                               'fO2_buffer': fO2_buffer, 
+                                                               'fO2_offset': fO2_offset,
+                                                               'Suppress': ['rutile', 'tridymite']})
 
             ps.append(p)
             p.start()

@@ -911,21 +911,22 @@ def path_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid = None,
     bulk = list(100*np.array(bulk)/np.sum(bulk))
 
     if Suppress_except is False:
-        if Suppress == "All":
-            melts.engine.pressure = np.random.normal(500, 500/10)
-            melts.engine.temperature = 1200 + 200
-            melts.engine.setBulkComposition(bulk)
-            PL = melts.engine.calcSaturationState()
-            for p in PL:
-                if p != "fluid":
-                    if p != "water":
-                        melts.engine.setSystemProperties("Suppress", p)
-        else:
-            if type(Suppress) == list:
-                for p in Suppress:
-                    melts.engine.setSystemProperties("Suppress", p)
+        if Suppress is not None:
+            if Suppress == "All":
+                melts.engine.pressure = np.random.normal(500, 500/10)
+                melts.engine.temperature = 1200 + 200
+                melts.engine.setBulkComposition(bulk)
+                PL = melts.engine.calcSaturationState()
+                for p in PL:
+                    if p != "fluid":
+                        if p != "water":
+                            melts.engine.setSystemProperties("Suppress", p)
             else:
-                melts.engine.setSystemProperties("Suppress", Suppress)
+                if type(Suppress) == list:
+                    for p in Suppress:
+                        melts.engine.setSystemProperties("Suppress", p)
+                else:
+                    melts.engine.setSystemProperties("Suppress", Suppress)
     else:
         melts.engine.pressure = np.random.normal(500, 500/10)
         melts.engine.temperature = 1200 + 200
