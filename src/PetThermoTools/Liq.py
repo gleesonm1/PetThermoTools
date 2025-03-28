@@ -366,12 +366,15 @@ def equilibrate_multi(cores = None, Model = None, bulk = None, T_C = None, P_bar
         # Affinity = Af_Combined.copy()
         return Combined
     else:
-        import julia
-        from julia.api import Julia
-        jl = Julia(compiled_modules=False)
-        from julia import MAGEMinCalc
-        # Output = MM.equilibrate_multi(P_bar = P_bar, T_C = T_C, comp = comp)
-        
+        # import julia
+        # from julia.api import Julia
+        # jl = Julia(compiled_modules=False)
+        # from julia import MAGEMinCalc
+        ## Output = MM.equilibrate_multi(P_bar = P_bar, T_C = T_C, comp = comp)
+        from juliacall import Main as jl, convert as jlconvert
+
+        jl.seval("using MAGEMinCalc")
+
         comp['O'] = comp['Fe3Fet_Liq']*(((159.59/2)/71.844)*comp['FeOt_Liq'] - comp['FeOt_Liq'])
 
         if Model == "Weller2024":
@@ -380,8 +383,19 @@ def equilibrate_multi(cores = None, Model = None, bulk = None, T_C = None, P_bar
             bulk = comp[['SiO2_Liq', 'Al2O3_Liq', 'CaO_Liq', 'MgO_Liq', 'FeOt_Liq', 'K2O_Liq', 'Na2O_Liq', 'TiO2_Liq', 'O', 'Cr2O3_Liq', 'H2O_Liq']].astype(float).values
 
         print(np.shape(bulk))
+        bulk_jl = jl.seval("collect")(bulk)
 
-        Output = MAGEMinCalc.equilibrate(bulk = bulk, P_kbar = P_bar/1000.0, T_C = T_C, fo2_buffer = fO2_buffer, fo2_offset = fO2_offset, Model = Model)
+        if type(T_C) == np.ndarray:
+            T_C = jl.seval("collect")(T_C)
+        if type(P_bar) == np.ndarray:
+            P_kbar = jl.seval("collect")(P_bar/1000.0)
+        else:
+            P_kbar = P_bar/1000.0
+        if type(fO2_offset) == np.ndarray:
+            fO2_offset = jl.seval("collect")(fO2_offset)
+
+        Output = jl.MAGEMinCalc.equilibrate(bulk = bulk_jl, P_kbar = P_kbar, T_C = T_C, fo2_buffer = fO2_buffer, fo2_offset = fO2_offset, Model = Model)
+        Output = dict(Output)
         Combined = stich(Output, Model = Model)
 
         if copy_columns is not None:

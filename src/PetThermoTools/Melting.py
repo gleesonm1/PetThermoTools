@@ -171,8 +171,9 @@ def AdiabaticMelt(q, index, *, Model = None, comp_1 = None, comp_2 = None, comp_
         return
 
     if Model == "Holland":
-        import pyMAGEMINcalc as MM
-        Results = MM.AdiabaticDecompressionMelting(comp = comp_1, T_p_C = Tp_C, P_start_kbar = P_start_bar/1000, P_end_kbar = P_end_bar/1000, dp_kbar = dp_bar/1000, Frac = 0)
+        # import pyMAGEMINcalc as MM
+        # Results = MM.AdiabaticDecompressionMelting(comp = comp_1, T_p_C = Tp_C, P_start_kbar = P_start_bar/1000, P_end_kbar = P_end_bar/1000, dp_kbar = dp_bar/1000, Frac = 0)
+        print('Note that the ability to use MAGEMin to performed adiabatic decompression melting in PetThermoTools has been temporarily disabled. The underlying issue will be fixed soon and this funciton will once again become available.')
         q.put([Results, index])
         return
     

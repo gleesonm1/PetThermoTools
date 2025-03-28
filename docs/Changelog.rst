@@ -79,3 +79,8 @@ Updates to MAGEMinCalc that allow greater integration with PetThermoTools and re
 Fixes to minor bugs included output of single equilibrium calculations.
 MAGEMin_C v1.6.9 https://github.com/ComputationalThermodynamics/MAGEMin_C.jl/archive/refs/tags/v1.6.9.zip
 MAGEMinCalc v0.3.8 https://github.com/gleesonm1/MAGEMinCalc/archive/refs/tags/v0.3.8.zip 
+
+Version 0.2.32 (March 28th 2025)
+====================================
+Changes to the underlying code and associated MAGEMinCalc library to improve the ease of integration between the packages. Adiabatic decompression melting in MAGEMinCalc is temporarily turn off.
+MAGEMinCalc v0.4.1 https://github.com/gleesonm1/MAGEMinCalc/archive/refs/tags/v0.4.1.zip 

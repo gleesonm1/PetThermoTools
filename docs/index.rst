@@ -12,7 +12,7 @@ Welcome to PetThermoTools's documentation!
 
    introduction
    Installation/InstallationScript
-   Installation/MAGEMin_Installation
+   Installation/MAGEMin_PythonCall
    available_functions_pdf
 
 .. importing_data

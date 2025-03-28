@@ -201,7 +201,7 @@ def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid 
 
     qs = []
     q = Queue()
-
+    
     # perform calculation if only 1 calculation is specified
     if One == 1:
         if Print_suppress is None:
@@ -374,6 +374,7 @@ def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid 
             if Print_suppress is None:
                 print(" Complete (time taken = " + str(round(time.time() - s,2)) + " seconds)", end = "\n", flush = True)
 
+
         Results = {}
         Out = {}
         for i in range(len(qs)):
@@ -452,7 +453,6 @@ def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid 
 
         #if "MELTS" in Model:
         Results = stich(Results, multi = True, Model = Model, Frac_fluid = Frac_fluid, Frac_solid = Frac_solid)
-
         
         for r in Results:
             i = int(r.split('=')[1].strip())
@@ -625,21 +625,41 @@ def path(q, index, *, Model = None, comp = None, Frac_solid = None, Frac_fluid =
         return
 
     if "MELTS" not in Model:
-        import julia
-        from julia.api import Julia
-        jl = Julia(compiled_modules=False)
-        from julia import MAGEMinCalc
-        # import pyMAGEMINcalc as MM
-        # try:
-            # Results = MM.path(Model = Model, comp = comp, Frac_solid = Frac_solid, Frac_fluid = Frac_fluid, T_C = T_C, T_path_C = T_path_C, T_start_C = T_start_C, T_end_C = T_end_C, dt_C = dt_C, P_bar = P_bar, P_path_bar = P_path_bar, P_start_bar = P_start_bar, P_end_bar = P_end_bar, dp_bar = dp_bar, find_liquidus = find_liquidus, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset)
+        # import julia
+        # from julia.api import Julia
+        # jl = Julia(compiled_modules=False)
+        # from julia import MAGEMinCalc
+        # # import pyMAGEMINcalc as MM
+        # # try:
+        #     # Results = MM.path(Model = Model, comp = comp, Frac_solid = Frac_solid, Frac_fluid = Frac_fluid, T_C = T_C, T_path_C = T_path_C, T_start_C = T_start_C, T_end_C = T_end_C, dt_C = dt_C, P_bar = P_bar, P_path_bar = P_path_bar, P_start_bar = P_start_bar, P_end_bar = P_end_bar, dp_bar = dp_bar, find_liquidus = find_liquidus, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset)
+        # if Frac_solid is None:
+        #     Frac_solid = False
+            
+        # Results = MAGEMinCalc.path(comp = comp, T_start_C = T_start_C, T_end_C = T_end_C, dt_C = dt_C,
+        #                             T_C = T_C, P_start_bar = P_start_bar, P_end_bar = P_end_bar, dp_bar = dp_bar,
+        #                             P_bar = P_bar, T_path_C = T_path_C, P_path_bar = P_path_bar, frac_xtal = Frac_solid,
+        #                             Model = Model, fo2_buffer = fO2_buffer, fo2_offset = fO2_offset, find_liquidus = find_liquidus)
+        # q.put([Results, index])
+
+        # import julia
+        from juliacall import Main as jl, convert as jlconvert
+
+        jl.seval("using MAGEMinCalc")
+
         if Frac_solid is None:
             Frac_solid = False
-            
-        Results = MAGEMinCalc.path(comp = comp, T_start_C = T_start_C, T_end_C = T_end_C, dt_C = dt_C,
-                                    T_C = T_C, P_start_bar = P_start_bar, P_end_bar = P_end_bar, dp_bar = dp_bar,
-                                    P_bar = P_bar, T_path_C = T_path_C, P_path_bar = P_path_bar, frac_xtal = Frac_solid,
-                                    Model = Model, fo2_buffer = fO2_buffer, fo2_offset = fO2_offset, find_liquidus = find_liquidus)
-        q.put([Results, index])
+
+        comp_julia = jl.seval("Dict")(comp)
+
+        Results = jl.MAGEMinCalc.path(
+            comp=comp_julia, T_start_C=T_start_C, T_end_C=T_end_C, dt_C=dt_C,
+            T_C=T_C, P_start_bar=P_start_bar, P_end_bar=P_end_bar, dp_bar=dp_bar,
+            P_bar=P_bar, T_path_C=T_path_C, P_path_bar=P_path_bar, frac_xtal=Frac_solid,
+            Model=Model, fo2_buffer=fO2_buffer, fo2_offset=fO2_offset, find_liquidus=find_liquidus
+        )
+        # Results = jl.pyconvert(dict, Results)
+        Results_df = dict(Results)
+        q.put([Results_df, index])
         # except:
         #     q.put([])
         # return
