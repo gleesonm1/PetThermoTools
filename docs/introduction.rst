@@ -22,7 +22,6 @@ Before the PetThermoTools package can be used to perform MAGEMin calculations, t
 repository, must be imported and added to Julia. Please see the installation page for full details.
 
 
-=======================
 Citing PetThermoTools
 =======================
 
@@ -30,7 +29,6 @@ At present there is no publication associated with PetThermoTools (although ther
 We request that any users using PetThermoTools in their research cite the PetThermoTools zenodo repository https://zenodo.org/badge/latestdoi/536711798 and state the 
 version that was used.
 
-==============================
 Reporting bugs/issues with the code
 ==============================
 No software is free of bugs, particularly when still in the early stages of development! Many of the calculations performed in PetThermoTools have been benchmarked to the results obtained by alternative MELTS software packages (e.g., MELTS for Excel). However, if users spot any bugs, or wish to request features, they should submit an 'issue' on the GitHub page. Alternatively, they can email the development team. In both cases, please upload any files the code is using (e.g. excel, jupyter notebooks) so that I can run your code to see what the issue is!
