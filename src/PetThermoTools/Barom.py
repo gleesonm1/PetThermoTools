@@ -23,24 +23,10 @@ import sys
 from tqdm.notebook import tqdm, trange
 from scipy import interpolate
 from shapely.geometry import MultiPoint, Point, Polygon
-from dask.distributed import Client
-import dask
-from dask import delayed
-from dask.multiprocessing import get as mp_get
 
 from functools import partial
 import concurrent.futures
 
-import numpy as np
-import multiprocessing
-from functools import partial
-import time
-
-from dask.distributed import Client, LocalCluster
-import multiprocessing
-from functools import partial
-import numpy as np
-import multiprocessing as mp
 
 def run_melts_single(Pin, Model, comp, T_maxdrop_C, dt_C, T_initial_C,
                      fO2_buffer, fO2_offset, H2O_Sat, phases):

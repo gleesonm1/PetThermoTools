@@ -185,4 +185,4 @@ decimalPlace, "CO2 doesn't match test value")
 
 
 if __name__ == '__main__':
-     unittest.main()
+    unittest.main()
