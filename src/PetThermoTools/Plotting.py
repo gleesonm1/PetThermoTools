@@ -131,12 +131,20 @@ def plot_surfaces(Results = None, P_bar = None, phases = None, H2O_Liq = None):
         a.set_xlabel('P (bars)')
         a.set_ylabel('T ($\degree$C)')
         for i in range(len(phases)):
-            if i == 0:
-                a.plot(P_bar, Results[phases[0]][0,0,:], '-r', linewidth = 2, label = phases[i])
-            if i == 1:
-                a.plot(P_bar, Results[phases[1]][0,0,:], '-b', linewidth = 2, label = phases[i])
-            if i == 2:
-                a.plot(P_bar, Results[phases[2]][0,0,:], '-k', linewidth = 2, label = phases[i])
+            try:
+                if i == 0:
+                    a.plot(P_bar, Results['Output'][phases[0]], '-r', linewidth = 2, label = phases[i])
+                if i == 1:
+                    a.plot(P_bar, Results['Output'][phases[1]], '-b', linewidth = 2, label = phases[i])
+                if i == 2:
+                    a.plot(P_bar, Results['Output'][phases[2]], '-k', linewidth = 2, label = phases[i])
+            except:
+                if i == 0:
+                    a.plot(P_bar, Results[phases[0]][0,0,:], '-r', linewidth = 2, label = phases[i])
+                if i == 1:
+                    a.plot(P_bar, Results[phases[1]][0,0,:], '-b', linewidth = 2, label = phases[i])
+                if i == 2:
+                    a.plot(P_bar, Results[phases[2]][0,0,:], '-k', linewidth = 2, label = phases[i])
 
         a.legend()
 
@@ -184,7 +192,11 @@ def residualT_plot(Results = None, P_bar = None, phases = None, H2O_Liq = None, 
             for i in range(2):
                 for j in range(2):
                     a[i][j].set_title(Name[i,j])
-                    a[i][j].plot(P_bar, Results[m[i,j]][0,0,:], 'ok', markerfacecolor="b", label="original", markersize = 8)
+                    try:
+                        a[i][j].plot(P_bar, Results['Output'][m[i,j]], 'ok', markerfacecolor="b", label="original", markersize = 8)
+                    except:
+                        print("You are using the old find_mineral_saturation function.\n This will soon be removed, please transition to the mineral_cosaturation function.")
+                        a[i][j].plot(P_bar, Results[m[i,j]][0,0,:], 'ok', markerfacecolor="b", label="original", markersize = 8)
                     if interpolate is True:
                         if ~np.isnan(Results['CurveMin'][m[i,j]]['P_min']):
                             a[i][j].plot(Results['CurveMin'][m[i,j]]['P_new'], Results['CurveMin'][m[i,j]]['y_new'],

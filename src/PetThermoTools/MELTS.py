@@ -299,7 +299,9 @@ def findCO2_MELTS(P_bar = None, Model = None, T_C = None, comp = None, melts = N
 
     return T_Liq, H2O, CO2
 
-def findLiq_MELTS(P_bar = None, Model = None, T_C_init = None, comp = None, melts = None, fO2_buffer = None, fO2_offset = None, Step = None, fluid_test = None, bulk_return = None, step = None, Affinity = False):
+def findLiq_MELTS(P_bar = None, Model = None, T_C_init = None, comp = None, melts = None, 
+                fO2_buffer = None, fO2_offset = None, Step = None, fluid_test = None, 
+                bulk_return = None, step = None, Affinity = False):
     '''
     Perform a single find liquidus calculation in MELTS. WARNING! Running this function directly from the command land/jupyter notebook will initiate the MELTS C library in the main python process. Once this has been initiated the MELTS C library cannot be re-loaded and failures during the calculation will likely cause a terminal error to occur.
 
@@ -801,12 +803,12 @@ def phaseSat_MELTS(Model = None, comp = None, phases = None, T_initial_C = None,
 
     return Results
 
-def path_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid = None, 
-               T_C = None, T_path_C = None, T_start_C = None, T_end_C = None, dt_C = None, 
+def path_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid = None, T_initial_C = 1400,
+               T_C = None, T_path_C = None, T_start_C = None, T_end_C = None, dt_C = None, T_maxdrop_C = None,
                P_bar = None, P_path_bar = None, P_start_bar = None, P_end_bar = None, dp_bar = None, 
                isenthalpic = None, isentropic = None, isochoric = None, find_liquidus = None, 
                fO2_buffer = None, fO2_offset = None, fluid_sat = None, Crystallinity_limit = None, 
-               Suppress = ['rutile', 'tridymite'], Suppress_except=False):
+               Suppress = ['rutile', 'tridymite'], Suppress_except=False, phases=None):
     '''
     Perform a single  calculation in MELTS. WARNING! Running this function directly from the command land/jupyter notebook will initiate the MELTS C library in the main python process. Once this has been initiated the MELTS C library cannot be re-loaded and failures during the calculation will likely cause a terminal error to occur.
 
@@ -946,18 +948,21 @@ def path_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid = None,
         if P_path_bar is not None:
             try:
                 if type(P_path_bar) == np.ndarray:
-                    Liq_Results = findLiq_MELTS(P_bar = P_path_bar[0], comp = bulk, melts = melts, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, T_C_init = 1400)
+                    Liq_Results = findLiq_MELTS(P_bar = P_path_bar[0], comp = bulk, melts = melts, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, T_C_init = T_initial_C)
                 else:
-                    Liq_Results = findLiq_MELTS(P_bar = P_path_bar, comp = bulk, melts = melts, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, T_C_init = 1400)
+                    Liq_Results = findLiq_MELTS(P_bar = P_path_bar, comp = bulk, melts = melts, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, T_C_init = T_initial_C)
             except:
                 return Results
         elif P_start_bar is not None:
             try:
-                Liq_Results = findLiq_MELTS(P_bar = P_start_bar, comp = bulk, melts = melts, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, T_C_init = 1400)
+                Liq_Results = findLiq_MELTS(P_bar = P_start_bar, comp = bulk, melts = melts, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, T_C_init = T_initial_C)
             except:
                 return Results
 
+        print(Liq_Results)
         T_start_C = Liq_Results['T_Liq'] + 0.1
+        if T_end_C is None and T_maxdrop_C is not None:
+            T_end_C = T_start_C - T_maxdrop_C
 
     else:
         if fO2_buffer is not None:
@@ -1153,6 +1158,15 @@ def path_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid = None,
             Total_volume = Volume + float(Results['liquid1_prop']['v'].loc[i])
 
             if Volume/Total_volume > Crystallinity_limit:
+                break
+
+        if phases is not None:
+            ll = 0
+            for p in phases:
+                if p in Results.keys():
+                    ll = ll + 1
+            
+            if ll == len(phases):
                 break
 
         melts = melts.addNodeAfter()

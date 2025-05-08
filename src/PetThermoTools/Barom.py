@@ -10,6 +10,7 @@ from PetThermoTools.GenFuncs import *
 from PetThermoTools.Plotting import *
 from PetThermoTools.Liq import *
 from PetThermoTools.MELTS import *
+from PetThermoTools.Path import *
 # try:
 #     from PetThermoTools.Holland import *
 # except:
@@ -22,8 +23,227 @@ import sys
 from tqdm.notebook import tqdm, trange
 from scipy import interpolate
 from shapely.geometry import MultiPoint, Point, Polygon
+from dask.distributed import Client
+import dask
+from dask import delayed
+from dask.multiprocessing import get as mp_get
 
-def find_mineral_cosaturation(cores = None, Model = None, bulk = None, phases = None, P_bar = None, Fe3Fet_Liq = None, H2O_Liq = None, H2O_Sat = False, T_initial_C = None, dt_C = None, T_maxdrop_C = None, T_cut_C = None, find_range = None, find_min = None, fO2_buffer = None, fO2_offset = None):
+from functools import partial
+import concurrent.futures
+
+import numpy as np
+import multiprocessing
+from functools import partial
+import time
+
+from dask.distributed import Client, LocalCluster
+import multiprocessing
+from functools import partial
+import numpy as np
+import multiprocessing as mp
+
+def run_melts_single(Pin, Model, comp, T_maxdrop_C, dt_C, T_initial_C,
+                     fO2_buffer, fO2_offset, H2O_Sat, phases):
+    try:
+        return path_MELTS(
+            Model=Model,
+            comp=comp,
+            T_maxdrop_C=T_maxdrop_C,
+            dt_C=dt_C,
+            T_initial_C=T_initial_C,
+            P_bar=Pin,
+            find_liquidus=True,
+            fO2_buffer=fO2_buffer,
+            fO2_offset=fO2_offset,
+            fluid_sat=H2O_Sat,
+            Suppress=['rutile', 'tridymite'],
+            phases=phases
+        )
+    except Exception as e:
+        print(f"Failed at {Pin} bar: {e}")
+        return None
+
+def mineral_cosaturation(Model="MELTSv1.0.2", cores=int(np.floor(multiprocessing.cpu_count()/2)), bulk=None,
+                         phases=['quartz1', 'alkali-feldspar1', 'plagioclase1'],
+                         P_bar=np.linspace(250, 5000, 32), Fe3Fet_init=None, H2O_init=None,
+                         CO2_init=None, H2O_Sat=False, T_initial_C=None, dt_C=2,
+                         T_maxdrop_C=50, T_cut_C=20, find_range=True,
+                         find_min=True, fO2_buffer=None, fO2_offset=0.0, timeout = 30):
+
+    comp = bulk.copy()
+    if H2O_Sat:
+        comp['H2O_Liq'] = 20
+
+    comp = comp_fix(Model=Model, comp=comp, Fe3Fet_Liq=Fe3Fet_init,
+                    H2O_Liq=H2O_init, CO2_Liq=CO2_init)
+
+    run_partial = partial(run_melts_single, 
+                          Model=Model, comp=comp, T_maxdrop_C=T_maxdrop_C,
+                          dt_C=dt_C, T_initial_C=T_initial_C,
+                          fO2_buffer=fO2_buffer, fO2_offset=fO2_offset,
+                          H2O_Sat=H2O_Sat, phases=phases)
+
+    results = {}
+    with concurrent.futures.ProcessPoolExecutor(max_workers=cores) as executor:
+        futures = {executor.submit(run_partial, p): i for i, p in enumerate(P_bar)}
+
+        done, not_done = concurrent.futures.wait(
+            futures.keys(), timeout=timeout, return_when=concurrent.futures.ALL_COMPLETED
+        )
+
+        for future in done:
+            i = futures[future]
+            try:
+                results[f"P = {P_bar[i]:.2f} bars"] = future.result()
+            except Exception as e:
+                print(f"Failure at {P_bar[i]} bar: {e}")
+                results[f"P = {P_bar[i]:.2f} bars"] = {}
+
+        for future in not_done:
+            i = futures[future]
+            print(f"Timeout at {P_bar[i]} bar. Either the calculation was slow (increase timeout) or it failed.")
+            results[f"P = {P_bar[i]:.2f} bars"] = {}
+            future.cancel()  # Cancel if still running
+
+    Results = stich(Res=results, multi=True, Model=Model)
+
+    ## determine the offset between the phases
+    if len(phases)  == 3:
+        arr = np.zeros((len(Results.keys()), 4))
+        arr2 = np.zeros((len(Results.keys()), 4))
+        columns = ['P_bar'] + phases + [phases[0] + ' - ' + phases[1], phases[0] + ' - ' + phases[2], phases[1] + ' - ' + phases[2], '3 Phase Saturation']
+        for i, r in enumerate(Results.keys()):
+            for idx, p in enumerate(phases):
+                if p in Results[r]['Mass'].keys():
+                    arr[i, idx+1] = Results[r]['Conditions'].loc[Results[r]['Mass'][p] > 0.0, 'T_C'].values[0]
+                else:
+                    arr[i, idx + 1] = np.nan
+
+            arr[i,0] = Results[r]['Conditions']['P_bar'].loc[0]
+
+        arr2[:, 0] = np.abs(arr[:,1] - arr[:,2])
+        arr2[:, 1] = np.abs(arr[:,1] - arr[:,3])
+        arr2[:, 2] = np.abs(arr[:,2] - arr[:,3])
+        arr2[:,3] = np.max(arr2[:,0:2], axis = 1)
+
+        r_arr = np.hstack((arr,arr2))
+
+        out = pd.DataFrame(data = r_arr, columns = columns)
+        out = out.sort_values('P_bar').reset_index(drop=True)
+
+    else:
+        arr = np.zeros((len(Results.keys()),4))
+        columns = ['P_bar'] + phases + [phases[0]+' - '+phases[1]]
+        for i, r in enumerate(Results.keys()):
+            for idx, p in enumerate(phases):
+                if p in Results[r]['Mass'].keys():
+                    arr[i, idx+1] = Results[r]['Conditions'].loc[Results[r]['Mass'][p] > 0.0, 'T_C'].values[0]
+                else:
+                    arr[i, idx + 1] = np.nan
+
+            arr[i,0] = Results[r]['Conditions']['P_bar'].loc[0]
+
+        arr[:,3] = np.abs(arr[:,1] - arr[:,2])
+
+        out = pd.DataFrame(data = r_arr, columns = columns)
+        out = out.sort_values('P_bar').reset_index(drop=True)
+
+    if find_min:
+        res = findmin(out = out, P_bar = P_bar, T_cut_C = T_cut_C)
+        out = {'CurveMin': res, 'Output': out}
+    else:
+        out = {'Output': out}
+
+    return out, Results
+
+def findmin(out = None, P_bar = None, T_cut_C = None):
+    Res = out.copy()
+
+    if '3 Phase Saturation' in list(Res.keys()):
+        T_cut_old = T_cut_C
+        T_cut_C = T_cut_C + np.nanmin(Res[4:])
+        Minimum = list(Res.keys())[4:]
+        CurveMin = {}
+        for m in Minimum:
+            if len(Res[m][~np.isnan(Res[m].values)]) > 2:
+                y = Res[m][(~np.isnan(Res[m].values)) & (Res[m].values < T_cut_C)].values
+                x = P_bar[(~np.isnan(Res[m].values)) & (Res[m].values < T_cut_C)]
+
+                try:
+                    y_new = interpolate.UnivariateSpline(x, y, k = 3)
+
+                    P_new = np.linspace(P_bar[P_bar == np.nanmin(P_bar[(~np.isnan(Res[m].values)) & (Res[m].values < T_cut_C)])], 
+                                        P_bar[P_bar == np.nanmax(P_bar[(~np.isnan(Res[m].values)) & (Res[m].values < T_cut_C)])], 200)
+
+                    NewMin = np.nanmin(y_new(P_new))
+                    P_min = P_new[np.where(y_new(P_new) == NewMin)][0]
+                    if NewMin < T_cut_old:
+                        Test = 'Pass'
+                    else:
+                        Test = 'Fail'
+
+                    CurveMin[m] = {'P_min': P_min, 'Res_min': NewMin, 'y_new': y_new(P_new), 'P_new': P_new, 'test': Test}
+                except:
+                    try:
+                        y_new = interpolate.UnivariateSpline(x, y, k = 2)
+
+                        P_new = np.linspace(P_bar[P_bar == np.nanmin(P_bar[(~np.isnan(Res[m].values)) & (Res[m].values < T_cut_C)])], 
+                                            P_bar[P_bar == np.nanmax(P_bar[(~np.isnan(Res[m].values)) & (Res[m].values < T_cut_C)])], 200)
+
+                        NewMin = np.nanmin(y_new(P_new))
+                        P_min = P_new[np.where(y_new(P_new) == NewMin)][0]
+                        if NewMin < T_cut_old:
+                            Test = 'Pass'
+                        else:
+                            Test = 'Fail'
+
+                        CurveMin[m] = {'P_min': P_min, 'Res_min': NewMin, 'y_new': y_new(P_new), 'P_new': P_new, 'test': Test}
+                    except:
+                        CurveMin[m] = {'P_min': np.nan, 'Res_min': np.nan, 'y_new': np.nan, 'P_new': np.nan, 'test': 'Fail'}
+            else:
+                y_new = np.nan
+                P_new = np.nan
+                NewMin = np.nan
+                P_min = np.nan
+                Test = 'Fail'
+                CurveMin[m] = {'P_min': P_min, 'Res_min': NewMin, 'y_new': y_new, 'P_new': P_new, 'test': Test}
+
+    else:
+        CurveMin = {}
+        m = Res.keys()[3]
+        if len(Res[m][~np.isnan(Res[m])]) > 2:
+            y = Res[m][(~np.isnan(Res[m].values)) & (Res[m].values < T_cut_C*2)].values
+            x = P_bar[(~np.isnan(Res[m].values)) & (Res[m].values < T_cut_C*2)]
+
+            try:
+                y_new = interpolate.UnivariateSpline(x, y, k = 3)
+            except:
+                y_new = interpolate.UnivariateSpline(x, y, k = 2)
+
+            P_new = np.linspace(P_bar[P_bar == np.nanmin(P_bar[(~np.isnan(Res[m])) & (Res[m] < T_cut_C*2)])], 
+                                    P_bar[P_bar == np.nanmax(P_bar[(~np.isnan(Res[m])) & (Res[m] < T_cut_C*2)])], 200)
+            
+            NewMin = np.nanmin(y_new(P_new))
+            P_min = P_new[np.where(y_new(P_new) == NewMin)][0]
+            if NewMin < T_cut_C:
+                Test = 'Pass'
+            else:
+                Test = 'Fail'
+        else:
+            y_new = np.nan
+            P_new = np.nan
+            NewMin = np.nan
+            P_min = np.nan
+            Test = 'Fail'
+
+        CurveMin[m] = {'P_min': P_min, 'Res_min': NewMin, 'y_new': y_new, 'P_new': P_new, 'test': Test}
+
+    return CurveMin
+
+
+def find_mineral_cosaturation(cores = None, Model = None, bulk = None, phases = None, P_bar = None, Fe3Fet_Liq = None, 
+                              H2O_Liq = None, H2O_Sat = False, T_initial_C = None, dt_C = None, T_maxdrop_C = None, 
+                              T_cut_C = None, find_range = None, find_min = None, fO2_buffer = None, fO2_offset = None):
     '''
     Carry out multiple calculations in parallel. Allows isobaric, polybaric and isochoric crystallisation to be performed as well as isothermal, isenthalpic or isentropic decompression. All temperature inputs/outputs are reported in degrees celcius and pressure is reported in bars.
 
@@ -620,407 +840,4 @@ def satTemperature(q, index, *, Model = None, comp = None, phases = None, T_init
         #    q.put([Results, index])
         return
 
-
-# def detRange(P, Model, bulk, Results, Phases, T_initial = None, Fe3 = None, H2O = None, T_cut = None, findRange = None, cores = None):
-#     '''
-#     re-run the SatPress calculations using a higher resolution to determine the range of P (+H2O +fO2) where the maximum difference between the target saturation curve is below some reference value.
-#     '''
-#     if T_cut is None:
-#         T_cut = 5
-#
-#     if T_initial is None:
-#         T_initial = 1200
-#
-#     Res_key = list(Results.keys())[:-2]
-#
-#     if Fe3 is None and H2O is None:
-#         P_min = np.zeros(len(Res_key))
-#         P_max = np.zeros(len(Res_key))
-#         i = 0
-#         for Res in Res_key:
-#             if len(Results[Res][np.where(Results[Res]<T_cut*2)]) > 0:
-#                 P_min[i] = np.nanmin(P[np.where(Results[Res]<T_cut*2)])
-#                 P_max[i] = np.nanmax(P[np.where(Results[Res]<T_cut*2)])
-#             else:
-#                 P_min[i] = np.nan
-#                 P_max[i] = np.nan
-#
-#             i = i + 1
-#
-#         P_start = np.nanmin(P_min)
-#         P_end = np.nanmax(P_max)
-#
-#         P_space = 1 + 3*(P_end - P_start)/((np.max(P) - np.min(P))/(len(P)-1))
-#
-#         P = np.linspace(P_start, P_end, int(P_space))
-#
-#         with open('bulk.obj', 'wb') as f:
-#             pickle.dump(bulk, f)
-#
-#         if len(Phases) == 3:
-#             phases[0], b_Sat, c_Sat, T_Liq, H2O_Melt = findSat(P, Model, Phases, bulk, T_initial = T_initial, dt = T_cut, T_step = T_cut, cores = cores)
-#         else:
-#             phases[0], b_Sat, T_Liq, H2O_Melt = findSat(P, Model, Phases, bulk, T_initial = T_initial, dt = T_cut, T_step = T_cut, cores = cores)
-#
-#         # calc residuals
-#         if len(Phases) == 3:
-#             Results_new = findResiduals(phases[0], b_Sat, c_Sat = c_Sat)
-#         else:
-#             Results_new = findResiduals(phases[0], b_Sat)
-#
-#         Results_new['H2O_sat'] = H2O_Melt
-#         Results_new['T_Liq'] = T_Liq
-#
-#         for Res in Res_key:
-#             if len(Results_new[Res][np.where(~np.isnan(Results_new[Res]))]) > 0:
-#                 Results_new[Res + '_min_P'] = np.nanmin(P[~np.isnan(Results_new[Res])])
-#                 Results_new[Res + '_max_P'] = np.nanmin(P[~np.isnan(Results_new[Res])])
-#             else:
-#                 Results_new[Res + '_min_P'] = np.nan
-#                 Results_new[Res + '_max_P'] = np.nan
-#
-#         return Results_new
-#
-#     if Fe3 is not None and H2O is None:
-#         P_min = np.zeros(len(Res_key))
-#         P_max = np.zeros(len(Res_key))
-#
-#         Fe3_min = np.zeros(len(Res_key))
-#         Fe3_max = np.zeros(len(Res_key))
-#
-#         P_mat, Fe3_mat = np.meshgrid(P, Fe3)
-#
-#         i = 0
-#         for Res in Res_key:
-#             if len(Results[Res][np.where(Results[Res]<T_cut*2)]) > 0:
-#                 P_min[i] = np.nanmin(P_mat[np.where(Results[Res]<T_cut*2)])
-#                 P_max[i] = np.nanmax(P_mat[np.where(Results[Res]<T_cut*2)])
-#
-#                 Fe3_min[i] = np.nanmin(Fe3_mat[np.where(Results[Res]<T_cut*2)])
-#                 Fe3_max[i] = np.nanmax(Fe3_mat[np.where(Results[Res]<T_cut*2)])
-#             else:
-#
-#                 P_min[i] = np.nan
-#                 P_max[i] = np.nan
-#
-#                 Fe3_min[i] = np.nan
-#                 Fe3_max[i] = np.nan
-#
-#             i = i + 1
-#
-#         P_start = np.nanmin(P_min)
-#         P_end = np.nanmax(P_max)
-#
-#         Fe3_start = np.nanmin(Fe3_min)
-#         Fe3_end = np.nanmax(Fe3_max)
-#
-#         P = np.linspace(P_start, P_end, int(1 + 3*(P_end - P_start)/((np.max(P) - np.min(P))/(len(P)-1))))
-#         Fe3 = np.linspace(Fe3_start, Fe3_end, int(1 + 3*(Fe3_end - Fe3_start)/((np.max(Fe3) - np.min(Fe3))/(len(Fe3)-1))))
-#
-#         if len(Phases) == 3:
-#             Res_abc_mat = np.zeros((len(Fe3), len(P)))
-#             Res_ac_mat = np.zeros((len(Fe3), len(P)))
-#             Res_bc_mat = np.zeros((len(Fe3), len(P)))
-#
-#         Res_ab_mat = np.zeros((len(Fe3), len(P)))
-#         H2O_mat = np.zeros((len(Fe3), len(P)))
-#         T_Liq_mat = np.zeros((len(Fe3), len(P)))
-#
-#         for i in range(len(Fe3)):
-#             Bulk_new = bulk.copy()
-#             Bulk_new[3] = Fe3[i]*((159.69/2)/71.844)*bulk[5]
-#             Bulk_new[5] = (1-Fe3[i])*bulk[5]
-#
-#             with open('bulk.obj', 'wb') as f:
-#                 pickle.dump(Bulk_new, f)
-#
-#             if len(Phases) == 3:
-#                 phases[0], b_Sat, c_Sat, T_Liq, H2O_Melt = findSat(P, Model, Phases, bulk, T_initial = T_initial, dt = T_cut, T_step = T_cut, cores = cores)
-#             else:
-#                 phases[0], b_Sat, T_Liq, H2O_Melt = findSat(P, Model, Phases, bulk, T_initial = T_initial, dt = T_cut, T_step = T_cut, cores = cores)
-#
-#             # calc residuals
-#             if len(Phases) == 3:
-#                 Res = findResiduals(phases[0], b_Sat, c_Sat = c_Sat)
-#                 Res_abc_mat[i, :] = Res['abc']
-#                 Res_ac_mat[i, :] = Res['ac']
-#                 Res_bc_mat[i, :] = Res['bc']
-#             else:
-#                 Res = findResiduals(phases[0], b_Sat)
-#
-#             T_Liq_mat[i, :] = T_Liq
-#             H2O_mat[i, :] = H2O_Melt
-#             Res_ab_mat[i, :] = Res['ab']
-#
-#         if len(Phases) == 3:
-#             Results_new = {'abc': Res_abc_mat, 'ab': Res_ab_mat, 'ac': Res_ac_mat, 'bc': Res_bc_mat, 'H2O_Sat': H2O_mat, 'T_Liq': T_Liq_mat}
-#         else:
-#             Results_new = {'ab': Res_ab_mat, 'H2O_Sat': H2O_mat, 'T_Liq': T_Liq_mat}
-#
-#         P_mat, Fe3_mat = np.meshgrid(P, Fe3)
-#         for Res in Res_key:
-#             if len(Results_new[Res][np.where(~np.isnan(Results_new[Res]))]) > 0:
-#                 Results_new[Res + '_min_P'] = np.nanmin(P_mat[np.where(~np.isnan(Results_new[Res]))])
-#                 Results_new[Res + '_max_P'] = np.nanmin(P_mat[np.where(~np.isnan(Results_new[Res]))])
-#
-#                 Results_new[Res + '_min_Fe3'] = np.nanmin(Fe3_mat[np.where(~np.isnan(Results_new[Res]))])
-#                 Results_new[Res + '_max_Fe3'] = np.nanmin(Fe3_mat[np.where(~np.isnan(Results_new[Res]))])
-#             else:
-#                 Results_new[Res + '_min_P'] = np.nan
-#                 Results_new[Res + '_max_P'] = np.nan
-#
-#                 Results_new[Res + '_min_Fe3'] = np.nan
-#                 Results_new[Res + '_max_Fe3'] = np.nan
-#
-#         return Results_new
-#
-#     if Fe3 is None and H2O is not None:
-#         P_min = np.zeros(len(Res_key))
-#         P_max = np.zeros(len(Res_key))
-#
-#         H2O_min = np.zeros(len(Res_key))
-#         H2O_max = np.zeros(len(Res_key))
-#
-#         P_mat, H2O_mat = np.meshgrid(P, H2O)
-#
-#         i = 0
-#         for Res in Res_key:
-#             if len(Results[Res][np.where(Results[Res]<T_cut*2)]) > 0:
-#                 P_min[i] = np.nanmin(P_mat[np.where(Results[Res]<T_cut*2)])
-#                 P_max[i] = np.nanmax(P_mat[np.where(Results[Res]<T_cut*2)])
-#
-#                 H2O_min[i] = np.nanmin(H2O_mat[np.where(Results[Res]<T_cut*2)])
-#                 H2O_max[i] = np.nanmax(H2O_mat[np.where(Results[Res]<T_cut*2)])
-#             else:
-#
-#                 P_min[i] = np.nan
-#                 P_max[i] = np.nan
-#
-#                 H2O_min[i] = np.nan
-#                 H2O_max[i] = np.nan
-#
-#             i = i + 1
-#
-#         P_start = np.nanmin(P_min)
-#         P_end = np.nanmax(P_max)
-#
-#         H2O_start = np.nanmin(H2O_min)
-#         H2O_end = np.nanmax(H2O_max)
-#
-#         P = np.linspace(P_start, P_end, int(1 + 3*(P_end - P_start)/((np.max(P) - np.min(P))/(len(P)-1))))
-#         H2O = np.linspace(H2O_start, H2O_end, int(1 + 3*(H2O_end - H2O_start)/((np.max(H2O) - np.min(H2O))/(len(H2O)-1))))
-#
-#         if len(Phases) == 3:
-#             Res_abc_mat = np.zeros((len(H2O), len(P)))
-#             Res_ac_mat = np.zeros((len(H2O), len(P)))
-#             Res_bc_mat = np.zeros((len(H2O), len(P)))
-#
-#         Res_ab_mat = np.zeros((len(H2O), len(P)))
-#         H2O_mat = np.zeros((len(H2O), len(P)))
-#         T_Liq_mat = np.zeros((len(H2O), len(P)))
-#
-#         for i in range(len(H2O)):
-#             Bulk_new = bulk.copy()
-#             Bulk_new[14] = H2O[i]
-#
-#             with open('bulk.obj', 'wb') as f:
-#                 pickle.dump(Bulk_new, f)
-#
-#             if len(Phases) == 3:
-#                 phases[0], b_Sat, c_Sat, T_Liq, H2O_Melt = findSat(P, Model, Phases, bulk, T_initial = T_initial, dt = T_cut, T_step = T_cut, cores = cores)
-#             else:
-#                 phases[0], b_Sat, T_Liq, H2O_Melt = findSat(P, Model, Phases, bulk, T_initial = T_initial, dt = T_cut, T_step = T_cut, cores = cores)
-#
-#             # calc residuals
-#             if len(Phases) == 3:
-#                 Res = findResiduals(phases[0], b_Sat, c_Sat = c_Sat)
-#                 Res_abc_mat[i, :] = Res['abc']
-#                 Res_ac_mat[i, :] = Res['ac']
-#                 Res_bc_mat[i, :] = Res['bc']
-#             else:
-#                 Res = findResiduals(phases[0], b_Sat)
-#
-#             T_Liq_mat[i, :] = T_Liq
-#             H2O_mat[i, :] = H2O_Melt
-#             Res_ab_mat[i, :] = Res['ab']
-#
-#         if len(Phases) == 3:
-#             Results_new = {'abc': Res_abc_mat, 'ab': Res_ab_mat, 'ac': Res_ac_mat, 'bc': Res_bc_mat, 'H2O_Sat': H2O_mat, 'T_Liq': T_Liq_mat}
-#         else:
-#             Results_new = {'ab': Res_ab_mat, 'H2O_Sat': H2O_mat, 'T_Liq': T_Liq_mat}
-#
-#         P_mat, H2O_mat = np.meshgrid(P, H2O)
-#         for Res in Res_key:
-#             if len(Results_new[Res][np.where(~np.isnan(Results_new[Res]))]) > 0:
-#                 Results_new[Res + '_min_P']= np.nanmin(P_mat[np.where(~np.isnan(Results_new[Res]))])
-#                 Results_new[Res + '_max_P'] = np.nanmin(P_mat[np.where(~np.isnan(Results_new[Res]))])
-#
-#                 Results_new[Res + '_min_H2O'] = np.nanmin(Results_new['H2O_Sat'][np.where(~np.isnan(Results_new[Res]))])
-#                 Results_new[Res + '_max_H2O'] = np.nanmin(Results_new['H2O_Sat'][np.where(~np.isnan(Results_new[Res]))])
-#             else:
-#                 Results_new[Res + '_min_P']= np.nan
-#                 Results_new[Res + '_max_P'] = np.nan
-#
-#                 Results_new[Res + '_min_H2O'] = np.nan
-#                 Results_new[Res + '_max_H2O'] = np.nan
-#
-#         return Results_new
-#
-#     if H2O is not None and Fe3 is not None:
-#         Results_new = {}
-#         P_min = np.zeros(len(Res_key))
-#         P_max = np.zeros(len(Res_key))
-#
-#         Fe3_min = np.zeros(len(Res_key))
-#         Fe3_max = np.zeros(len(Res_key))
-#
-#         H2O_min = np.zeros(len(Res_key))
-#         H2O_max = np.zeros(len(Res_key))
-#
-#         Fe3_mat, H2O_mat, P_mat = np.meshgrid(Fe3, H2O, P)
-#
-#         i = 0
-#         for Res in Res_key:
-#             if len(Results[Res][np.where(Results[Res]<T_cut*2)]) > 0:
-#                 P_min[i] = np.nanmin(P_mat[np.where(Results[Res]<T_cut*2)])
-#                 P_max[i] = np.nanmax(P_mat[np.where(Results[Res]<T_cut*2)])
-#
-#                 H2O_min[i] = np.nanmin(H2O_mat[np.where(Results[Res]<T_cut*2)])
-#                 H2O_max[i] = np.nanmax(H2O_mat[np.where(Results[Res]<T_cut*2)])
-#
-#                 Fe3_min[i] = np.nanmin(Fe3_mat[np.where(Results[Res]<T_cut*2)])
-#                 Fe3_max[i] = np.nanmax(Fe3_mat[np.where(Results[Res]<T_cut*2)])
-#             else:
-#
-#                 P_min[i] = np.nan
-#                 P_max[i] = np.nan
-#
-#                 H2O_min[i] = np.nan
-#                 H2O_max[i] = np.nan
-#
-#                 Fe3_min[i] = np.nan
-#                 Fe3_max[i] = np.nan
-#
-#             i = i + 1
-#
-#         if findRange == 'abc':
-#             P_start = P_min[0] - (P[1] - P[0])/3
-#             P_end = P_max[0] + (P[1] - P[0])/3
-#
-#             H2O_start = H2O_min[0] - (H2O[1] - H2O[0])/3
-#             H2O_end = H2O_max[0] + (H2O[1] - H2O[0])/3
-#
-#             Fe3_start = Fe3_min[0] - (Fe3[1] - Fe3[0])/3
-#             Fe3_end = Fe3_max[0] + (Fe3[1] - Fe3[0])/3
-#         else:
-#             P_start = np.nanmin(P_min)
-#             P_end = np.nanmax(P_max)
-#
-#             H2O_start = np.nanmin(H2O_min)
-#             H2O_end = np.nanmax(H2O_max)
-#
-#             Fe3_start = np.nanmin(Fe3_min)
-#             Fe3_end = np.nanmax(Fe3_max)
-#
-#         if P_end - P_start > 0:
-#             P = np.linspace(P_start, P_end, int(1 + 3*(P_end - P_start)/((np.max(P) - np.min(P))/(len(P)))))
-#         else:
-#             return Results_new
-#
-#         if H2O_end - H2O_start > 0:
-#             H2O = np.linspace(H2O_start, H2O_end, int(1 + 3*(H2O_end - H2O_start)/((np.max(H2O) - np.min(H2O))/(len(H2O)))))
-#         else:
-#             return Results_new
-#
-#         if Fe3_end - Fe3_start > 0:
-#             Fe3 = np.linspace(Fe3_start, Fe3_end, int(1 + 3*(Fe3_end - Fe3_start)/((np.max(Fe3) - np.min(Fe3))/(len(Fe3)))))
-#         else:
-#             return Results_new
-#
-#         if len(Phases) == 3:
-#             Res_abc_mat = np.zeros((len(H2O), len(Fe3), len(P)))
-#             Res_ac_mat = np.zeros((len(H2O), len(Fe3), len(P)))
-#             Res_bc_mat = np.zeros((len(H2O), len(Fe3), len(P)))
-#
-#         Res_ab_mat = np.zeros((len(H2O), len(Fe3), len(P)))
-#         T_Liq_3Dmat = np.zeros((len(H2O), len(Fe3), len(P)))
-#         H2O_Liq_3Dmat = np.zeros((len(H2O), len(Fe3), len(P)))
-#
-#         for i in range(len(H2O)):
-#             Bulk_new = bulk.copy()
-#             Bulk_new[14] = H2O[i]
-#
-#             if len(Phases) == 3:
-#                 Res_abc_mat_2D = np.zeros((len(Fe3), len(P)))
-#                 Res_ac_mat_2D = np.zeros((len(Fe3), len(P)))
-#                 Res_bc_mat_2D = np.zeros((len(Fe3), len(P)))
-#
-#             Res_ab_mat_2D = np.zeros((len(Fe3), len(P)))
-#             T_Liq_mat_2D = np.zeros((len(Fe3), len(P)))
-#             H2O_Liq_mat_2D = np.zeros((len(Fe3), len(P)))
-#
-#             for j in range(len(Fe3)):
-#
-#                 Bulk_new[3] = Fe3[j]*((159.69/2)/71.844)*bulk[5]
-#                 Bulk_new[5] = (1-Fe3[j])*bulk[5]
-#
-#                 with open('bulk.obj', 'wb') as f:
-#                     pickle.dump(Bulk_new, f)
-#
-#                 if len(Phases) == 3:
-#                     phases[0], b_Sat, c_Sat, T_Liq, H2O_Melt = findSat(P, Model, Phases, Bulk_new, T_initial = T_initial, dt = T_cut, T_step = T_cut, cores = cores)
-#                 else:
-#                     phases[0], b_Sat, T_Liq, H2O_Melt = findSat(P, Model, Phases, Bulk_new, T_initial = T_initial, dt = T_cut, T_step = T_cut, cores = cores)
-#
-#                 # calc residuals
-#                 if len(Phases) == 3:
-#                     Res = findResiduals(phases[0], b_Sat, c_Sat = c_Sat)
-#                     Res_abc_mat_2D[j, :] = Res['abc']
-#                     Res_ac_mat_2D[j, :] = Res['ac']
-#                     Res_bc_mat_2D[j, :] = Res['bc']
-#                 else:
-#                     Res = findResiduals(phases[0], b_Sat)
-#
-#                 Res_ab_mat_2D[j, :] = Res['ab']
-#                 T_Liq_mat_2D[j, :] = T_Liq
-#                 H2O_Liq_mat_2D[j, :] = H2O_Melt
-#
-#             if len(Phases) == 3:
-#                 Res_abc_mat[i,:,:] = Res_abc_mat_2D
-#                 Res_ac_mat[i,:,:] = Res_ac_mat_2D
-#                 Res_bc_mat[i,:,:] = Res_bc_mat_2D
-#
-#             Res_ab_mat[i,:,:] = Res_ab_mat_2D
-#             T_Liq_3Dmat[i,:,:] = T_Liq_mat_2D
-#             H2O_Liq_3Dmat[i,:,:] = H2O_Liq_mat_2D
-#
-#         if len(Phases) == 3:
-#             Results_new = {'abc': Res_abc_mat, 'ab': Res_ab_mat, 'ac': Res_ac_mat, 'bc': Res_bc_mat, 'H2O_Sat': H2O_Liq_3Dmat, 'T_Liq': T_Liq_3Dmat}
-#         else:
-#             Results_new = {'ab': Res_ab_mat, 'H2O_Sat': H2O_Liq_3Dmat, 'T_Liq': T_Liq_3Dmat}
-#
-#
-#         Fe3_mat, H2O_mat, P_mat = np.meshgrid(Fe3, H2O, P)
-#
-#         for Res in Res_key:
-#             if len(Results_new[Res][np.where(~np.isnan(Results_new[Res]))]) > 0:
-#                 Results_new[Res + '_min_P'] = np.nanmin(P_mat[np.where(~np.isnan(Results_new[Res]))])
-#                 Results_new[Res + '_max_P'] = np.nanmax(P_mat[np.where(~np.isnan(Results_new[Res]))])
-#
-#                 Results_new[Res + '_min_H2O'] = np.nanmin(Results_new['H2O_Sat'][np.where(~np.isnan(Results_new[Res]))])
-#                 Results_new[Res + '_max_H2O'] = np.nanmax(Results_new['H2O_Sat'][np.where(~np.isnan(Results_new[Res]))])
-#
-#                 Results_new[Res + '_min_Fe3'] = np.nanmin(Fe3_mat[np.where(~np.isnan(Results_new[Res]))])
-#                 Results_new[Res + '_max_Fe3'] = np.nanmax(Fe3_mat[np.where(~np.isnan(Results_new[Res]))])
-#             else:
-#                 Results_new[Res + '_min_P'] = np.nan
-#                 Results_new[Res + '_max_P'] = np.nan
-#
-#                 Results_new[Res + '_min_H2O'] = np.nan
-#                 Results_new[Res + '_max_H2O'] = np.nan
-#
-#                 Results_new[Res + '_min_Fe3'] = np.nan
-#                 Results_new[Res + '_max_Fe3'] = np.nan
-#
-#         return Results_new
 
