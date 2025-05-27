@@ -27,29 +27,102 @@ from shapely.geometry import MultiPoint, Point, Polygon
 from functools import partial
 import concurrent.futures
 
+import numpy as np
+import pandas as pd
+from joblib import Parallel, delayed
+import multiprocessing
+import time
+        
+def path_4_saturation(q, index, *, Model = None, P_bar = None, comp = None, T_maxdrop_C = None, dt_C = None, T_initial_C = None, fO2_buffer = None,
+                      fO2_offset = 0.0, H2O_Sat = None, phases = None):
+    if "MELTS" in Model:
+        Results = path_MELTS(P_bar = P_bar,
+                Model=Model,
+                comp=comp,
+                T_maxdrop_C=T_maxdrop_C,
+                dt_C=dt_C,
+                T_initial_C=T_initial_C,
+                find_liquidus=True,
+                fO2_buffer=fO2_buffer,
+                fO2_offset=fO2_offset,
+                fluid_sat=H2O_Sat,
+                Suppress=['rutile', 'tridymite'],
+                phases=phases
+            )
+        q.put([index, Results])
+    return
 
-def run_melts_single(Pin, Model, comp, T_maxdrop_C, dt_C, T_initial_C,
-                     fO2_buffer, fO2_offset, H2O_Sat, phases):
-    try:
-        return path_MELTS(
-            Model=Model,
-            comp=comp,
-            T_maxdrop_C=T_maxdrop_C,
-            dt_C=dt_C,
-            T_initial_C=T_initial_C,
-            P_bar=Pin,
-            find_liquidus=True,
-            fO2_buffer=fO2_buffer,
-            fO2_offset=fO2_offset,
-            fluid_sat=H2O_Sat,
-            Suppress=['rutile', 'tridymite'],
-            phases=phases
-        )
-    except Exception as e:
-        print(f"Failed at {Pin} bar: {e}")
-        return None
+def path_4_saturation_multi(q, index, *, Model = None, P_bar = None, comp = None, T_maxdrop_C = None, dt_C = None, T_initial_C = None, fO2_buffer = None,
+                      fO2_offset = 0.0, H2O_Sat = None, phases = None):
+    results = {}
+    idx = []
+    
+    if "MELTS" in Model:
+        from meltsdynamic import MELTSdynamic
 
-def mineral_cosaturation(Model="MELTSv1.0.2", cores=int(np.floor(multiprocessing.cpu_count()/2)), bulk=None,
+        if Model is None or Model == "MELTSv1.0.2":
+            melts = MELTSdynamic(1)
+        elif Model == "pMELTS":
+            melts = MELTSdynamic(2)
+        elif Model == "MELTSv1.1.0":
+            melts = MELTSdynamic(3)
+        elif Model == "MELTSv1.2.0":
+            melts = MELTSdynamic(4)
+    else:
+        from juliacall import Main as jl, convert as jlconvert
+
+        jl.seval("using MAGEMinCalc")
+
+        comp_julia = jl.seval("Dict")(comp)   
+
+    for i in index:
+        # try:
+        if "MELTS" in Model:
+            Results, tr = path_MELTS(P_bar = P_bar[i],
+                    Model=Model,
+                    comp=comp,
+                    T_maxdrop_C=T_maxdrop_C,
+                    dt_C=dt_C,
+                    T_initial_C=T_initial_C,
+                    find_liquidus=True,
+                    fO2_buffer=fO2_buffer,
+                    fO2_offset=fO2_offset,
+                    fluid_sat=H2O_Sat,
+                    Suppress=['rutile', 'tridymite'],
+                    phases=phases,
+                    trail = True,
+                    melts = melts
+                )
+        else:
+            if fO2_offset is None:
+                fO2_offset = 0.0
+
+            Results_df = jl.MAGEMinCalc.path(
+                                    comp=comp_julia, dt_C=dt_C,
+                                    P_bar=P_bar[i], T_min_C = T_maxdrop_C,            
+                                    Model=Model, fo2_buffer=fO2_buffer, 
+                                    fo2_offset=fO2_offset, find_liquidus=True,
+                                    frac_xtal = False
+                                    )
+            
+            Results = dict(Results_df)
+            
+            tr = True
+
+        idx.append(i)
+
+
+        results[f"index = {i}"] = Results
+
+        if tr is False:
+            break
+        # except:
+        #     idx.append(i)
+
+    q.put([idx, results])
+    return
+
+def mineral_cosaturation(Model="MELTSv1.0.2", cores=int(np.floor(multiprocessing.cpu_count())), bulk=None,
                          phases=['quartz1', 'alkali-feldspar1', 'plagioclase1'],
                          P_bar=np.linspace(250, 5000, 32), Fe3Fet_init=None, H2O_init=None,
                          CO2_init=None, H2O_Sat=False, T_initial_C=None, dt_C=2,
@@ -63,33 +136,105 @@ def mineral_cosaturation(Model="MELTSv1.0.2", cores=int(np.floor(multiprocessing
     comp = comp_fix(Model=Model, comp=comp, Fe3Fet_Liq=Fe3Fet_init,
                     H2O_Liq=H2O_init, CO2_Liq=CO2_init)
 
-    run_partial = partial(run_melts_single, 
-                          Model=Model, comp=comp, T_maxdrop_C=T_maxdrop_C,
-                          dt_C=dt_C, T_initial_C=T_initial_C,
-                          fO2_buffer=fO2_buffer, fO2_offset=fO2_offset,
-                          H2O_Sat=H2O_Sat, phases=phases)
+    index_in = np.arange(len(P_bar))
+    # index_in = index
+    combined_results = {}
+    index_out = np.array([], dtype=int)
 
-    results = {}
-    with concurrent.futures.ProcessPoolExecutor(max_workers=cores) as executor:
-        futures = {executor.submit(run_partial, p): i for i, p in enumerate(P_bar)}
+    while len(index_out) < len(index_in):
+        index = np.setdiff1d(index_in, index_out)
+        groups = np.array_split(index, cores)
 
-        done, not_done = concurrent.futures.wait(
-            futures.keys(), timeout=timeout, return_when=concurrent.futures.ALL_COMPLETED
-        )
+        processes = []
+        for i in range(len(groups)):
+            q = Queue()
+            p = Process(target = path_4_saturation_multi, args = (q, groups[i]),
+                        kwargs = {'Model': Model, 'comp': comp,
+                        'T_initial_C': T_initial_C, 'T_maxdrop_C': T_maxdrop_C,
+                        'dt_C': dt_C, 'P_bar': P_bar, 'phases': phases,
+                        'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset})
+            
+            processes.append((p, q))
+            p.start()
 
-        for future in done:
-            i = futures[future]
-            try:
-                results[f"P = {P_bar[i]:.2f} bars"] = future.result()
-            except Exception as e:
-                print(f"Failure at {P_bar[i]} bar: {e}")
-                results[f"P = {P_bar[i]:.2f} bars"] = {}
+        for p, q in processes:
+            res = q.get(timeout=timeout)
+            p.join(timeout = 2)
+            p.terminate()
 
-        for future in not_done:
-            i = futures[future]
-            print(f"Timeout at {P_bar[i]} bar. Either the calculation was slow (increase timeout) or it failed.")
-            results[f"P = {P_bar[i]:.2f} bars"] = {}
-            future.cancel()  # Cancel if still running
+            idx_chunks, results = res
+
+            index_out = np.hstack((index_out, idx_chunks))
+            combined_results.update(results)
+
+    results = combined_results
+    # results = {}
+    # if len(P_bar) > 1:
+    #     A = len(P_bar)//cores
+    #     B = len(P_bar) % cores
+
+    # if A > 0:
+    #     Group = np.zeros(A) + cores
+    #     if B > 0:
+    #         Group = np.append(Group, B)
+    # else:
+    #     Group = np.array([B])
+
+    # # initialise queue
+    # qs = []
+    # q = Queue()
+
+
+    # # run calculations
+    # for k in range(len(Group)):
+    #     ps = []
+
+    #     for kk in range(int(cores*k), int(cores*k + Group[k])):
+    #         p = Process(target = path_4_saturation, args = (q, kk),
+    #                     kwargs = {'Model': Model, 'comp': comp,
+    #                     'T_initial_C': T_initial_C, 'T_maxdrop_C': T_maxdrop_C,
+    #                     'dt_C': dt_C, 'P_bar': P_bar[kk], 'phases': phases,
+    #                     'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset})
+            
+    #         ps.append(p)
+    #         p.start()
+
+    #     start = time.time()
+    #     for p in ps:
+    #         if time.time() - start < timeout - 10:
+    #             try:
+    #                 ret = q.get(timeout = timeout - (time.time()-start) + 10)
+    #             except:
+    #                 ret = []
+    #         else:
+    #             try:
+    #                 ret = q.get(timeout = 10)
+    #             except:
+    #                 ret = []
+
+    #         qs.append(ret)
+
+    #     TIMEOUT = 5
+    #     start = time.time()
+    #     for p in ps:
+    #         if p.is_alive():
+    #             while time.time() - start <= TIMEOUT:
+    #                 if not p.is_alive():
+    #                     p.join()
+    #                     p.terminate()
+    #                     break
+    #                 time.sleep(.1)
+    #             else:
+    #                 p.terminate()
+    #                 p.join(5)
+    #         else:
+    #             p.join()
+    #             p.terminate()
+
+    # for kk in range(len(qs)):
+    #     if len(qs[kk]) > 0:
+    #         index, res = qs[kk]
+    #         results[f"P = {P_bar[index]:.2f} bars"] = res.copy()
 
     Results = stich(Res=results, multi=True, Model=Model)
 
@@ -131,7 +276,7 @@ def mineral_cosaturation(Model="MELTSv1.0.2", cores=int(np.floor(multiprocessing
 
         arr[:,3] = np.abs(arr[:,1] - arr[:,2])
 
-        out = pd.DataFrame(data = r_arr, columns = columns)
+        out = pd.DataFrame(data = arr, columns = columns)
         out = out.sort_values('P_bar').reset_index(drop=True)
 
     if find_min:
