@@ -11,46 +11,17 @@ from PetThermoTools.Plotting import *
 from PetThermoTools.Liq import *
 from PetThermoTools.MELTS import *
 from PetThermoTools.Path import *
-# try:
-#     from PetThermoTools.Holland import *
-# except:
-#     pass
 import multiprocessing
 from multiprocessing import Queue
 from multiprocessing import Process
 import time
-import sys
-from tqdm.notebook import tqdm, trange
 from scipy import interpolate
 from shapely.geometry import MultiPoint, Point, Polygon
 
-from functools import partial
-import concurrent.futures
-
 import numpy as np
 import pandas as pd
-from joblib import Parallel, delayed
 import multiprocessing
 import time
-        
-def path_4_saturation(q, index, *, Model = None, P_bar = None, comp = None, T_maxdrop_C = None, dt_C = None, T_initial_C = None, fO2_buffer = None,
-                      fO2_offset = 0.0, H2O_Sat = None, phases = None):
-    if "MELTS" in Model:
-        Results = path_MELTS(P_bar = P_bar,
-                Model=Model,
-                comp=comp,
-                T_maxdrop_C=T_maxdrop_C,
-                dt_C=dt_C,
-                T_initial_C=T_initial_C,
-                find_liquidus=True,
-                fO2_buffer=fO2_buffer,
-                fO2_offset=fO2_offset,
-                fluid_sat=H2O_Sat,
-                Suppress=['rutile', 'tridymite'],
-                phases=phases
-            )
-        q.put([index, Results])
-    return
 
 def path_4_saturation_multi(q, index, *, Model = None, P_bar = None, comp = None, T_maxdrop_C = None, dt_C = None, T_initial_C = None, fO2_buffer = None,
                       fO2_offset = 0.0, H2O_Sat = None, phases = None):
@@ -127,7 +98,7 @@ def mineral_cosaturation(Model="MELTSv1.0.2", cores=int(np.floor(multiprocessing
                          P_bar=np.linspace(250, 5000, 32), Fe3Fet_init=None, H2O_init=None,
                          CO2_init=None, H2O_Sat=False, T_initial_C=None, dt_C=2,
                          T_maxdrop_C=50, T_cut_C=20, find_range=True,
-                         find_min=True, fO2_buffer=None, fO2_offset=0.0, timeout = 30):
+                         find_min=True, fO2_buffer=None, fO2_offset=0.0, timeout = 90, multiprocesses = True):
 
     comp = bulk.copy()
     if H2O_Sat:
@@ -136,105 +107,100 @@ def mineral_cosaturation(Model="MELTSv1.0.2", cores=int(np.floor(multiprocessing
     comp = comp_fix(Model=Model, comp=comp, Fe3Fet_Liq=Fe3Fet_init,
                     H2O_Liq=H2O_init, CO2_Liq=CO2_init)
 
-    index_in = np.arange(len(P_bar))
-    # index_in = index
     combined_results = {}
-    index_out = np.array([], dtype=int)
+    if multiprocesses:
+        index_in = np.arange(len(P_bar))
+        index_out = np.array([], dtype=int)
 
-    while len(index_out) < len(index_in):
-        index = np.setdiff1d(index_in, index_out)
-        groups = np.array_split(index, cores)
+        while len(index_out) < len(index_in):
+            index = np.setdiff1d(index_in, index_out)
+            groups = np.array_split(index, cores)
+            non_empty_groups = [g for g in groups if g.size > 0]
+            groups = non_empty_groups
 
-        processes = []
-        for i in range(len(groups)):
-            q = Queue()
-            p = Process(target = path_4_saturation_multi, args = (q, groups[i]),
-                        kwargs = {'Model': Model, 'comp': comp,
-                        'T_initial_C': T_initial_C, 'T_maxdrop_C': T_maxdrop_C,
-                        'dt_C': dt_C, 'P_bar': P_bar, 'phases': phases,
-                        'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset})
-            
-            processes.append((p, q))
-            p.start()
+            processes = []
+            for i in range(len(groups)):
+                q = Queue()
+                p = Process(target = path_4_saturation_multi, args = (q, groups[i]),
+                            kwargs = {'Model': Model, 'comp': comp,
+                            'T_initial_C': T_initial_C, 'T_maxdrop_C': T_maxdrop_C,
+                            'dt_C': dt_C, 'P_bar': P_bar, 'phases': phases,
+                            'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset})
+                
+                processes.append((p, q, groups[i]))
+                p.start()
 
-        for p, q in processes:
-            res = q.get(timeout=timeout)
-            p.join(timeout = 2)
-            p.terminate()
+            for p, q, group in processes:
+                try:
+                    res = q.get(timeout=timeout)
+                except:
+                    res = []
+                    idx_chunks = np.array([group[0]], dtype = int)
+                p.join(timeout = 2)
+                p.terminate()
 
-            idx_chunks, results = res
+                if len(res) > 0.0:
+                    idx_chunks, results = res
+                    combined_results.update(results)
 
-            index_out = np.hstack((index_out, idx_chunks))
-            combined_results.update(results)
+                index_out = np.hstack((index_out, idx_chunks))
+    else:
+        if "MELTS" in Model:
+            from meltsdynamic import MELTSdynamic
+
+            if Model is None or Model == "MELTSv1.0.2":
+                melts = MELTSdynamic(1)
+            elif Model == "pMELTS":
+                melts = MELTSdynamic(2)
+            elif Model == "MELTSv1.1.0":
+                melts = MELTSdynamic(3)
+            elif Model == "MELTSv1.2.0":
+                melts = MELTSdynamic(4)
+        else:
+            from juliacall import Main as jl, convert as jlconvert
+
+            jl.seval("using MAGEMinCalc")
+
+            comp_julia = jl.seval("Dict")(comp) 
+
+        if "MELTS" in Model:
+            for i in range(len(P_bar)):
+                results = {}
+                Results = path_MELTS(P_bar = P_bar[i],
+                        Model=Model,
+                        comp=comp,
+                        T_maxdrop_C=T_maxdrop_C,
+                        dt_C=dt_C,
+                        T_initial_C=T_initial_C,
+                        find_liquidus=True,
+                        fO2_buffer=fO2_buffer,
+                        fO2_offset=fO2_offset,
+                        fluid_sat=H2O_Sat,
+                        Suppress=['rutile', 'tridymite'],
+                        phases=phases,
+                        melts = melts
+                    )
+                results[f"index = {i}"] = Results
+                combined_results.update(results)
+        else:
+            if fO2_offset is None:
+                fO2_offset = 0.0
+
+            for i in range(len(P_bar)):
+                results = {}
+                Results_df = jl.MAGEMinCalc.path(
+                                        comp=comp_julia, dt_C=dt_C,
+                                        P_bar=P_bar[i], T_min_C = T_maxdrop_C,            
+                                        Model=Model, fo2_buffer=fO2_buffer, 
+                                        fo2_offset=fO2_offset, find_liquidus=True,
+                                        frac_xtal = False
+                                        )
+                
+                Results = dict(Results_df)
+                results[f"index = {i}"] = Results
+                combined_results.update(results)
 
     results = combined_results
-    # results = {}
-    # if len(P_bar) > 1:
-    #     A = len(P_bar)//cores
-    #     B = len(P_bar) % cores
-
-    # if A > 0:
-    #     Group = np.zeros(A) + cores
-    #     if B > 0:
-    #         Group = np.append(Group, B)
-    # else:
-    #     Group = np.array([B])
-
-    # # initialise queue
-    # qs = []
-    # q = Queue()
-
-
-    # # run calculations
-    # for k in range(len(Group)):
-    #     ps = []
-
-    #     for kk in range(int(cores*k), int(cores*k + Group[k])):
-    #         p = Process(target = path_4_saturation, args = (q, kk),
-    #                     kwargs = {'Model': Model, 'comp': comp,
-    #                     'T_initial_C': T_initial_C, 'T_maxdrop_C': T_maxdrop_C,
-    #                     'dt_C': dt_C, 'P_bar': P_bar[kk], 'phases': phases,
-    #                     'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset})
-            
-    #         ps.append(p)
-    #         p.start()
-
-    #     start = time.time()
-    #     for p in ps:
-    #         if time.time() - start < timeout - 10:
-    #             try:
-    #                 ret = q.get(timeout = timeout - (time.time()-start) + 10)
-    #             except:
-    #                 ret = []
-    #         else:
-    #             try:
-    #                 ret = q.get(timeout = 10)
-    #             except:
-    #                 ret = []
-
-    #         qs.append(ret)
-
-    #     TIMEOUT = 5
-    #     start = time.time()
-    #     for p in ps:
-    #         if p.is_alive():
-    #             while time.time() - start <= TIMEOUT:
-    #                 if not p.is_alive():
-    #                     p.join()
-    #                     p.terminate()
-    #                     break
-    #                 time.sleep(.1)
-    #             else:
-    #                 p.terminate()
-    #                 p.join(5)
-    #         else:
-    #             p.join()
-    #             p.terminate()
-
-    # for kk in range(len(qs)):
-    #     if len(qs[kk]) > 0:
-    #         index, res = qs[kk]
-    #         results[f"P = {P_bar[index]:.2f} bars"] = res.copy()
 
     Results = stich(Res=results, multi=True, Model=Model)
 
@@ -255,7 +221,7 @@ def mineral_cosaturation(Model="MELTSv1.0.2", cores=int(np.floor(multiprocessing
         arr2[:, 0] = np.abs(arr[:,1] - arr[:,2])
         arr2[:, 1] = np.abs(arr[:,1] - arr[:,3])
         arr2[:, 2] = np.abs(arr[:,2] - arr[:,3])
-        arr2[:,3] = np.max(arr2[:,0:2], axis = 1)
+        arr2[:, 3] = np.max(arr2[:,0:2], axis = 1)
 
         r_arr = np.hstack((arr,arr2))
 
@@ -431,6 +397,8 @@ def find_mineral_cosaturation(cores = None, Model = None, bulk = None, phases = 
     Results: Dict
         Dictionary containing information regarding the saturation temperature of each phase and the residuals between the different phases
     '''
+    print('This function will be removed following the update to v0.3.0. Please switch to using the mineral_cosaturation() function')
+
     try:
         from meltsdynamic import MELTSdynamic
     except:
