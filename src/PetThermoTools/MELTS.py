@@ -1114,7 +1114,8 @@ def path_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid = None, 
                 else:
                     melts.engine.calcEquilibriumState(2,0)
             except:
-                trail = False
+                if trail is not None:
+                    trail = False
                 # if trail is not None:
                 #     return Results, trail
                 # else:
@@ -1128,7 +1129,8 @@ def path_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid = None, 
                 else:
                     melts.engine.calcEquilibriumState(3,0)
             except:
-                trail = False
+                if trail is not None:
+                    trail = False
                 # return Results
                 break
 
@@ -1136,7 +1138,8 @@ def path_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid = None, 
             try:
                 melts.engine.calcEquilibriumState(4,0)
             except:
-                trail = False
+                if trail is not None:
+                    trail = False
                 # return Results
                 break
 
@@ -1156,7 +1159,8 @@ def path_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid = None, 
         try:
             PhaseList = ['liquid1'] + melts.engine.solidNames
         except:
-            trail = False
+            if trail is not None:
+                trail = False
             # return Results
             break
 

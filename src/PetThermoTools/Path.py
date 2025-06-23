@@ -730,11 +730,14 @@ def path(q, index, *, Model = None, comp = None, Frac_solid = None, Frac_fluid =
             Frac_solid = False
 
         comp_julia = jl.seval("Dict")(comp)
+        # T_path_C = T_path_C.tolist()
+        T_path_C_julia = jlconvert(jl.Vector[jl.Float64], T_path_C)
+        P_path_bar_julia = jlconvert(jl.Vector[jl.Float64], P_path_bar)
 
         Results = jl.MAGEMinCalc.path(
             comp=comp_julia, T_start_C=T_start_C, T_end_C=T_end_C, dt_C=dt_C,
             T_C=T_C, P_start_bar=P_start_bar, P_end_bar=P_end_bar, dp_bar=dp_bar,
-            P_bar=P_bar, T_path_C=T_path_C, P_path_bar=P_path_bar, frac_xtal=Frac_solid,
+            P_bar=P_bar, T_path_C=T_path_C_julia, P_path_bar=P_path_bar_julia, frac_xtal=Frac_solid,
             Model=Model, fo2_buffer=fO2_buffer, fo2_offset=fO2_offset, find_liquidus=find_liquidus
         )
         # Results = jl.pyconvert(dict, Results)
