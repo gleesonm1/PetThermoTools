@@ -731,8 +731,15 @@ def path(q, index, *, Model = None, comp = None, Frac_solid = None, Frac_fluid =
 
         comp_julia = jl.seval("Dict")(comp)
         # T_path_C = T_path_C.tolist()
-        T_path_C_julia = jlconvert(jl.Vector[jl.Float64], T_path_C)
-        P_path_bar_julia = jlconvert(jl.Vector[jl.Float64], P_path_bar)
+        if T_path_C is not None: 
+            T_path_C_julia = jlconvert(jl.Vector[jl.Float64], T_path_C)
+        else:
+            T_path_C_julia = T_path_C
+
+        if P_path_bar is not None:
+            P_path_bar_julia = jlconvert(jl.Vector[jl.Float64], P_path_bar)
+        else:
+            P_path_bar_julia = P_path_bar
 
         Results = jl.MAGEMinCalc.path(
             comp=comp_julia, T_start_C=T_start_C, T_end_C=T_end_C, dt_C=dt_C,
