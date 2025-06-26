@@ -38,6 +38,7 @@ Welcome to PetThermoTools's documentation!
    :caption: Crystallisation calculations
 
    Examples/CrystallisationTests/BasalticCrystallisation
+   Examples/CrystallisationTests/BasalticCrystallisation_Holland
 
 
 .. toctree::
