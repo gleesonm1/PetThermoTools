@@ -46,6 +46,31 @@ Names_MM = {'liq1': '_Liq',
             'spn1': '_Sp',
             'spn2': '_Sp2'}
 
+def label_results(Result,label):
+    Results = Result.copy()
+    new_out = {}
+    if  label == "CO2":
+        for r in Results:
+            new_out['CO2 = ' + str(Results[r]['Input']['comp']['CO2_Liq']) + ' wt%'] = Results[r].copy()
+        new_out = dict(sorted(new_out.items(), key=lambda x: float(x[0].split('=')[1].split(' ')[1])))
+    elif label == "pressure" or label == "P" or label == "P_bar":
+        for r in Results:
+            new_out['P = ' + str(Results[r]['Input']['P_bar']) + ' bars'] = Results[r].copy()
+        new_out = dict(sorted(new_out.items(), key=lambda x: float(x[0].split('=')[1].split(' ')[1])))
+    elif label == "fO2":
+        for r in Results:
+            new_out['fO2 = ' + Results[r]['Input']['fO2_buffer'] + ' ' + str(round(Results[r]['Input']['fO2_offset'],2))] = Results[r].copy()
+        new_out = dict(sorted(new_out.items(), key=lambda x: float(x[0].split('=')[1].split(' ')[2])))
+    elif label == 'H2O':
+        for r in Results:
+            new_out['H2O = ' + str(Results[r]['Input']['comp']['H2O_Liq']) + ' wt%'] = Results[r].copy()
+        new_out = dict(sorted(new_out.items(), key=lambda x: float(x[0].split('=')[1].split(' ')[1])))
+    
+    if len(new_out) == 0:
+        new_out = Results.copy()
+    
+    return new_out
+
 def supCalc(Model = "MELTSv1.0.2", bulk = None, phase = None, T_C = None, P_bar = None,
              Fe3Fet_Liq = None, H2O_Liq = None, CO2_Liq = None, fO2_buffer = None, fO2_offset = None, 
              melts = None):

@@ -117,10 +117,8 @@ def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid 
         Dictionary where each entry represents the results of a single calculation. Within the dictionary each single calculation is reported as a series of pandas DataFrames, displaying the composition and thermodynamic properties of each phase.
 
     '''
-    try:
-        from meltsdynamic import MELTSdynamic
-    except:
-        Warning('alphaMELTS for Python files are not on the python path. \n Please add these files to the path running \n import sys \n sys.path.append(r"insert_your_path_to_melts_here") \n You are looking for the location of the meltsdynamic.py file')
+    if timeout is None:
+        timeout = 180
 
     timeout_main = timeout
 
@@ -136,6 +134,12 @@ def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid 
     # set default values if required
     if Model is None:
         Model == "MELTSv1.0.2"
+
+    if "MELTS" in Model:
+        try:
+            from meltsdynamic import MELTSdynamic
+        except:
+            Warning('alphaMELTS for Python files are not on the python path. \n Please add these files to the path running \n import sys \n sys.path.append(r"insert_your_path_to_melts_here") \n You are looking for the location of the meltsdynamic.py file')
 
     # if comp is entered as a pandas series, it must first be converted to a dict
     if type(comp) == pd.core.series.Series:
@@ -357,89 +361,6 @@ def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid 
         results = combined_results
 
         Results = stich(Res=results, multi=True, Model=Model, Frac_fluid = Frac_fluid, Frac_solid = Frac_solid)
-
-        # for j in tqdm(range(len(Group))):
-        #     ps = []
-
-        #     if Print_suppress is None:
-        #         print("Running " + Model + " calculations " + str(int(cores*j)) + " to " + str(int(cores*j) + Group[j] - 1) + " ...", end = "", flush = True)
-        #         s = time.time()
-
-        #     for i in range(int(cores*j), int(cores*j + Group[j])):
-        #         if type(comp) == dict:
-        #             p = Process(target = path, args = (q, i),
-        #                         kwargs = {'Model': Model, 'comp': comp, 'Frac_solid': Frac_solid, 'Frac_fluid': Frac_fluid,
-        #                                 'T_C': T_C[i], 'T_path_C': T_path_C[i], 'T_start_C': T_start_C[i], 'T_end_C': T_end_C[i], 'dt_C': dt_C[i],
-        #                                 'P_bar': P_bar[i], 'P_path_bar': P_path_bar[i], 'P_start_bar': P_start_bar[i], 'P_end_bar': P_end_bar[i], 'dp_bar': dp_bar[i],
-        #                                 'isenthalpic': isenthalpic, 'isentropic': isentropic, 'isochoric': isochoric, 'find_liquidus': find_liquidus,
-        #                                 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset[i], 'fluid_sat': fluid_sat, 'Crystallinity_limit': Crystallinity_limit,
-        #                                 'Suppress': Suppress, 'Suppress_except': Suppress_except})
-        #         else:
-        #             p = Process(target = path, args = (q, i),
-        #                         kwargs = {'Model': Model, 'comp': comp.loc[i].to_dict(), 'Frac_solid': Frac_solid, 'Frac_fluid': Frac_fluid,
-        #                                 'T_C': T_C[i], 'T_path_C': T_path_C[i], 'T_start_C': T_start_C[i], 'T_end_C': T_end_C[i], 'dt_C': dt_C[i],
-        #                                 'P_bar': P_bar[i], 'P_path_bar': P_path_bar[i], 'P_start_bar': P_start_bar[i], 'P_end_bar': P_end_bar[i], 'dp_bar': dp_bar[i],
-        #                                 'isenthalpic': isenthalpic, 'isentropic': isentropic, 'isochoric': isochoric, 'find_liquidus': find_liquidus,
-        #                                 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset[i], 'fluid_sat': fluid_sat, 'Crystallinity_limit': Crystallinity_limit,
-        #                                 'Suppress': Suppress, 'Suppress_except': Suppress_except})
-
-        #         ps.append(p)
-        #         p.start()
-
-        #     if timeout is None:
-        #         TIMEOUT = 240
-        #     else:
-        #         TIMEOUT = timeout
-
-        #     start = time.time()
-        #     first = True
-        #     for p in ps:
-        #         if time.time() - start < TIMEOUT - 10:
-        #             try:
-        #                 ret = q.get(timeout = TIMEOUT - (time.time()-start) + 10)
-        #             except:
-        #                 ret = []
-        #         else:
-        #             if first == True:
-        #                 print('Timeout Reached - this likely indicates the calculation failed. \n You can try increasing the timeout limit using the "timeout" kwarg.')
-        #                 first = False
-        #             try:
-        #                 ret = q.get(timeout = 10)
-        #             except:
-        #                 ret = []
-
-        #         qs.append(ret)
-
-        #     TIMEOUT = 5
-        #     start = time.time()
-        #     for p in ps:
-        #         if p.is_alive():
-        #             while time.time() - start <= TIMEOUT:
-        #                 if not p.is_alive():
-        #                     p.join()
-        #                     p.terminate()
-        #                     break
-        #                 time.sleep(.1)
-        #             else:
-        #                 p.terminate()
-        #                 p.join(5)
-        #         else:
-        #             p.join()
-        #             p.terminate()
-
-        #     if Print_suppress is None:
-        #         print(" Complete (time taken = " + str(round(time.time() - s,2)) + " seconds)", end = "\n", flush = True)
-
-
-        # Results = {}
-        # Out = {}
-        # for i in range(len(qs)):
-        #     if len(qs[i]) > 0:
-        #         Res, index = qs[i]
-        #         Results['index = ' + str(index)] = Res
-
-        #if "MELTS" in Model:
-        # Results = stich(Results, multi = True, Model = Model, Frac_fluid = Frac_fluid, Frac_solid = Frac_solid)
         
         for r in Results:
             i = int(r.split('=')[1].strip())
@@ -463,31 +384,6 @@ def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid 
             return new_out
         else:
             return Results
-
-def label_results(Result,label):
-    Results = Result.copy()
-    new_out = {}
-    if  label == "CO2":
-        for r in Results:
-            new_out['CO2 = ' + str(Results[r]['Input']['comp']['CO2_Liq']) + ' wt%'] = Results[r].copy()
-        new_out = dict(sorted(new_out.items(), key=lambda x: float(x[0].split('=')[1].split(' ')[1])))
-    elif label == "pressure" or label == "P" or label == "P_bar":
-        for r in Results:
-            new_out['P = ' + str(Results[r]['Input']['P_bar']) + ' bars'] = Results[r].copy()
-        new_out = dict(sorted(new_out.items(), key=lambda x: float(x[0].split('=')[1].split(' ')[1])))
-    elif label == "fO2":
-        for r in Results:
-            new_out['fO2 = ' + Results[r]['Input']['fO2_buffer'] + ' ' + str(round(Results[r]['Input']['fO2_offset'],2))] = Results[r].copy()
-        new_out = dict(sorted(new_out.items(), key=lambda x: float(x[0].split('=')[1].split(' ')[2])))
-    elif label == 'H2O':
-        for r in Results:
-            new_out['H2O = ' + str(Results[r]['Input']['comp']['H2O_Liq']) + ' wt%'] = Results[r].copy()
-        new_out = dict(sorted(new_out.items(), key=lambda x: float(x[0].split('=')[1].split(' ')[1])))
-    
-    if len(new_out) == 0:
-        new_out = Results.copy()
-    
-    return new_out
 
 def path_multi(q, index, *, Model = None, comp = None, Frac_solid = None, Frac_fluid = None,
             T_C = None, T_path_C = None, T_start_C = None, T_end_C = None, dt_C = None,
