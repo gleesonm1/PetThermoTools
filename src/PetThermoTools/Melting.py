@@ -49,14 +49,15 @@ def AdiabaticDecompressionMelting(cores = multiprocessing.cpu_count(),
                                   P_path_bar = None, Frac = False, prop = None, 
                                   fO2_buffer = None, fO2_offset = None, Fe3Fet = None, MELTS_filter = True):
     
-    try:
-        import pyMelt as m
-        Lithologies = {'KLB-1': m.lithologies.matthews.klb1(),
-                    'KG1': m.lithologies.matthews.kg1(),
-                    'G2': m.lithologies.matthews.eclogite(),
-                    'hz': m.lithologies.shorttle.harzburgite()}
-    except ImportError:
-        raise RuntimeError('You havent installed pyMelt or there is an error when importing pyMelt. pyMelt is currently required to estimate the starting point for the melting calculations.')
+    if Tp_Method == "pyMelt":
+        try:
+            import pyMelt as m
+            Lithologies = {'KLB-1': m.lithologies.matthews.klb1(),
+                        'KG1': m.lithologies.matthews.kg1(),
+                        'G2': m.lithologies.matthews.eclogite(),
+                        'hz': m.lithologies.shorttle.harzburgite()}
+        except ImportError:
+            raise RuntimeError('You havent installed pyMelt or there is an error when importing pyMelt. pyMelt is currently required to estimate the starting point for the melting calculations.')
 
     if bulk is not None and comp_lith_1 is None:
         comp_lith_1 = bulk
@@ -155,7 +156,9 @@ def AdiabaticDecompressionMelting(cores = multiprocessing.cpu_count(),
 
     return Results
 
-def AdiabaticMelt(q, index, *, Model = None, comp_1 = None, comp_2 = None, comp_3 = None, Tp_C = None, P_start_bar = None, P_end_bar = None, dp_bar = None, P_path_bar = None, Frac = None, fO2_buffer = None, fO2_offset = None, prop = None):
+def AdiabaticMelt(q, index, *, Model = None, comp_1 = None, comp_2 = None, comp_3 = None, 
+                  Tp_C = None, P_start_bar = None, P_end_bar = None, dp_bar = None, P_path_bar = None, 
+                  Frac = None, fO2_buffer = None, fO2_offset = None, prop = None):
     '''
     Melting calculations to be performed in parallel.
 
@@ -163,21 +166,16 @@ def AdiabaticMelt(q, index, *, Model = None, comp_1 = None, comp_2 = None, comp_
     Results = {}
     if "MELTS" in Model:
         try:
-            Results = AdiabaticDecompressionMelting_MELTS(Model = Model, comp = comp_1, Tp_C = Tp_C, P_path_bar = P_path_bar, P_start_bar = P_start_bar, P_end_bar = P_end_bar, dp_bar = dp_bar, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset)
+            Results = AdiabaticDecompressionMelting_MELTS(Model = Model, comp = comp_1, Tp_C = Tp_C, 
+                                                          P_path_bar = P_path_bar, P_start_bar = P_start_bar, P_end_bar = P_end_bar, dp_bar = dp_bar, 
+                                                          fO2_buffer = fO2_buffer, fO2_offset = fO2_offset)
             q.put([Results, index])
         except:
             q.put([])
 
         return
-
-    if Model == "Holland":
-        # import pyMAGEMINcalc as MM
-        # Results = MM.AdiabaticDecompressionMelting(comp = comp_1, T_p_C = Tp_C, P_start_kbar = P_start_bar/1000, P_end_kbar = P_end_bar/1000, dp_kbar = dp_bar/1000, Frac = 0)
-        print('Note that the ability to use MAGEMin to performed adiabatic decompression melting in PetThermoTools has been temporarily disabled. The underlying issue will be fixed soon and this funciton will once again become available.')
-        q.put([Results, index])
-        return
     
-    if Model == "pyMelt":
+    elif Model == "pyMelt":
         try:
             import pyMelt as m
             Lithologies = {'KLB-1': m.lithologies.matthews.klb1(),
@@ -236,6 +234,45 @@ def AdiabaticMelt(q, index, *, Model = None, comp_1 = None, comp_2 = None, comp_
                     Results['All']['mass_Liq_'+comp_1] = column.lithologies[comp_1].F
                     Results['All']['mass_Liq_'+comp_2] = column.lithologies[comp_2].F
                     Results['All']['mass_Liq_'+comp_3] = column.lithologies[comp_3].F
+        
+        q.put([Results, index])
+        return
+
+    else:
+        # import pyMAGEMINcalc as MM
+        # Results = MM.AdiabaticDecompressionMelting(comp = comp_1, T_p_C = Tp_C, P_start_kbar = P_start_bar/1000, P_end_kbar = P_end_bar/1000, dp_kbar = dp_bar/1000, Frac = 0)
+        # print('Note that the ability to use MAGEMin to performed adiabatic decompression melting in PetThermoTools has been temporarily disabled. The underlying issue will be fixed soon and this funciton will once again become available.')
+        
+        try:
+            import pyMelt as m
+            Lithologies = {'KLB-1': m.lithologies.matthews.klb1(),
+                        'KG1': m.lithologies.matthews.kg1(),
+                        'G2': m.lithologies.matthews.eclogite(),
+                        'hz': m.lithologies.shorttle.harzburgite()}
+        except ImportError:
+            raise RuntimeError('You havent installed pyMelt or there is an error when importing pyMelt. pyMelt is currently required to estimate the starting point for the melting calculations.')
+
+        lz = m.lithologies.matthews.klb1()
+        mantle = m.mantle([lz], [1], ['Lz'])
+        T_start_C = mantle.adiabat(P_start_bar/10000.0, Tp_C)
+        
+        from juliacall import Main as jl, convert as jlconvert
+
+        jl.seval("using MAGEMinCalc")
+
+        comp_1['O'] = comp_1['Fe3Fet_Liq']*(((159.59/2)/71.844)*comp_1['FeOt_Liq'] - comp_1['FeOt_Liq'])
+
+        if type(comp_1) == dict:
+            comp_julia = jl.seval("Dict")(comp_1) 
+        else:
+            comp_new = comp_1.loc[i].to_dict()
+            comp_julia = jl.seval("Dict")(comp_new)
+
+        Output_jl = jl.MAGEMinCalc.AdiabaticDecompressionMelting(comp = comp_julia, P_start_kbar = P_start_bar/1000.0, 
+                                                              P_end_kbar = P_end_bar/1000.0, dp_kbar = dp_bar/1000.0,
+                                                              T_start_C = T_start_C, fo2_buffer = fO2_buffer, fo2_offset = fO2_offset, Model = Model)
+        Results = dict(Output_jl)
+        # Results = stich(Results, Model = Model)
         
         q.put([Results, index])
         return

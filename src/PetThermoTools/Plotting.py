@@ -359,7 +359,7 @@ def residualT_plot(Results = None, P_bar = None, phases = None, H2O_Liq = None, 
                         a[i][j].set_zlim([0,50])
 
 def phase_plot(Results = None, y_axis = None, x_axis = None, 
-               phases = ['Liq','Ol', 'Opx', 'Cpx', 'Sp', 'Grt'], cmap = "Reds",
+               phases = ['Liq', 'Ol', 'Opx', 'Cpx', 'Sp', 'Grt'], cmap = "Reds",
                title = None, figsize = None):
     
     if type(Results) != list:
@@ -373,10 +373,11 @@ def phase_plot(Results = None, y_axis = None, x_axis = None,
 
         Stop = np.zeros(len(Results['All']['P_bar']))
         for idx, p in enumerate(phases):
-            a.fill_betweenx(Results['All']['P_bar'], Stop, 
-                            x2= Stop + Results['All']['Mass_' + p], alpha = 0.75, color = PhaseList[p], lw = 0)
+            if 'mass_' + p in Results['All'].keys():
+                a.fill_betweenx(Results['All']['P_bar'], Stop, 
+                                x2= Stop + Results['All']['mass_' + p], alpha = 0.75, color = PhaseList[p], lw = 0)
 
-            Stop = Stop + Results['All']['Mass_'+p]
+                Stop = Stop + Results['All']['mass_' + p]
 
         a.set_ylabel('Pressure (bars)')
         a.set_xlabel('Mass (g)')
