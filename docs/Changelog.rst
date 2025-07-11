@@ -84,3 +84,9 @@ Version 0.2.32 (March 28th 2025)
 ====================================
 Changes to the underlying code and associated MAGEMinCalc library to improve the ease of integration between the packages. Adiabatic decompression melting in MAGEMinCalc is temporarily turn off.
 MAGEMinCalc v0.4.1 https://github.com/gleesonm1/MAGEMinCalc/archive/refs/tags/v0.4.1.zip 
+
+
+Version 0.2.39 (July 2025)
+====================================
+Fix to minor bugs influencing crystallization calculations. Changes to the name of functions used for barometry calculations.
+Please ensure you're updated to MAGEMinCalc v0.4.3 (see instructions) if running MAGEMin calculations.
