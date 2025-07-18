@@ -25,98 +25,80 @@ except:
 def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid = None, Frac_fluid = None, 
                T_C = None, T_path_C = None, T_start_C = None, T_end_C = None, dt_C = None, 
                P_bar = None, P_path_bar = None, P_start_bar = None, P_end_bar = None, dp_bar = None, 
-               Fe3Fet_Liq = None, H2O_Liq = None, CO2_Liq = None, 
+               Fe3Fet_init = None, Fe3Fet_Liq = None, H2O_init = None, H2O_Liq = None, CO2_init = None, CO2_Liq = None, 
                isenthalpic = None, isentropic = None, isochoric = None, find_liquidus = None, 
                fO2_buffer = None, fO2_offset = None, 
                Print_suppress = None, fluid_sat = None, Crystallinity_limit = None, Combined = None,
-               label = None, timeout = None, print_label = True, Suppress = ['rutile', 'tridymite'], Suppress_except=False):
-    '''
-    Carry out multiple calculations in parallel. Allows isobaric, polybaric and isochoric crystallisation to be performed as well as isothermal, isenthalpic or isentropic decompression. All temperature inputs/outputs are reported in degrees celcius and pressure is reported in bars.
+               label = None, timeout = None, print_label = True, Suppress = ['rutile', 'tridymite'], Suppress_except=False,
+               multi_processing = True):
+    """
+    Perform single or multiple MELTS/MAGEMin crystallization or degassing calculations in series or parallel.
 
-    Parameters:
+    Supports isothermal, isenthalpic, isentropic, and isochoric processes over fixed or variable pressure and 
+    temperature paths. Works with both MELTS and MAGEMin models. Automatically handles composition expansion when
+    using arrays for Fe3+/FeT, H2O, or CO2.
+
+    Parameters
     ----------
-    cores: int
-        number of processes to run in parallel. Default will be determined using Multiprocessing.cpu_count().
+    cores : int, optional
+        Number of CPU cores to use for multiprocessing. Defaults to total available.
+    Model : str
+        Thermodynamic model. MELTS variants: "MELTSv1.0.2", "MELTSv1.1.0", "MELTSv1.2.0", "pMELTS";
+        or MAGEMin: "Green2025", "Weller2024".
+    bulk or comp : dict or pd.DataFrame
+        Starting composition(s) for the model run(s). If `dict`, single composition for all runs.
+    Frac_solid : bool, optional
+        If True, remove solids at each step (fractional crystallization).
+    Frac_fluid : bool, optional
+        If True, remove fluids at each step.
+    T_C, P_bar : float or np.ndarray, optional
+        Fixed temperature/pressure values for isothermal/isobaric runs.
+    T_path_C, P_path_bar : np.ndarray or 2D array, optional
+        User-defined temperature/pressure paths for each model run.
+    T_start_C, T_end_C, dt_C : float or array, optional
+        Starting, ending, and increment temperature values for path calculations.
+    P_start_bar, P_end_bar, dp_bar : float or array, optional
+        Starting, ending, and increment pressure values for path calculations.
+    Fe3Fet_init : float or array, optional
+        Initial Fe3+/FeT ratio(s). Required if redox state is not specified in `comp` or `fO2_buffer`.
+    H2O_init, CO2_init : float or array, optional
+        Initial melt volatile contents. Required if not specified in `comp`.
+    isenthalpic, isentropic, isochoric : bool, optional
+        If True, applies respective thermodynamic constraint.
+    find_liquidus : bool, optional
+        If True, searches for the liquidus before starting.
+    fO2_buffer : {"FMQ", "NNO"}, optional
+        Specifies redox buffer for constraining oxygen fugacity.
+    fO2_offset : float or array, optional
+        Offset (in log units) from the specified fO2 buffer.
+    Print_suppress : bool, optional
+        If True, suppresses status messages.
+    fluid_sat : bool, optional
+        If True, starts the system at fluid saturation.
+    Crystallinity_limit : float, optional
+        Ends run when crystallinity (excluding fluids) exceeds this threshold.
+    Combined : unused
+        Placeholder for backwards compatibility.
+    label : str or array, optional
+        If provided, labels output dictionaries using `label`.
+    timeout : float, optional
+        Max allowed runtime for each subprocess (in seconds).
+    print_label : bool, default=True
+        If True, prints label with status updates.
+    Suppress : list of str
+        List of phases to exclude from results.
+    Suppress_except : bool
+        If True, `Suppress` acts as a whitelist instead of a blacklist.
+    multi_processing : bool
+        If False, run sequentially in main process.
 
-    Model: string
-        "MELTS" or "Holland". Dictates whether MELTS or MAGEMin calculations are performed. Default "MELTS".
-        Version of melts can be specified "MELTSv1.0.2", "MELTSv1.1.0", "MELTSv1.2.0", or "pMELTS". Default "v.1.0.2".
+    Returns
+    -------
+    Results : dict
+        Dictionary with each run's label as key. Values are sub-dictionaries of phase/property DataFrames.
+        Includes `Input` key summarizing model configuration per run.
+    """
 
-    bulk or comp: Dict or pd.DataFrame
-        Initial compositon for calculations. If type == Dict, the same initial composition will be used in all calculations.
-
-    Frac_solid: True/False
-        If True, solid phases will be removed from the system at the end of each  step. Default False.
-
-    Frac_fluid: True/False
-        If True, fluid phases will be removed from the system at the end of each  step. Default False.
-
-    T_C: float or np.ndarray
-        Calculation temperature - typically used when calculations are performed at a fixed T (e.g.,isothermal degassing).
-
-    T_path_C: np.ndarray
-        If a specified temperature path is to be used, T_path_C will be used to determine the T at each step of the model. If 2D, this indicates that multiple calculations with different T_path_C arrays are to be performed.
-
-    T_start_C: float or np.ndarray
-        Initial temperature used for path calculations.
-
-    T_end_C: float or np.ndarray
-        Final temperature in crystallisation calculations.
-
-    dt_C: float or np.ndarray
-        Temperature increment during crystallisation calculations.
-
-    P_bar: float or np.ndarray
-        Calculation pressure - typically used when calculations are performed at a fixed P (e.g.,isobaric crystallisation).
-
-    P_path_bar: np.ndarray
-        If a specified pressure path is to be used, P_path_bar will be used to determine the P at each step of the model. If 2D, this indicates that multiple calculations with different P_path_bar arrays are to be performed.
-
-    P_start_bar: float or np.ndarray
-        Initial pressure used for path calculations.
-
-    P_end_bar: float or np.ndarray
-        Final pressure in crystallisation calculations.
-
-    dp_bar: float or np.ndarray
-        Pressure increment during crystallisation calculations..
-
-    Fe3Fet_Liq: float or np.ndarray
-        Fe 3+/total ratio. If type(comp) == dict, and type(Fe3Fet_Liq) == np.ndarray a new DataFrame will be constructed with bulk compositions varying only in their Fe3Fet_Liq value. If comp is a pd.DataFrame, a single Fe3Fet_Liq value may be passed (float) and will be used as the Fe redox state for all starting compostions, or an array of Fe3Fet_Liq values, equal to the number of compositions specified in comp can specify a different Fe redox state for each sample. If None, the Fe redox state must be specified in the comp variable or an oxygen fugacity buffer must be chosen.
-
-    H2O_Liq: float or np.ndarray
-        H2O content of the initial melt phase. If type(comp) == dict, and type(H2O_Liq) = np.ndarray a new DataFrame will be constructed with bulk compositions varying only in their H2O_Liq value. If comp is a pd.DataFrame, a single H2O_Liq value may be passes (float) and will be used as the initial melt H2O content for all starting compositions. Alternatively, if an array of H2O_Liq values is passed, equal to the number of compositions specified in comp, a different initial melt H2O value will be passed for each sample. If None, H2O_Liq must be specified in the comp variable.
-
-    isenthalpic: True/False
-        If True, calculations will be performed at a constant enthalpy with T treated as a dependent variable.
-
-    isentropic: True/False
-        If True, calculations will be performed at a constant entropy with T treated as a dependent variable.
-
-    isochoric: True/False
-        If True, the volume of the system will be held constant instead of the pressure. Default is False.
-
-    find_liquidus: True/False
-        If True, the calculations will start with a search for the melt liquidus temperature. Default is False.
-
-    fO2_buffer: string
-        If the oxygen fugacity of the system is to be buffered during crystallisation/decompression, then an offset to a known buffer must be specified. Here the user can define the known buffer as either "FMQ" or "NNO".
-
-    fO2_offset: float or np.ndarray
-        Offset from the buffer spcified in fO2_buffer (log units).
-
-    Print_suppress: True/False
-        If True, print messages concerning the status of the thermodynamic calculations will not be displayed.
-
-    Crystallinity_limit: float
-        If value given, calculation will stop when the volume mass fraction of the system (excludin fluids) exceeds this value.
-
-    Returns:
-    ----------
-    Results: Dict
-        Dictionary where each entry represents the results of a single calculation. Within the dictionary each single calculation is reported as a series of pandas DataFrames, displaying the composition and thermodynamic properties of each phase.
-
-    '''
     if timeout is None:
         timeout = 180
 
@@ -141,6 +123,21 @@ def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid 
         except:
             Warning('alphaMELTS for Python files are not on the python path. \n Please add these files to the path running \n import sys \n sys.path.append(r"insert_your_path_to_melts_here") \n You are looking for the location of the meltsdynamic.py file')
 
+    if H2O_Liq is not None:
+        print('Warning - the kwarg "H2O_Liq" will be removed from v1.0.0 onwards. Please use "H2O_init" instead.')
+        if H2O_init is None:
+            H2O_init = H2O_Liq
+
+    if CO2_Liq is not None:
+        print('Warning - the kwarg "CO2_Liq" will be removed from v1.0.0 onwards. Please use "CO2_init" instead.')
+        if CO2_init is None:
+            CO2_init = CO2_Liq
+
+    if Fe3Fet_Liq is not None:
+        print('Warning - the kwarg "Fe3Fet_Liq" will be removed from v1.0.0 onwards. Please use "Fe3Fet_init" instead.')
+        if Fe3Fet_init is None:
+            Fe3Fet_init = Fe3Fet_Liq
+
     # if comp is entered as a pandas series, it must first be converted to a dict
     if type(comp) == pd.core.series.Series:
         comp = comp.to_dict()
@@ -155,7 +152,7 @@ def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid 
             fO2_buffer = "qfm"
 
     # ensure the bulk composition has the correct headers etc.
-    comp = comp_fix(Model = Model, comp = comp, Fe3Fet_Liq = Fe3Fet_Liq, H2O_Liq = H2O_Liq, CO2_Liq = CO2_Liq)
+    comp = comp_fix(Model = Model, comp = comp, Fe3Fet_Liq = Fe3Fet_init, H2O_Liq = H2O_init, CO2_Liq = CO2_init)
 
     if type(comp) == dict:
         if comp['H2O_Liq'] == 0.0 and "MELTS" in Model:
@@ -213,45 +210,57 @@ def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid 
             print("Running " + Model + " calculation...", end = "", flush = True)
             s = time.time()
 
-        p = Process(target = path, args = (q, 1),
-                    kwargs = {'Model': Model, 'comp': comp, 'Frac_solid': Frac_solid, 'Frac_fluid': Frac_fluid,
-                            'T_C': T_C, 'T_path_C': T_path_C, 'T_start_C': T_start_C, 'T_end_C': T_end_C, 'dt_C': dt_C,
-                            'P_bar': P_bar, 'P_path_bar': P_path_bar, 'P_start_bar': P_start_bar, 'P_end_bar': P_end_bar, 'dp_bar': dp_bar,
-                            'isenthalpic': isenthalpic, 'isentropic': isentropic, 'isochoric': isochoric, 'find_liquidus': find_liquidus,
-                            'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset, 'fluid_sat': fluid_sat, 'Crystallinity_limit': Crystallinity_limit,
-                            'Suppress': Suppress, 'Suppress_except': Suppress_except})
+        if multi_processing:
+            p = Process(target = path, args = (q, 1),
+                        kwargs = {'Model': Model, 'comp': comp, 'Frac_solid': Frac_solid, 'Frac_fluid': Frac_fluid,
+                                'T_C': T_C, 'T_path_C': T_path_C, 'T_start_C': T_start_C, 'T_end_C': T_end_C, 'dt_C': dt_C,
+                                'P_bar': P_bar, 'P_path_bar': P_path_bar, 'P_start_bar': P_start_bar, 'P_end_bar': P_end_bar, 'dp_bar': dp_bar,
+                                'isenthalpic': isenthalpic, 'isentropic': isentropic, 'isochoric': isochoric, 'find_liquidus': find_liquidus,
+                                'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset, 'fluid_sat': fluid_sat, 'Crystallinity_limit': Crystallinity_limit,
+                                'Suppress': Suppress, 'Suppress_except': Suppress_except})
 
-        p.start()
-        try:
-            ret = q.get(timeout = 180)
-        except:
-            ret = []
+            p.start()
+            try:
+                ret = q.get(timeout = 180)
+            except:
+                ret = []
 
-        TIMEOUT = 5
-        start = time.time()
-        if p.is_alive():
-            while time.time() - start <= TIMEOUT:
-                if not p.is_alive():
-                    p.join()
+            TIMEOUT = 5
+            start = time.time()
+            if p.is_alive():
+                while time.time() - start <= TIMEOUT:
+                    if not p.is_alive():
+                        p.join()
+                        p.terminate()
+                        break
+                    time.sleep(.1)
+                else:
                     p.terminate()
-                    break
-                time.sleep(.1)
+                    p.join(5)
             else:
+                p.join()
                 p.terminate()
-                p.join(5)
+
+            if Print_suppress is None:
+                print(" Complete (time taken = " + str(round(time.time() - s,2)) + " seconds)", end = "", flush = True)
+
+            if len(ret) > 0:
+                Results, index = ret
+                Results = stich(Results, Model = Model, Frac_fluid = Frac_fluid, Frac_solid = Frac_solid)
+                return Results
+            else:
+                Results = {}
+                return Results
         else:
-            p.join()
-            p.terminate()
-
-        if Print_suppress is None:
-            print(" Complete (time taken = " + str(round(time.time() - s,2)) + " seconds)", end = "", flush = True)
-
-        if len(ret) > 0:
-            Results, index = ret
+            Results = path_MELTS(Model = Model, comp = comp, Frac_solid = Frac_solid, Frac_fluid = Frac_fluid, 
+                                     T_C = T_C, T_path_C = T_path_C, T_start_C = T_start_C, T_end_C = T_end_C, 
+                                     dt_C = dt_C, P_bar = P_bar, P_path_bar = P_path_bar, P_start_bar = P_start_bar, 
+                                     P_end_bar = P_end_bar, dp_bar = dp_bar, isenthalpic = isenthalpic, 
+                                     isentropic = isentropic, isochoric = isochoric, find_liquidus = find_liquidus, 
+                                     fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, fluid_sat = fluid_sat, 
+                                     Crystallinity_limit = Crystallinity_limit, Suppress = Suppress, Suppress_except = Suppress_except)
+            
             Results = stich(Results, Model = Model, Frac_fluid = Frac_fluid, Frac_solid = Frac_solid)
-            return Results
-        else:
-            Results = {}
             return Results
 
     else: # perform multiple crystallisation calculations
@@ -363,7 +372,7 @@ def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid 
         Results = stich(Res=results, multi=True, Model=Model, Frac_fluid = Frac_fluid, Frac_solid = Frac_solid)
         
         for r in Results:
-            i = int(r.split('=')[1].strip())
+            i = int(r.split(' ')[1].strip())
             if type(comp) == dict:
                 Results[r]['Input'] = {'Model': Model, 'comp': comp, 'Frac_solid': Frac_solid, 'Frac_fluid': Frac_fluid,
                                     'T_C': T_C[i], 'T_path_C': T_path_C[i], 'T_start_C': T_start_C[i], 'T_end_C': T_end_C[i], 'dt_C': dt_C[i],
@@ -391,6 +400,57 @@ def path_multi(q, index, *, Model = None, comp = None, Frac_solid = None, Frac_f
             isenthalpic = None, isentropic = None, isochoric = None, find_liquidus = None,
             fO2_buffer = None, fO2_offset = None, fluid_sat = None, Crystallinity_limit = None,
             Suppress = None, Suppress_except = None, trail = True):
+    """
+    Worker function to run a subset of crystallization/decompression models (MELTS or MAGEMin) in parallel.
+
+    This function is intended to be run in a separate process. It takes a set of indices representing model runs,
+    executes them using the appropriate model interface, and returns the results via a multiprocessing queue.
+
+    Parameters
+    ----------
+    q : multiprocessing.Queue
+        Output queue for sending back results.
+    index : list of int
+        Indices of the simulations to be run by this worker.
+    Model : str
+        The thermodynamic model ("MELTSv1.0.2", "MELTSv1.1.0", "MELTSv1.2.0", "pMELTS", or MAGEMin variant: "Green2025" or "Weller2024").
+    comp : dict or pd.DataFrame
+        Starting compositions. Either a single dictionary or a DataFrame with one row per simulation.
+    Frac_solid : bool
+        If True, removes solids at each step.
+    Frac_fluid : bool
+        If True, removes fluids at each step.
+    T_C, T_path_C, T_start_C, T_end_C, dt_C : float or np.ndarray
+        Temperature constraints or paths for each simulation.
+    P_bar, P_path_bar, P_start_bar, P_end_bar, dp_bar : float or np.ndarray
+        Pressure constraints or paths for each simulation.
+    isenthalpic, isentropic, isochoric : bool
+        Apply respective thermodynamic constraints.
+    find_liquidus : bool
+        If True, finds the liquidus temperature before starting.
+    fO2_buffer : str
+        Oxygen fugacity buffer ("FMQ" or "NNO").
+    fO2_offset : float or array
+        Offset from specified fO2 buffer in log units.
+    fluid_sat : bool
+        If True, terminates runs at fluid saturation.
+    Crystallinity_limit : float
+        Ends run when crystallinity exceeds this value.
+    Suppress : list of str
+        Phases to exclude from results.
+    Suppress_except : bool
+        If True, treat `Suppress` as a whitelist.
+    trail : bool
+        If True, include trailing properties from model output.
+
+    Returns
+    -------
+    None
+        The function returns results using `q.put()`:
+        q.put([idx, results])
+        where `idx` is the list of completed indices and `results` is a dictionary of output per run.
+    """
+
     results = {}
     idx = []
 
@@ -467,7 +527,7 @@ def path_multi(q, index, *, Model = None, comp = None, Frac_solid = None, Frac_f
             idx.append(i)
 
 
-            results[f"index = {i}"] = Results
+            results[f"Run {i}"] = Results
 
             if tr is False:
                 break

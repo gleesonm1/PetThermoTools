@@ -11,7 +11,12 @@ from tqdm.notebook import tqdm, trange
 import random
 import time
 
-def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar = None, T_min_C = None, T_max_C = None, T_num = None, P_min_bar = None, P_max_bar = None, P_num = None, Fe3Fet_Liq = None, H2O_Liq = None, fO2_buffer = None, fO2_offset = None, i_max = 25, grid = True):
+def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar = None, 
+                      T_min_C = None, T_max_C = None, T_num = None, 
+                      P_min_bar = None, P_max_bar = None, P_num = None, 
+                      Fe3Fet_Liq = None, H2O_Liq = None, CO2_Liq = None,
+                      Fe3Fet_init = None, H2O_init = None, CO2_init = None,
+                      fO2_buffer = None, fO2_offset = None, i_max = 25, grid = True, refine = None):
     """
     Calculate phase diagrams for igneous systems (rocks and magmas).
 
@@ -61,6 +66,20 @@ def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar
     pandas.DataFrame
         A dataframe containing the phase diagram results.
     """
+    if H2O_Liq is not None:
+        print('Warning - the kwarg "H2O_Liq" will be removed from v1.0.0 onwards. Please use "H2O_init" instead.')
+        if H2O_init is None:
+            H2O_init = H2O_Liq
+
+    if CO2_Liq is not None:
+        print('Warning - the kwarg "CO2_Liq" will be removed from v1.0.0 onwards. Please use "CO2_init" instead.')
+        if CO2_init is None:
+            CO2_init = CO2_Liq
+
+    if Fe3Fet_Liq is not None:
+        print('Warning - the kwarg "Fe3Fet_Liq" will be removed from v1.0.0 onwards. Please use "Fe3Fet_init" instead.')
+        if Fe3Fet_init is None:
+            Fe3Fet_init = Fe3Fet_Liq
 
     comp = bulk.copy()
 
@@ -80,7 +99,7 @@ def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar
         comp = comp.to_dict()
 
     # ensure the bulk composition has the correct headers etc.
-    comp = comp_fix(Model = Model, comp = comp, Fe3Fet_Liq = Fe3Fet_Liq, H2O_Liq = H2O_Liq)
+    comp = comp_fix(Model = Model, comp = comp, Fe3Fet_Liq = Fe3Fet_init, H2O_Liq = H2O_init, CO2_Liq=CO2_init)
 
     if type(comp) == dict:
         if comp['Fe3Fet_Liq'] == 0.0 and "MELTS" in Model and fO2_buffer is None:
@@ -109,20 +128,6 @@ def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar
 
     c = 0
     j = 0
-
-
-    # subarray_length = len(T_flat) // cores
-
-    # # Initialize an empty list to store subarrays
-    # subarrays_T = []
-
-    # Loop through the indices and create subarrays
-    # for i in range(subarray_length):
-    #     subarray_T = T_flat[i::subarray_length]
-    #     subarrays_T.append(subarray_T)
-        
-    #     subarray_P = T_flat[i::subarray_length]
-    #     subarrays_P.append(subarray_P)
 
     while len(T_flat)>1:
         if j > i_max:
@@ -175,22 +180,6 @@ def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar
                 T_path_C = np.flip(T_path_C)
                 P_path_bar = np.flip(P_path_bar)
 
-            # if "MELTS" not in Model:
-            #     T_path_C = T_path_C.tolist()
-            #     P_path_bar = P_path_bar.tolist()
-
-            # if j > 5:
-            #     com = list(zip(T, P))
-
-            #     # Step 2: Randomize the order of the combined list
-            #     random.shuffle(com)
-
-            #     # Step 3: Separate the pairs back into two arrays
-            #     T_randomized, P_randomized = zip(*com)
-
-            #     T_path_C = np.array(T_randomized)
-            #     P_path_bar = np.array(P_randomized)
-
             p = Process(target = path, args = (q,i), kwargs = {'Model': Model, 'comp': comp, 
                                                                'T_path_C': T_path_C, 
                                                                'P_path_bar': P_path_bar, 
@@ -242,66 +231,6 @@ def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar
                 p.join()
                 p.terminate()
 
-        # TIMEOUT = 150 #+ #0.5*len(T_flat)
-        # start = time.time()
-        # for p in ps:
-        #     ret = []
-        #     if time.time() - start <= TIMEOUT:
-        #         while time.time() - start <= TIMEOUT:
-        #             try:
-        #                 ret = q.get(timeout = 2)
-        #                 break
-        #             except:
-        #                 continue
-        #
-        #             # if p.is_alive():
-        #             #     time.sleep(.1)
-        #             # else:
-        #             #     p.terminate()
-        #             #     p.join()
-        #             #     break
-        #
-        #         # if p.is_alive():
-        #     else:
-        #         try:
-        #             ret = q.get(timeout = 5)
-        #         except:
-        #             ret =[]
-        #
-        #     p.terminate()
-        #     p.join()
-
-            # else:
-            #     p.terminate()
-            #     p.join()
-
-            # try:
-            #     ret = q.get(timeout = 5)
-            # except:
-            #     ret = []
-
-            # qs.append(ret)
-            # if p.is_alive():
-            #     while time.time() - start <= TIMEOUT:
-            #         if not p.is_alive():
-            #             p.terminate()
-            #             p.join()
-            #             break
-            #         time.sleep(.1)
-            #     else:
-            #         p.terminate()
-            #         p.join()
-            # else:
-            #     p.terminate()
-            #     p.join()
-            #
-            # try:
-            #     ret = q.get(timeout = 2)
-            # except:
-            #     ret = []
-
-            # qs.append(ret)
-
         for p in ps:
             p.kill()
 
@@ -347,9 +276,6 @@ def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar
     new_flat = flat[np.where((flat[:, None] == Res_flat).all(-1).any(-1) == False)]
 
     if np.shape(new_flat)[0] > 0.0:
-        # df = pd.DataFrame(columns = ['T_C', 'P_bar'])
-        # for i in range(len(new_flat)):
-        #     df.loc[i] = new_flat[i]
         A = np.zeros((np.shape(new_flat)[0], np.shape(Combined.values)[1]))
         A[:,:2] = new_flat
 
@@ -358,7 +284,6 @@ def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar
         C = np.concatenate((A, B))
 
         Combined = pd.DataFrame(columns = list(Combined.keys()), data = C)
-        # Combined = pd.concat([Combined, df], axis = 0, ignore_index = True)
 
     Combined['T_C'] = np.round(Combined['T_C'], 2)
     Combined['P_bar'] = np.round(Combined['P_bar'], 2)
@@ -366,9 +291,15 @@ def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar
     Combined = Combined.reset_index(drop = True)
     Combined = Combined.dropna(subset = ['T_C'])
 
+    if refine is not None:
+        for i in range(refine):
+            Combined = phaseDiagram_refine(Data = Combined, Model = Model, bulk = bulk, Fe3Fet_Liq=Fe3Fet_init,
+                                           H2O_Liq=H2O_init, CO2_Liq=CO2_init, fO2_buffer=fO2_buffer, fO2_offset=fO2_offset, i_max = i_max)
+
     return Combined
 
-def phaseDiagram_refine(Data = None, Model = None, bulk = None, Fe3Fet_Liq = None, H2O_Liq = None, fO2_buffer = None, fO2_offset = None, i_max = 25):
+def phaseDiagram_refine(Data = None, Model = None, bulk = None, Fe3Fet_Liq = None, H2O_Liq = None, CO2_Liq = None, 
+                        fO2_buffer = None, fO2_offset = None, i_max = 25):
     Combined = Data.copy()
     # find existing T,P data
     T_C = Combined['T_C'].unique()
@@ -508,7 +439,8 @@ def phaseDiagram_refine(Data = None, Model = None, bulk = None, Fe3Fet_Liq = Non
     matching_df = matching_df.loc[np.where(matching_df['h'] != 0.0)[0],:]
     matching_df = matching_df.reset_index(drop = True)
 
-    New = phaseDiagram_calc(cores = 1, Model = Model, bulk = bulk, T_C = T_C, P_bar = P_bar, Fe3Fet_Liq = Fe3Fet_Liq, H2O_Liq = H2O_Liq, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, i_max = i_max, grid = False)
+    New = phaseDiagram_calc(cores = multiprocessing.cpu_count(), 
+                            Model = Model, bulk = bulk, T_C = T_C, P_bar = P_bar, Fe3Fet_init = Fe3Fet_Liq, H2O_init = H2O_Liq, CO2_init = CO2_Liq, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, i_max = i_max, grid = False)
 
     # A = New.values
     # B = matching_df.values

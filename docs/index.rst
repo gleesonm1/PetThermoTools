@@ -26,11 +26,11 @@ Welcome to PetThermoTools's documentation!
 
 ..    youtube
 
-.. toctree::
-   :maxdepth: 2
-   :caption: Melt liquidus temperature
+.. .. toctree::
+..    :maxdepth: 2
+..    :caption: Melt liquidus temperature
 
-   Examples/LiquidusTests/LiquidusTest
+..    Examples/LiquidusTests/LiquidusTest
 
 
 .. toctree::
@@ -38,7 +38,13 @@ Welcome to PetThermoTools's documentation!
    :caption: Crystallisation calculations
 
    Examples/CrystallisationTests/BasalticCrystallisation
-   Examples/CrystallisationTests/BasalticCrystallisation_Holland
+   Examples/CrystallisationTests/BasalticCrystallisation_withMAGEMin
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Phase Diagram calcualtions
+
+   Examples/PhaseDiagrams/PhaseDiagram_example
 
 
 .. toctree::

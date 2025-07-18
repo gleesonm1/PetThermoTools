@@ -37,7 +37,6 @@ def equilibrate_MELTS(Model = None, P_bar = None, T_C = None, comp = None,
         if Suppress == "All":
             melts.engine.pressure = np.random.normal(P_bar, P_bar/10)
             melts.engine.temperature = T_C + 500
-            # melts.engine.setBulkComposition(bulk)
             PL = melts.engine.calcSaturationState()
             for p in PL:
                 if p != "fluid":
@@ -73,12 +72,6 @@ def equilibrate_MELTS(Model = None, P_bar = None, T_C = None, comp = None,
         return Results
 
     SolidPhase = melts.engine.solidNames
-    # if np.isnan(melts.engine.getProperty('mass', 'liquid1')):
-    #     PhaseList = SolidPhase
-    # elif len(SolidPhase) > 0:
-    #     PhaseList = ['liquid1'] + SolidPhase
-    # else:
-    #     PhaseList = ['Liquid1']
     if SolidPhase is not None:
         PhaseList = ['liquid1'] + SolidPhase
     else:
@@ -104,17 +97,9 @@ def equilibrate_MELTS(Model = None, P_bar = None, T_C = None, comp = None,
 
         for pr in Results[phase + '_prop']:
             Results[phase + '_prop'][pr].loc[0] = melts.engine.getProperty(pr, phase)
-
-    # if PhaseList is not None:
-    #     for p in PhaseList:
-    #         PhaseComp[p] = melts.engine.getProperty('dispComposition', p)
-    #         PhaseProp[p] = {}
-    #         for i in Props:
-    #             PhaseProp[p][i] = melts.engine.getProperty(i, p)
     
     PhaseList = melts.engine.calcSaturationState()
     Affinity_raw = melts.engine.getProperty('affinity', PhaseList)
-    # Affinity = {'orthopyroxene': Affinity_raw}
     Affinity = {Phase: float_value for Phase, float_value in zip(PhaseList, Affinity_raw)}
 
     return Results, Affinity
@@ -1205,7 +1190,7 @@ def path_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid = None, 
     else:
         return Results
 
-def findSatPressure_MELTS_multi(Model = None, comp = None, fO2_buffer = None, fO2_offset = None, P_bar = None, T_fixed_C = None):
+def findSatPressure_MELTS_multi(Model = None, comp = None, fO2_buffer = None, fO2_offset = None, P_bar = None, T_fixed_C = None, index = None):
     out = pd.DataFrame(columns = ['Sample_ID_Liq', 'SiO2_Liq', 'TiO2_Liq', 'Al2O3_Liq', 'Cr2O3_Liq', 'FeOt_Liq', 'MnO_Liq', 'MgO_Liq', 'CaO_Liq', 'Na2O_Liq', 'K2O_Liq', 'P2O5_Liq', 'H2O_Liq', 'CO2_Liq', 'Fe3Fet_Liq', 'P_bar', 'T_Liq'])
 
     from meltsdynamic import MELTSdynamic
@@ -1219,11 +1204,14 @@ def findSatPressure_MELTS_multi(Model = None, comp = None, fO2_buffer = None, fO
     elif Model == "MELTSv1.2.0":
         melts = MELTSdynamic(4)
 
-    melts.engine.setSystemProperties("Suppress", "rutile")
-    melts.engine.setSystemProperties("Suppress", "tridymite")
+    # melts.engine.setSystemProperties("Suppress", "rutile")
+    # melts.engine.setSystemProperties("Suppress", "tridymite")
 
     if "Sample_ID_Liq" not in comp.keys():
-        comp.loc[:,"Sample_ID_Liq"] = np.linspace(0, len(comp['SiO2_Liq'])-1, len(comp['SiO2_Liq']))
+        if index is not None:
+            comp.loc[:, "Sample_ID_Liq"] = index
+        else:
+            comp.loc[:,"Sample_ID_Liq"] = np.linspace(0, len(comp['SiO2_Liq'])-1, len(comp['SiO2_Liq']))
 
     for i in range(len(T_fixed_C)):
         bulk = [comp.loc[i,'SiO2_Liq'], comp.loc[i,'TiO2_Liq'], comp.loc[i,'Al2O3_Liq'], 
@@ -1329,7 +1317,8 @@ def findSatPressure_MELTS_multi(Model = None, comp = None, fO2_buffer = None, fO
 
     return out
 
-def findSatPressure_MELTS(Model = None, T_C_init = None, T_fixed_C = None, P_bar_init = None, comp = None, fO2_buffer = None, fO2_offset = None):
+def findSatPressure_MELTS(Model = None, T_C_init = None, T_fixed_C = None, P_bar_init = None, 
+                          comp = None, fO2_buffer = None, fO2_offset = None, trial = None, melts = None, suppressed = None):
     """
     Calculates the volatile saturation pressure and temperature of a given chemical composition (including volatiles) using the MELTS model.
 
@@ -1352,6 +1341,8 @@ def findSatPressure_MELTS(Model = None, T_C_init = None, T_fixed_C = None, P_bar
             'P_bar': the saturation pressure in bars.
             'T_Liq': the temperature in degrees Celsius at which the saturation pressure is calculated.
     """
+    if trial is not None:
+        trial = False
     
     if P_bar_init is None:
         P_bar_init = 5000
@@ -1361,32 +1352,31 @@ def findSatPressure_MELTS(Model = None, T_C_init = None, T_fixed_C = None, P_bar
     if T_C_init is None:
         T_C_init = 1200
 
-    from meltsdynamic import MELTSdynamic
+    if melts is None:
+        from meltsdynamic import MELTSdynamic
 
-    if Model is None or Model == "MELTSv1.0.2":
-        melts = MELTSdynamic(1)
-    elif Model == "pMELTS":
-        melts = MELTSdynamic(2)
-    elif Model == "MELTSv1.1.0":
-        melts = MELTSdynamic(3)
-    elif Model == "MELTSv1.2.0":
-        melts = MELTSdynamic(4)
-
-    melts.engine.setSystemProperties("Suppress", "rutile")
-    melts.engine.setSystemProperties("Suppress", "tridymite")
+        if Model is None or Model == "MELTSv1.0.2":
+            melts = MELTSdynamic(1)
+        elif Model == "pMELTS":
+            melts = MELTSdynamic(2)
+        elif Model == "MELTSv1.1.0":
+            melts = MELTSdynamic(3)
+        elif Model == "MELTSv1.2.0":
+            melts = MELTSdynamic(4)
 
     bulk = [comp['SiO2_Liq'], comp['TiO2_Liq'], comp['Al2O3_Liq'], comp['Fe3Fet_Liq']*((159.59/2)/71.844)*comp['FeOt_Liq'], comp['Cr2O3_Liq'], (1- comp['Fe3Fet_Liq'])*comp['FeOt_Liq'], comp['MnO_Liq'], comp['MgO_Liq'], 0.0, 0.0, comp['CaO_Liq'], comp['Na2O_Liq'], comp['K2O_Liq'], comp['P2O5_Liq'], comp['H2O_Liq'], comp['CO2_Liq'], 0.0, 0.0, 0.0]
     bulk = list(100*np.array(bulk)/np.sum(bulk))
 
     if T_fixed_C is not None:
-        melts.engine.pressure = P_bar_init
-        melts.engine.temperature = T_fixed_C + 500
-        melts.engine.setBulkComposition(bulk)
-        PL = melts.engine.calcSaturationState()
-        for p in PL:
-            if p != "fluid":
-                if p != "water":
-                    melts.engine.setSystemProperties("Suppress", p)
+        if suppressed is None:
+            melts.engine.pressure = P_bar_init
+            melts.engine.temperature = T_fixed_C + 500
+            melts.engine.setBulkComposition(bulk)
+            PL = melts.engine.calcSaturationState()
+            for p in PL:
+                if p != "fluid":
+                    if p != "water":
+                        melts.engine.setSystemProperties("Suppress", p)
 
         melts.engine.pressure = P_bar_init
         melts.engine.temperature = T_fixed_C
@@ -1394,8 +1384,12 @@ def findSatPressure_MELTS(Model = None, T_C_init = None, T_fixed_C = None, P_bar
         try:
             melts.engine.calcEquilibriumState(1,0)
         except:
-            out = {'SiO2_Liq': 0.0, 'TiO2_Liq': 0.0, 'Al2O3_Liq': 0.0, 'FeOt_Liq': 0.0, 'MnO_Liq': 0.0, 'MgO_Liq': 0.0, 'CaO_Liq': 0.0, 'Na2O_Liq': 0.0, 'K2O_Liq': 0.0, 'P2O5_Liq': 0.0, 'H2O_Liq': 0.0, 'CO2_Liq': 0.0, 'Fe3Fet_Liq': 0.0, 'P_bar': 0.0, 'T_Liq': 0.0}
-            return out
+            if trial is not None:
+                out = {'SiO2_Liq': 0.0, 'TiO2_Liq': 0.0, 'Al2O3_Liq': 0.0, 'FeOt_Liq': 0.0, 'MnO_Liq': 0.0, 'MgO_Liq': 0.0, 'CaO_Liq': 0.0, 'Na2O_Liq': 0.0, 'K2O_Liq': 0.0, 'P2O5_Liq': 0.0, 'H2O_Liq': 0.0, 'CO2_Liq': 0.0, 'Fe3Fet_Liq': 0.0, 'P_bar': 0.0, 'T_Liq': 0.0}
+                return out, trial
+            else:
+                out = {'SiO2_Liq': 0.0, 'TiO2_Liq': 0.0, 'Al2O3_Liq': 0.0, 'FeOt_Liq': 0.0, 'MnO_Liq': 0.0, 'MgO_Liq': 0.0, 'CaO_Liq': 0.0, 'Na2O_Liq': 0.0, 'K2O_Liq': 0.0, 'P2O5_Liq': 0.0, 'H2O_Liq': 0.0, 'CO2_Liq': 0.0, 'Fe3Fet_Liq': 0.0, 'P_bar': 0.0, 'T_Liq': 0.0}
+                return out
         
         for i in range(2):
             if len(melts.engine.solidNames) > 0:
@@ -1405,13 +1399,18 @@ def findSatPressure_MELTS(Model = None, T_C_init = None, T_fixed_C = None, P_bar
                         P_bar = P_bar*1.1
                     else:
                         P_bar = P_bar*1.5
+
                     melts.engine.pressure = P_bar
                     try:
                         melts = melts.addNodeAfter()
                         melts.engine.calcEquilibriumState(1,0)
                     except:
-                        out = {'SiO2_Liq': 0.0, 'TiO2_Liq': 0.0, 'Al2O3_Liq': 0.0, 'FeOt_Liq': 0.0, 'MnO_Liq': 0.0, 'MgO_Liq': 0.0, 'CaO_Liq': 0.0, 'Na2O_Liq': 0.0, 'K2O_Liq': 0.0, 'P2O5_Liq': 0.0, 'H2O_Liq': 0.0, 'CO2_Liq': 0.0, 'Fe3Fet_Liq': 0.0, 'P_bar': 0.0, 'T_Liq': 0.0}
-                        return out
+                        if trial is not None:
+                            out = {'SiO2_Liq': 0.0, 'TiO2_Liq': 0.0, 'Al2O3_Liq': 0.0, 'FeOt_Liq': 0.0, 'MnO_Liq': 0.0, 'MgO_Liq': 0.0, 'CaO_Liq': 0.0, 'Na2O_Liq': 0.0, 'K2O_Liq': 0.0, 'P2O5_Liq': 0.0, 'H2O_Liq': 0.0, 'CO2_Liq': 0.0, 'Fe3Fet_Liq': 0.0, 'P_bar': 0.0, 'T_Liq': 0.0}
+                            return out, trial
+                        else:
+                            out = {'SiO2_Liq': 0.0, 'TiO2_Liq': 0.0, 'Al2O3_Liq': 0.0, 'FeOt_Liq': 0.0, 'MnO_Liq': 0.0, 'MgO_Liq': 0.0, 'CaO_Liq': 0.0, 'Na2O_Liq': 0.0, 'K2O_Liq': 0.0, 'P2O5_Liq': 0.0, 'H2O_Liq': 0.0, 'CO2_Liq': 0.0, 'Fe3Fet_Liq': 0.0, 'P_bar': 0.0, 'T_Liq': 0.0}
+                            return out
                     
                     if len(melts.engine.solidNames) == 0:
                         P_high = P_bar
@@ -1425,8 +1424,12 @@ def findSatPressure_MELTS(Model = None, T_C_init = None, T_fixed_C = None, P_bar
                         melts = melts.addNodeAfter()
                         melts.engine.calcEquilibriumState(1,0)
                     except:
-                        out = {'SiO2_Liq': 0.0, 'TiO2_Liq': 0.0, 'Al2O3_Liq': 0.0, 'FeOt_Liq': 0.0, 'MnO_Liq': 0.0, 'MgO_Liq': 0.0, 'CaO_Liq': 0.0, 'Na2O_Liq': 0.0, 'K2O_Liq': 0.0, 'P2O5_Liq': 0.0, 'H2O_Liq': 0.0, 'CO2_Liq': 0.0, 'Fe3Fet_Liq': 0.0, 'P_bar': 0.0, 'T_Liq': 0.0}
-                        return out
+                        if trial is not None:
+                            out = {'SiO2_Liq': 0.0, 'TiO2_Liq': 0.0, 'Al2O3_Liq': 0.0, 'FeOt_Liq': 0.0, 'MnO_Liq': 0.0, 'MgO_Liq': 0.0, 'CaO_Liq': 0.0, 'Na2O_Liq': 0.0, 'K2O_Liq': 0.0, 'P2O5_Liq': 0.0, 'H2O_Liq': 0.0, 'CO2_Liq': 0.0, 'Fe3Fet_Liq': 0.0, 'P_bar': 0.0, 'T_Liq': 0.0}
+                            return out, trial
+                        else:
+                            out = {'SiO2_Liq': 0.0, 'TiO2_Liq': 0.0, 'Al2O3_Liq': 0.0, 'FeOt_Liq': 0.0, 'MnO_Liq': 0.0, 'MgO_Liq': 0.0, 'CaO_Liq': 0.0, 'Na2O_Liq': 0.0, 'K2O_Liq': 0.0, 'P2O5_Liq': 0.0, 'H2O_Liq': 0.0, 'CO2_Liq': 0.0, 'Fe3Fet_Liq': 0.0, 'P_bar': 0.0, 'T_Liq': 0.0}
+                            return out
                     
                     if len(melts.engine.solidNames) == 0:
                         P_low = P_bar
@@ -1438,8 +1441,12 @@ def findSatPressure_MELTS(Model = None, T_C_init = None, T_fixed_C = None, P_bar
                 melts = melts.addNodeAfter()
                 melts.engine.calcEquilibriumState(1,0)
             except:
-                out = {'SiO2_Liq': 0.0, 'TiO2_Liq': 0.0, 'Al2O3_Liq': 0.0, 'FeOt_Liq': 0.0, 'MnO_Liq': 0.0, 'MgO_Liq': 0.0, 'CaO_Liq': 0.0, 'Na2O_Liq': 0.0, 'K2O_Liq': 0.0, 'P2O5_Liq': 0.0, 'H2O_Liq': 0.0, 'CO2_Liq': 0.0, 'Fe3Fet_Liq': 0.0, 'P_bar': 0.0, 'T_Liq': 0.0}
-                return out
+                if trial is not None:
+                    out = {'SiO2_Liq': 0.0, 'TiO2_Liq': 0.0, 'Al2O3_Liq': 0.0, 'FeOt_Liq': 0.0, 'MnO_Liq': 0.0, 'MgO_Liq': 0.0, 'CaO_Liq': 0.0, 'Na2O_Liq': 0.0, 'K2O_Liq': 0.0, 'P2O5_Liq': 0.0, 'H2O_Liq': 0.0, 'CO2_Liq': 0.0, 'Fe3Fet_Liq': 0.0, 'P_bar': 0.0, 'T_Liq': 0.0}
+                    return out, trial
+                else:
+                    out = {'SiO2_Liq': 0.0, 'TiO2_Liq': 0.0, 'Al2O3_Liq': 0.0, 'FeOt_Liq': 0.0, 'MnO_Liq': 0.0, 'MgO_Liq': 0.0, 'CaO_Liq': 0.0, 'Na2O_Liq': 0.0, 'K2O_Liq': 0.0, 'P2O5_Liq': 0.0, 'H2O_Liq': 0.0, 'CO2_Liq': 0.0, 'Fe3Fet_Liq': 0.0, 'P_bar': 0.0, 'T_Liq': 0.0}
+                    return out
             
             if len(melts.engine.solidNames) > 0:
                 P_low = P_bar
@@ -1466,6 +1473,7 @@ def findSatPressure_MELTS(Model = None, T_C_init = None, T_fixed_C = None, P_bar
             'T_Liq': T_fixed_C}
 
     else:    
+
         Liq_Results = findLiq_MELTS(Model = Model, P_bar = P_bar, comp = bulk, melts = melts, 
                                     fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, T_C_init = T_C_init, Step = np.array([5,1]))
         
@@ -1476,13 +1484,21 @@ def findSatPressure_MELTS(Model = None, T_C_init = None, T_fixed_C = None, P_bar
         if Liq_Results['fluid_saturated'] == "Yes":
             while Liq_Results['fluid_saturated'] == "Yes":
                 P_low = P_bar
-                P_bar = P_bar*2
+                if P_bar > 5000:
+                    P_bar = P_bar*1.2
+                else:
+                    P_bar = P_bar*1.6
+
                 Liq_Results = findLiq_MELTS(Model = Model, P_bar = P_bar, comp = bulk, melts = melts, 
                                         fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, T_C_init = Liq_Results['T_Liq'], Step = np.array([5,1]))
 
                 if Liq_Results['T_Liq'] == 0.0:
-                    out = {'SiO2_Liq': 0.0, 'TiO2_Liq': 0.0, 'Al2O3_Liq': 0.0, 'FeOt_Liq': 0.0, 'MnO_Liq': 0.0, 'MgO_Liq': 0.0, 'CaO_Liq': 0.0, 'Na2O_Liq': 0.0, 'K2O_Liq': 0.0, 'P2O5_Liq': 0.0, 'H2O_Liq': 0.0, 'CO2_Liq': 0.0, 'Fe3Fet_Liq': 0.0, 'P_bar': 0.0, 'T_Liq': 0.0}
-                    return out
+                    if trial is not None:
+                        out = {'SiO2_Liq': 0.0, 'TiO2_Liq': 0.0, 'Al2O3_Liq': 0.0, 'FeOt_Liq': 0.0, 'MnO_Liq': 0.0, 'MgO_Liq': 0.0, 'CaO_Liq': 0.0, 'Na2O_Liq': 0.0, 'K2O_Liq': 0.0, 'P2O5_Liq': 0.0, 'H2O_Liq': 0.0, 'CO2_Liq': 0.0, 'Fe3Fet_Liq': 0.0, 'P_bar': 0.0, 'T_Liq': 0.0}
+                        return out, trial
+                    else:
+                        out = {'SiO2_Liq': 0.0, 'TiO2_Liq': 0.0, 'Al2O3_Liq': 0.0, 'FeOt_Liq': 0.0, 'MnO_Liq': 0.0, 'MgO_Liq': 0.0, 'CaO_Liq': 0.0, 'Na2O_Liq': 0.0, 'K2O_Liq': 0.0, 'P2O5_Liq': 0.0, 'H2O_Liq': 0.0, 'CO2_Liq': 0.0, 'Fe3Fet_Liq': 0.0, 'P_bar': 0.0, 'T_Liq': 0.0}
+                        return out
                 
                 if Liq_Results['fluid_saturated'] == "No":
                     P_high = P_bar
@@ -1496,21 +1512,29 @@ def findSatPressure_MELTS(Model = None, T_C_init = None, T_fixed_C = None, P_bar
                                         fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, T_C_init = Liq_Results['T_Liq'], Step = np.array([5,1]))
 
                 if Liq_Results['T_Liq'] == 0.0:
-                    out = {'SiO2_Liq': 0.0, 'TiO2_Liq': 0.0, 'Al2O3_Liq': 0.0, 'FeOt_Liq': 0.0, 'MnO_Liq': 0.0, 'MgO_Liq': 0.0, 'CaO_Liq': 0.0, 'Na2O_Liq': 0.0, 'K2O_Liq': 0.0, 'P2O5_Liq': 0.0, 'H2O_Liq': 0.0, 'CO2_Liq': 0.0, 'Fe3Fet_Liq': 0.0, 'P_bar': 0.0, 'T_Liq': 0.0}
-                    return out
+                    if trial is not None:
+                        out = {'SiO2_Liq': 0.0, 'TiO2_Liq': 0.0, 'Al2O3_Liq': 0.0, 'FeOt_Liq': 0.0, 'MnO_Liq': 0.0, 'MgO_Liq': 0.0, 'CaO_Liq': 0.0, 'Na2O_Liq': 0.0, 'K2O_Liq': 0.0, 'P2O5_Liq': 0.0, 'H2O_Liq': 0.0, 'CO2_Liq': 0.0, 'Fe3Fet_Liq': 0.0, 'P_bar': 0.0, 'T_Liq': 0.0}
+                        return out, trial
+                    else:
+                        out = {'SiO2_Liq': 0.0, 'TiO2_Liq': 0.0, 'Al2O3_Liq': 0.0, 'FeOt_Liq': 0.0, 'MnO_Liq': 0.0, 'MgO_Liq': 0.0, 'CaO_Liq': 0.0, 'Na2O_Liq': 0.0, 'K2O_Liq': 0.0, 'P2O5_Liq': 0.0, 'H2O_Liq': 0.0, 'CO2_Liq': 0.0, 'Fe3Fet_Liq': 0.0, 'P_bar': 0.0, 'T_Liq': 0.0}
+                        return out
                 
                 if Liq_Results['fluid_saturated'] == "Yes":
                     P_low = P_bar
                     break
 
-        while P_high/P_low > 1.01:
+        for jj in range(5):
             P_new = P_low + (P_high - P_low)/2
             Liq_Results = findLiq_MELTS(Model = Model, P_bar = P_new, comp = bulk, melts = melts, 
                                     fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, T_C_init = Liq_Results['T_Liq'], Step = np.array([3,1]))
             
             if Liq_Results['T_Liq'] == 0.0:
-                out = {'SiO2_Liq': 0.0, 'TiO2_Liq': 0.0, 'Al2O3_Liq': 0.0, 'FeOt_Liq': 0.0, 'MnO_Liq': 0.0, 'MgO_Liq': 0.0, 'CaO_Liq': 0.0, 'Na2O_Liq': 0.0, 'K2O_Liq': 0.0, 'P2O5_Liq': 0.0, 'H2O_Liq': 0.0, 'CO2_Liq': 0.0, 'Fe3Fet_Liq': 0.0, 'P_bar': 0.0, 'T_Liq': 0.0}
-                return out
+                if trial is not None:
+                    out = {'SiO2_Liq': 0.0, 'TiO2_Liq': 0.0, 'Al2O3_Liq': 0.0, 'FeOt_Liq': 0.0, 'MnO_Liq': 0.0, 'MgO_Liq': 0.0, 'CaO_Liq': 0.0, 'Na2O_Liq': 0.0, 'K2O_Liq': 0.0, 'P2O5_Liq': 0.0, 'H2O_Liq': 0.0, 'CO2_Liq': 0.0, 'Fe3Fet_Liq': 0.0, 'P_bar': 0.0, 'T_Liq': 0.0}
+                    return out, trial
+                else:
+                    out = {'SiO2_Liq': 0.0, 'TiO2_Liq': 0.0, 'Al2O3_Liq': 0.0, 'FeOt_Liq': 0.0, 'MnO_Liq': 0.0, 'MgO_Liq': 0.0, 'CaO_Liq': 0.0, 'Na2O_Liq': 0.0, 'K2O_Liq': 0.0, 'P2O5_Liq': 0.0, 'H2O_Liq': 0.0, 'CO2_Liq': 0.0, 'Fe3Fet_Liq': 0.0, 'P_bar': 0.0, 'T_Liq': 0.0}
+                    return out
                 break
 
             if Liq_Results['fluid_saturated'] == "Yes":
@@ -1542,7 +1566,11 @@ def findSatPressure_MELTS(Model = None, T_C_init = None, T_fixed_C = None, P_bar
             'P_bar': P_bar, 
             'T_Liq': Liq_Results['T_Liq']}
 
-    return out
+    if trial is not None:
+        trial = True
+        return out, trial
+    else:
+        return out
 
 def AdiabaticDecompressionMelting_MELTS(Model = None, comp = None, Tp_C = None, P_path_bar = None, P_start_bar = None, P_end_bar = None, dp_bar = None, Frac = False, fO2_buffer = None, fO2_offset = None):
     try:

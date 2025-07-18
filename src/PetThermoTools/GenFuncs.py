@@ -11,6 +11,8 @@ from PetThermoTools.MELTS import *
 
 Names = {'liquid1': '_Liq',
         'liquid2': '_Liq2',
+        'liquid3': '_Liq3',
+        'liquid4': '_Liq4',
         'olivine1': '_Ol',
         'olivine2': '_Ol2',
         'clinopyroxene1': '_Cpx',
@@ -33,6 +35,9 @@ Names = {'liquid1': '_Liq',
         'apatite2': '_Apa2'}
 
 Names_MM = {'liq1': '_Liq',
+            'liq2': '_Liq2',
+            'liq3': '_Liq3',
+            'liq4': '_Liq4',
             'ol1': '_Ol',
             'ol2': '_Ol2',
             'cpx1': '_Cpx',
@@ -43,8 +48,8 @@ Names_MM = {'liq1': '_Liq',
             'g2': '_Grt2',
             'fsp1': '_Plag',
             'fsp2': '_Plag2',
-            'spn1': '_Sp',
-            'spn2': '_Sp2'}
+            'spl1': '_Sp',
+            'spl2': '_Sp2'}
 
 def label_results(Result,label):
     Results = Result.copy()

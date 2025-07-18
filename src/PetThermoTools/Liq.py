@@ -353,24 +353,16 @@ def equilibrate_multi(cores = None, Model = None, bulk = None, T_C = None, P_bar
         if copy_columns is not None:
             if type(copy_columns) == str:
                 Combined.insert(0, copy_columns, comp[copy_columns])
-                # Af_Combined.insert(0, copy_columns, comp[copy_columns])
             elif type(copy_columns) == list:
                 j = 0
                 for i in copy_columns:
                     Combined.insert(j, i, comp[i])
-                    # Af_Combined.insert(j, i, comp[i])
                     j = j + 1
 
         Af_Combined = Af_Combined.add_suffix('_affinity')
         Combined = pd.concat([Combined, Af_Combined], axis = 1)
-        # Affinity = Af_Combined.copy()
         return Combined
     else:
-        # import julia
-        # from julia.api import Julia
-        # jl = Julia(compiled_modules=False)
-        # from julia import MAGEMinCalc
-        ## Output = MM.equilibrate_multi(P_bar = P_bar, T_C = T_C, comp = comp)
         from juliacall import Main as jl, convert as jlconvert
 
         jl.seval("using MAGEMinCalc")
