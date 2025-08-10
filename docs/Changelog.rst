@@ -90,3 +90,7 @@ Version 0.2.39 (July 2025)
 ====================================
 Fix to minor bugs influencing crystallization calculations. Changes to the name of functions used for barometry calculations.
 Please ensure you're updated to MAGEMinCalc v0.4.3 (see instructions) if running MAGEMin calculations.
+
+Version 0.2.40 (August 2025)
+====================================
+Adding melting calculations to MAGEMinCalc extension - works with MAGEMin_C up to v1.9.6.
