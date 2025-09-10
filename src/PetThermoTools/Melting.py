@@ -49,6 +49,17 @@ def AdiabaticDecompressionMelting(cores = multiprocessing.cpu_count(),
                                   P_path_bar = None, Frac = False, prop = None, 
                                   fO2_buffer = None, fO2_offset = None, Fe3Fet = None, MELTS_filter = True):
     
+    Tp_C        = to_float(Tp_C)
+
+    P_path_bar = to_float(P_path_bar)
+    P_start_bar= to_float(P_start_bar)
+    P_end_bar  = to_float(P_end_bar)
+    dp_bar     = to_float(dp_bar)
+
+    Fe3Fet = to_float(Fe3Fet)
+    fO2_offset = to_float(fO2_offset)
+
+
     if Tp_Method == "pyMelt":
         try:
             import pyMelt as m
@@ -265,7 +276,7 @@ def AdiabaticMelt(q, index, *, Model = None, comp_1 = None, comp_2 = None, comp_
         if type(comp_1) == dict:
             comp_julia = jl.seval("Dict")(comp_1) 
         else:
-            comp_new = comp_1.loc[i].to_dict()
+            comp_new = comp_1.loc[0].to_dict()
             comp_julia = jl.seval("Dict")(comp_new)
 
         Output_jl = jl.MAGEMinCalc.AdiabaticDecompressionMelting(comp = comp_julia, P_start_kbar = P_start_bar/1000.0, 

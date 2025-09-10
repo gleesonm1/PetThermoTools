@@ -98,6 +98,26 @@ def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid 
         Dictionary with each run's label as key. Values are sub-dictionaries of phase/property DataFrames.
         Includes `Input` key summarizing model configuration per run.
     """
+    ## make sure everything is a float
+    T_C        = to_float(T_C)
+    T_path_C   = to_float(T_path_C)
+    T_start_C  = to_float(T_start_C)
+    T_end_C    = to_float(T_end_C)
+    dt_C       = to_float(dt_C)
+
+    P_bar      = to_float(P_bar)
+    P_path_bar = to_float(P_path_bar)
+    P_start_bar= to_float(P_start_bar)
+    P_end_bar  = to_float(P_end_bar)
+    dp_bar     = to_float(dp_bar)
+
+    Fe3Fet_init= to_float(Fe3Fet_init)
+    Fe3Fet_Liq = to_float(Fe3Fet_Liq)
+    H2O_init   = to_float(H2O_init)
+    H2O_Liq    = to_float(H2O_Liq)
+    CO2_init   = to_float(CO2_init)
+    CO2_Liq    = to_float(CO2_Liq)
+    fO2_offset = to_float(fO2_offset)
 
     if timeout is None:
         timeout = 180
@@ -153,7 +173,7 @@ def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid 
 
     # ensure the bulk composition has the correct headers etc.
     comp = comp_fix(Model = Model, comp = comp, Fe3Fet_Liq = Fe3Fet_init, H2O_Liq = H2O_init, CO2_Liq = CO2_init)
-
+    
     if type(comp) == dict:
         if comp['H2O_Liq'] == 0.0 and "MELTS" in Model:
             raise Warning("Adding small amounts of H$_{2}$O may improve the ability of MELTS to accurately reproduce the saturation of oxide minerals. Additionally, sufficient H$_{2}$O is required in the model for MELTS to predict the crystallisation of apatite, rather than whitlockite.")
@@ -473,28 +493,48 @@ def path_multi(q, index, *, Model = None, comp = None, Frac_solid = None, Frac_f
 
         jl.seval("using MAGEMinCalc")
   
-
     for i in index:
         try:
             if "MELTS" in Model:
                 if type(comp) == dict:
-                    Results, tr = path_MELTS(Model = Model, comp = comp, Frac_solid = Frac_solid, Frac_fluid = Frac_fluid, 
-                                            T_initial_C = 1400, T_C = T_C[i], T_path_C = T_path_C[i], T_start_C = T_start_C[i], 
-                                            T_end_C = T_end_C[i], dt_C = dt_C[i], P_bar = P_bar[i], P_path_bar = P_path_bar[i], 
-                                            P_start_bar = P_start_bar[i], P_end_bar = P_end_bar[i], dp_bar = dp_bar[i], 
-                                            isenthalpic = isenthalpic, isentropic = isentropic, isochoric = isochoric, 
-                                            find_liquidus = find_liquidus, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset[i], 
-                                            fluid_sat = fluid_sat, Crystallinity_limit = Crystallinity_limit, Suppress = Suppress, 
-                                            Suppress_except=Suppress_except, trail = trail, melts = melts)
+                    if trail is not None:
+                        Results, tr = path_MELTS(Model = Model, comp = comp, Frac_solid = Frac_solid, Frac_fluid = Frac_fluid, 
+                                                T_initial_C = 1400, T_C = T_C[i], T_path_C = T_path_C[i], T_start_C = T_start_C[i], 
+                                                T_end_C = T_end_C[i], dt_C = dt_C[i], P_bar = P_bar[i], P_path_bar = P_path_bar[i], 
+                                                P_start_bar = P_start_bar[i], P_end_bar = P_end_bar[i], dp_bar = dp_bar[i], 
+                                                isenthalpic = isenthalpic, isentropic = isentropic, isochoric = isochoric, 
+                                                find_liquidus = find_liquidus, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset[i], 
+                                                fluid_sat = fluid_sat, Crystallinity_limit = Crystallinity_limit, Suppress = Suppress, 
+                                                Suppress_except=Suppress_except, trail = trail, melts = melts)
+                    else:
+                        Results = path_MELTS(Model = Model, comp = comp, Frac_solid = Frac_solid, Frac_fluid = Frac_fluid, 
+                                                T_initial_C = 1400, T_C = T_C[i], T_path_C = T_path_C[i], T_start_C = T_start_C[i], 
+                                                T_end_C = T_end_C[i], dt_C = dt_C[i], P_bar = P_bar[i], P_path_bar = P_path_bar[i], 
+                                                P_start_bar = P_start_bar[i], P_end_bar = P_end_bar[i], dp_bar = dp_bar[i], 
+                                                isenthalpic = isenthalpic, isentropic = isentropic, isochoric = isochoric, 
+                                                find_liquidus = find_liquidus, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset[i], 
+                                                fluid_sat = fluid_sat, Crystallinity_limit = Crystallinity_limit, Suppress = Suppress, 
+                                                Suppress_except=Suppress_except, trail = trail, melts = melts)
+
                 else:
-                    Results, tr = path_MELTS(Model = Model, comp = comp.loc[i].to_dict(), Frac_solid = Frac_solid, Frac_fluid = Frac_fluid, 
-                                            T_initial_C = 1400, T_C = T_C[i], T_path_C = T_path_C[i], T_start_C = T_start_C[i], 
-                                            T_end_C = T_end_C[i], dt_C = dt_C[i], P_bar = P_bar[i], P_path_bar = P_path_bar[i], 
-                                            P_start_bar = P_start_bar[i], P_end_bar = P_end_bar[i], dp_bar = dp_bar[i], 
-                                            isenthalpic = isenthalpic, isentropic = isentropic, isochoric = isochoric, 
-                                            find_liquidus = find_liquidus, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset[i], 
-                                            fluid_sat = fluid_sat, Crystallinity_limit = Crystallinity_limit, Suppress = Suppress, 
-                                            Suppress_except=Suppress_except, trail = trail, melts = melts)
+                    if trail is not None:
+                        Results, tr = path_MELTS(Model = Model, comp = comp.loc[i].to_dict(), Frac_solid = Frac_solid, Frac_fluid = Frac_fluid, 
+                                                T_initial_C = 1400, T_C = T_C[i], T_path_C = T_path_C[i], T_start_C = T_start_C[i], 
+                                                T_end_C = T_end_C[i], dt_C = dt_C[i], P_bar = P_bar[i], P_path_bar = P_path_bar[i], 
+                                                P_start_bar = P_start_bar[i], P_end_bar = P_end_bar[i], dp_bar = dp_bar[i], 
+                                                isenthalpic = isenthalpic, isentropic = isentropic, isochoric = isochoric, 
+                                                find_liquidus = find_liquidus, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset[i], 
+                                                fluid_sat = fluid_sat, Crystallinity_limit = Crystallinity_limit, Suppress = Suppress, 
+                                                Suppress_except=Suppress_except, trail = trail, melts = melts)
+                    else:
+                        Results = path_MELTS(Model = Model, comp = comp.loc[i].to_dict(), Frac_solid = Frac_solid, Frac_fluid = Frac_fluid, 
+                                                T_initial_C = 1400, T_C = T_C[i], T_path_C = T_path_C[i], T_start_C = T_start_C[i], 
+                                                T_end_C = T_end_C[i], dt_C = dt_C[i], P_bar = P_bar[i], P_path_bar = P_path_bar[i], 
+                                                P_start_bar = P_start_bar[i], P_end_bar = P_end_bar[i], dp_bar = dp_bar[i], 
+                                                isenthalpic = isenthalpic, isentropic = isentropic, isochoric = isochoric, 
+                                                find_liquidus = find_liquidus, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset[i], 
+                                                fluid_sat = fluid_sat, Crystallinity_limit = Crystallinity_limit, Suppress = Suppress, 
+                                                Suppress_except=Suppress_except, trail = trail, melts = melts)
             else:
                 if fO2_offset[i] is None:
                     fO2_offset[i] = 0.0

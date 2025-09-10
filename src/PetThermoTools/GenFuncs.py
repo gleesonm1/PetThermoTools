@@ -51,6 +51,17 @@ Names_MM = {'liq1': '_Liq',
             'spl1': '_Sp',
             'spl2': '_Sp2'}
 
+def to_float(x):
+    if x is None:
+        return None
+    if isinstance(x, (int, float)):
+        return float(x)
+    if isinstance(x, (list, tuple)):
+        return [float(v) for v in x]
+    if isinstance(x, np.ndarray):
+        return x.astype(float)
+    return x  # leave unchanged if unexpected type
+
 def label_results(Result,label):
     Results = Result.copy()
     new_out = {}

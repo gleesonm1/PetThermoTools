@@ -66,6 +66,26 @@ def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar
     pandas.DataFrame
         A dataframe containing the phase diagram results.
     """
+
+    ## make sure everything is a float
+    T_C        = to_float(T_C)
+    T_min_C   = to_float(T_min_C)
+    T_max_C  = to_float(T_max_C)
+    T_num   = to_float(T_num)
+
+    P_bar      = to_float(P_bar)
+    P_min_bar = to_float(P_min_bar)
+    P_max_bar= to_float(P_max_bar)
+    P_num  = to_float(P_num)
+
+    Fe3Fet_init= to_float(Fe3Fet_init)
+    Fe3Fet_Liq = to_float(Fe3Fet_Liq)
+    H2O_init   = to_float(H2O_init)
+    H2O_Liq    = to_float(H2O_Liq)
+    CO2_init   = to_float(CO2_init)
+    CO2_Liq    = to_float(CO2_Liq)
+    fO2_offset = to_float(fO2_offset)
+
     if H2O_Liq is not None:
         print('Warning - the kwarg "H2O_Liq" will be removed from v1.0.0 onwards. Please use "H2O_init" instead.')
         if H2O_init is None:
@@ -299,7 +319,7 @@ def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar
     return Combined
 
 def phaseDiagram_refine(Data = None, Model = None, bulk = None, Fe3Fet_Liq = None, H2O_Liq = None, CO2_Liq = None, 
-                        fO2_buffer = None, fO2_offset = None, i_max = 25):
+                        fO2_buffer = None, fO2_offset = None, i_max = 150):
     Combined = Data.copy()
     # find existing T,P data
     T_C = Combined['T_C'].unique()

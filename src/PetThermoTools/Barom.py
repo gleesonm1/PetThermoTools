@@ -186,7 +186,18 @@ def mineral_cosaturation(Model="MELTSv1.0.2", cores=int(np.floor(multiprocessing
     Results : dict
         Raw simulation outputs for each pressure step.
     """
-        
+    ## make sure everything is a float
+    T_initial_C = to_float(T_initial_C)
+    T_maxdrop_C = to_float(T_maxdrop_C)
+    T_cut_C = to_float(T_cut_C)
+
+    P_bar      = to_float(P_bar)
+
+    Fe3Fet_init= to_float(Fe3Fet_init)
+    H2O_init   = to_float(H2O_init)
+    CO2_init   = to_float(CO2_init)
+    fO2_offset = to_float(fO2_offset)
+    
     comp = bulk.copy()
     if H2O_Sat:
         comp['H2O_Liq'] = 20
