@@ -412,6 +412,11 @@ def saturation_pressure(Model = "MELTSv1.2.0", cores = multiprocessing.cpu_count
             if fO2_buffer != "FMQ":
                 raise Warning("fO2 buffer specified is not an allowed input. This argument can only be 'FMQ' or 'NNO' \n if you want to offset from these buffers use the 'fO2_offset' argument.")
 
+    if "MELTS" not in Model:
+        if fO2_buffer == "FMQ":
+            fO2_buffer = "qfm"
+        if fO2_buffer == "NNO":
+            fO2_buffer = "nno"
     # ensure the bulk composition has the correct headers etc.
     comp = comp_fix(Model = Model, comp = comp, Fe3Fet_Liq = Fe3Fet_init, H2O_Liq = H2O_init, CO2_Liq = CO2_init)
 

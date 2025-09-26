@@ -4,52 +4,53 @@ import pandas as pd
 # from PetThermoTools.Liq import *
 # from PetThermoTools.Crystallise import *
 from PetThermoTools.MELTS import *
+from PetThermoTools.Compositions import *
 # try:
 #     from PetThermoTools.Holland import *
 # except:
 #     pass
 
 Names = {'liquid1': '_Liq',
+        'olivine1': '_Ol',
+        'orthopyroxene1': '_Opx',
+        'clinopyroxene1': '_Cpx',
+        'garnet1': '_Grt',
+        'spinel1': '_Sp',
+        'k-feldspar1': '_Kspar',
+        'quartz1': '_Qtz',
+        'rhm-oxide1': '_Rhm',
+        'apatite1': '_Apa',
+        'olivine2': '_Ol2',
+        'plagioclase1': '_Plag',
+        'clinopyroxene2': '_Cpx2',
+        'plagioclase2': '_Plag2',
+        'spinel2': '_Sp2',
+        'k-feldspar2': '_Kspar2',
+        'garnet2': '_Grt2',
+        'rhm-oxide2': '_Rhm2',
+        'quartz2': '_Qtz2',
+        'orthopyroxene2': '_Opx2',
+        'apatite2': '_Apa2',
         'liquid2': '_Liq2',
         'liquid3': '_Liq3',
-        'liquid4': '_Liq4',
-        'olivine1': '_Ol',
-        'olivine2': '_Ol2',
-        'clinopyroxene1': '_Cpx',
-        'clinopyroxene2': '_Cpx2',
-        'plagioclase1': '_Plag',
-        'plagioclase2': '_Plag2',
-        'spinel1': '_Sp',
-        'spinel2': '_Sp2',
-        'k-feldspar1': '_Kspar',
-        'k-feldspar2': '_Kspar2',
-        'garnet1': '_Grt',
-        'garnet2': '_Grt2',
-        'rhm-oxide1': '_Rhm',
-        'rhm-oxide2': '_Rhm2',
-        'quartz1': '_Qtz',
-        'quartz2': '_Qtz2',
-        'orthopyroxene1': '_Opx',
-        'orthopyroxene2': '_Opx2',
-        'apatite1': '_Apa',
-        'apatite2': '_Apa2'}
+        'liquid4': '_Liq4'}
 
 Names_MM = {'liq1': '_Liq',
+            'ol1': '_Ol',
+            'opx1': '_Opx',
+            'cpx1': '_Cpx',
+            'g1': '_Grt',
+            'spl1': '_Sp',
+            'fsp1': '_Plag',
+            'ol2': '_Ol2',
+            'cpx2': '_Cpx2',
+            'opx2': '_Opx2',
+            'g2': '_Grt2',
+            'fsp2': '_Plag2',
+            'spl2': '_Sp2',
             'liq2': '_Liq2',
             'liq3': '_Liq3',
-            'liq4': '_Liq4',
-            'ol1': '_Ol',
-            'ol2': '_Ol2',
-            'cpx1': '_Cpx',
-            'cpx2': '_Cpx2',
-            'opx1': '_Opx',
-            'opx2': '_Opx2',
-            'g1': '_Grt',
-            'g2': '_Grt2',
-            'fsp1': '_Plag',
-            'fsp2': '_Plag2',
-            'spl1': '_Sp',
-            'spl2': '_Sp2'}
+            'liq4': '_Liq4'}
 
 def to_float(x):
     if x is None:
@@ -103,6 +104,36 @@ def supCalc(Model = "MELTSv1.0.2", bulk = None, phase = None, T_C = None, P_bar 
              melts = melts)
     
     return Results
+
+def comp_check(comp_lith, Model, MELTS_filter, Fe3Fet):
+    if type(comp_lith) == str:
+        if Model != "pyMelt":
+            comp = Compositions[comp_lith]
+        else:
+            comp = comp_lith
+    else:
+        comp = comp_lith.copy()
+
+    # if comp is entered as a pandas series, it must first be converted to a dict
+    if Model != "pyMelt":
+        if type(comp) == pd.core.series.Series:
+            comp = comp.to_dict()
+
+        comp = comp_fix(Model = Model, comp = comp, Fe3Fet_Liq = Fe3Fet)
+
+    if "MELTS" in Model and MELTS_filter == True:
+        if type(comp) == pd.core.frame.DataFrame:
+            comp['K2O_Liq'] = np.zeros(len(comp['SiO2_Liq']))
+            comp['P2O5_Liq'] = np.zeros(len(comp['SiO2_Liq']))
+            comp['H2O_Liq'] = np.zeros(len(comp['SiO2_Liq']))
+            comp['CO2_Liq'] = np.zeros(len(comp['SiO2_Liq']))
+        else:
+            comp['K2O_Liq'] = 0
+            comp['P2O5_Liq'] = 0
+            comp['H2O_Liq'] = 0
+            comp['CO2_Liq'] = 0
+    
+    return comp
 
 
 def comp_fix(Model = None, comp = None, Fe3Fet_Liq = None, H2O_Liq = None, CO2_Liq = None):
@@ -356,12 +387,20 @@ def stich_work(Results = None, Order = None, Model = "MELTS", Frac_fluid = None,
             Results_Mass['fluid1_cumsum'] = Results_Mass['fluid1'].cumsum()
         elif Frac_fluid is None:
             for n in SN:
-                if n != 'liquid1' and n!= 'fluid1':
+                if n != 'liquid1' and n!= 'fluid1' and n != 'liq1' and n != 'fl1':
                     Results_Mass[n + '_cumsum'] = Results_Mass[n].cumsum()
+            if 'liq1' in SN:
+                Results_Mass[n + '_cumsum'] = Results_Mass.loc[0, 'liq1'] - Results_Mass.loc[:,Results_Mass.columns.str.contains('_cumsum')].sum(axis = 1)
+            elif 'liquid1' in SN:
+                Results_Mass[n + '_cumsum'] = Results_Mass.loc[0, 'liquid1'] - Results_Mass.loc[:,Results_Mass.columns.str.contains('_cumsum')].sum(axis = 1)
         else:
             for n in SN:
-                if n != 'liquid1':
+                if n != 'liquid1' and n != 'liq1':
                     Results_Mass[n + '_cumsum'] = Results_Mass[n].cumsum()
+            if 'liq1' in SN:
+                Results_Mass[n + '_cumsum'] = Results_Mass.loc[0, 'liq1'] - Results_Mass.loc[:,Results_Mass.columns.str.contains('_cumsum')].sum(axis = 1)
+            elif 'liquid1' in SN:
+                Results_Mass[n + '_cumsum'] = Results_Mass.loc[0, 'liquid1'] - Results_Mass.loc[:,Results_Mass.columns.str.contains('_cumsum')].sum(axis = 1)
 
     Results_All = Results['Conditions'].copy()
     for R in Results:

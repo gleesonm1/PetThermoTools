@@ -16,6 +16,26 @@ def equilibrate_multi(cores = None, Model = None, bulk = None, T_C = None, P_bar
                       Fe3Fet_Liq = None, H2O_Liq = None, CO2_Liq = None, fO2_buffer = None, fO2_offset = None,
                       timeout = None, copy_columns = None, Suppress = None):
 
+    T_C        = to_float(T_C)
+
+    P_bar = to_float(P_bar)
+
+    H2O_Liq = to_float(H2O_Liq)
+    CO2_Liq = to_float(CO2_Liq)
+    Fe3Fet_Liq = to_float(Fe3Fet_Liq)
+    fO2_offset = to_float(fO2_offset)
+
+    if fO2_buffer is not None:
+        if fO2_buffer != "NNO":
+            if fO2_buffer != "FMQ":
+                raise Warning("fO2 buffer specified is not an allowed input. This argument can only be 'FMQ' or 'NNO' \n if you want to offset from these buffers use the 'fO2_offset' argument.")
+
+    if "MELTS" not in Model:
+        if fO2_buffer == "FMQ":
+            fO2_buffer = "qfm"
+        if fO2_buffer == "NNO":
+            fO2_buffer = "nno"
+
     if "MELTS" in Model:
         try:
             from meltsdynamic import MELTSdynamic
@@ -410,6 +430,17 @@ def findCO2_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P
     except:
         Warning('alphaMELTS for Python files are not on the python path. \n Please add these files to the path running \n import sys \n sys.path.append(r"insert_your_path_to_melts_here") \n You are looking for the location of the meltsdynamic.py file')
 
+    if fO2_buffer is not None:
+        if fO2_buffer != "NNO":
+            if fO2_buffer != "FMQ":
+                raise Warning("fO2 buffer specified is not an allowed input. This argument can only be 'FMQ' or 'NNO' \n if you want to offset from these buffers use the 'fO2_offset' argument.")
+
+    if "MELTS" not in Model:
+        if fO2_buffer == "FMQ":
+            fO2_buffer = "qfm"
+        if fO2_buffer == "NNO":
+            fO2_buffer = "nno"
+
     comp = bulk.copy()
 
     if Model is None:
@@ -607,11 +638,22 @@ def findLiq_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P
 
     comp = bulk.copy()
 
+    if fO2_buffer is not None:
+        if fO2_buffer != "NNO":
+            if fO2_buffer != "FMQ":
+                raise Warning("fO2 buffer specified is not an allowed input. This argument can only be 'FMQ' or 'NNO' \n if you want to offset from these buffers use the 'fO2_offset' argument.")
+
+    if "MELTS" not in Model:
+        if fO2_buffer == "FMQ":
+            fO2_buffer = "qfm"
+        if fO2_buffer == "NNO":
+            fO2_buffer = "nno"
+
     if Model is None:
         Model = "MELTSv1.0.2"
 
-    if Model == "Holland":
-        import pyMAGEMINcalc as MM
+    # if Model == "Holland":
+    #     import pyMAGEMINcalc as MM
 
     # if comp is entered as a pandas series, it must first be converted to a dict
     if type(comp) == pd.core.series.Series:
@@ -792,8 +834,8 @@ def findLiq_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P
         else:
             return Res
     else:
-        T_Liq = MM.findLiq_multi(P_bar = P_bar, T_initial_C = T_initial_C, comp = comp)
-        return T_Liq
+        # T_Liq = MM.findLiq_multi(P_bar = P_bar, T_initial_C = T_initial_C, comp = comp)
+        return "find liquidus calculations are currently not available through the MAGEMin models. This is an issue I'm working to fix as soon as possible."
 
 def findCO2(q, index, *, Model = None, P_bar = None, T_initial_C = None, comp = None, fO2_buffer = None, fO2_offset = None):
     T_Liq = 0

@@ -199,6 +199,18 @@ def mineral_cosaturation(Model="MELTSv1.0.2", cores=int(np.floor(multiprocessing
     fO2_offset = to_float(fO2_offset)
     
     comp = bulk.copy()
+
+    if fO2_buffer is not None:
+        if fO2_buffer != "NNO":
+            if fO2_buffer != "FMQ":
+                raise Warning("fO2 buffer specified is not an allowed input. This argument can only be 'FMQ' or 'NNO' \n if you want to offset from these buffers use the 'fO2_offset' argument.")
+
+    if "MELTS" not in Model:
+        if fO2_buffer == "FMQ":
+            fO2_buffer = "qfm"
+        if fO2_buffer == "NNO":
+            fO2_buffer = "nno"
+            
     if H2O_Sat:
         comp['H2O_Liq'] = 20
 

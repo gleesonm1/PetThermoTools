@@ -3,127 +3,236 @@ import pandas as pd
 from shapely.geometry import MultiPoint, Point, Polygon
 import matplotlib.pyplot as plt
 from matplotlib import cm
+import matplotlib.colors as mc
 from PetThermoTools.GenFuncs import *
+from itertools import zip_longest
 
-def harker(Results = None, x_axis = None, y_axis = None, phase = None, line_style = None, line_color = None, data = None, d_color = None, d_marker = None, label = None):
-    '''
-    Construct harker plots.
+def harker(Results=None, x_axis="MgO", y_axis=("SiO2", "TiO2", "Al2O3", "Cr2O3", "FeOt", "CaO", "Na2O", "K2O"),
+    phase="liquid1", line_color=None, data=None, d_color=None, d_marker=None,
+    legend=True, legend_loc=None,
+    xlim=None, ylim=None):
+    """
+    Generates a Harker diagram (oxide vs. MgO or another oxide) from model results.
 
-    Parameters:
-    -----------
-    Results: dict
-        Contains DataFrames with the results of the MELTS or MAGEMin calculations.
+    Parameters
+    ----------
+    Results : dict or None, optional
+        MELTS or MAGEMin results dictionary. If multiple results, they are overlaid.
+    x_axis : str, default="MgO"
+        Oxide to use for the x-axis.
+    y_axis : tuple of str, default=("SiO2","TiO2","Al2O3","Cr2O3","FeOt","CaO","Na2O","K2O")
+        Oxides to plot on y-axes. Plotted in groups of three per row.
+    phase : str, default="liquid1"
+        Phase to plot (must be in PetThermoTools.GenFuncs.Names).
+    line_color : str or None, optional
+        Line color. If None, uses matplotlib's default cycle.
+    data : pd.DataFrame, dict of DataFrames, or str, optional
+        External data to plot for comparison. If str, treated as CSV path.
+        If dict, plots each DataFrame with different marker/color.
+    d_colors : list of str or None, optional
+        Colors for external datasets. Cycles if fewer than number of datasets.
+    d_markers : list of str or None, optional
+        Markers for external datasets. Cycles if fewer than number of datasets.
+    legend : bool, default=True
+        Whether to display a legend.
+    legend_loc : tuple(int, int) or None, optional
+        Location of legend in subplot grid, as (row, col). If None, placed on last axis.
+    xlim, ylim : tuple or None, optional
+        Limits for x and y axes.
 
-    x_axis: str
-        Oxide to be placed on the x-axis, Default = "MgO".
-
-    y_axis: list
-        Oxides to be displayed on the y-axes.
-
-    phase: str
-        Phase compositions to be plotted. Plots the liquid component by default.
-
-    line_style: str
-        Line style to use for the MELTS/MAGEMin results. Default = '-'.
-
-    line_color: str or tuple
-        Color of the line used to display the MELTS/MAGEMin results. Black as default.
-
-    data: DataFrame
-        Optional. Include natural or experimental data to plot against the calculation results.
-
-    d_color: str or tuple
-        Color of the symbols used to display the natural/experimental data.
-
-    d_marker: str
-        Marker style for the natural/experimental data.
-    '''
+    Returns
+    -------
+    f : matplotlib.figure.Figure
+        Figure object.
+    a : np.ndarray of Axes
+        Array of Axes objects.
+    """
     if Results is None:
-        raise Exception("We need some results to work with!")
+        raise ValueError("Results cannot be None. Provide MELTS or MAGEMin results dictionary.")
 
-    if x_axis is None:
-        x_axis = "MgO"
+    if isinstance(y_axis, str):
+        y_axis = (y_axis,)
 
-    if y_axis is None:
-        y_axis = ["SiO2", "TiO2", "Al2O3", "FeOt", "CaO", "Na2O"]
+    y_axis = list(y_axis)
 
-    if phase is None:
-        phase = "liquid1"
-
-    if line_style is None:
-        line_style = '-'
-
-    if line_color is None:
-        line_color = 'k'
-
+    # Data loading
     if data is not None:
-        if d_color is None:
-            d_color = 'red'
+        if isinstance(data, str):
+            if data.contains('.csv'):
+                data = pd.read_csv(data)
+            else:
+                data = pd.read_excel(data)
+        elif isinstance(data, dict):
+            # validate
+            for k, v in data.items():
+                if not isinstance(v, pd.DataFrame):
+                    raise ValueError(f"data['{k}'] must be a DataFrame, got {type(v)}")
+                
+    # -------------------- filter y_axis to only include variables present --------------------
+    valid_y = []
+    for y in y_axis:
+        found = False
 
-        if d_marker is None:
-            d_marker = 'o'
+        # Check Results
+        for r in (Results.keys() if isinstance(Results, dict) else [Results]):
+            Res = Results[r] if isinstance(Results, dict) else Results
+            if "All" in Res:
+                cols = Res["All"].columns
+                if (y + Names[phase]) in cols or y in cols:
+                    if np.nanmax(Res["All"][y + Names[phase]]) > 0.0:
+                        found = True
+                    break
 
-    if type(y_axis) == list:
-        y_axis = np.array(y_axis)
+        # Check data (dict or DataFrame)
+        if not found and data is not None:
+            if isinstance(data, dict):
+                for df in data.values():
+                    cols = df.columns
+                    if (y + Names[phase]) in cols or y in cols:
+                        found = True
+                        break
+            else:
+                cols = data.columns
+                if (y + Names[phase]) in cols or y in cols:
+                    found = True
 
-    if len(y_axis) % 3 == 0.0:
-        y_axis = y_axis.reshape(len(y_axis)//3, 3)
+        if found:
+            valid_y.append(y)
+
+    # Replace y_axis with only valid variables
+    y_axis = valid_y
+
+    # -------------------- subplot grid handling --------------------
+    n_vars = len(y_axis)
+
+    if n_vars == 4:  # special case: 2x2 grid
+        ncols, nrows = 2, 2
+        rows = list(zip_longest(*[iter(y_axis)] * ncols, fillvalue=None))
     else:
-        y_axis = np.append(y_axis, np.array(["None"] * (3 - (len(y_axis) % 3))))
-        y_axis = y_axis.reshape(len(y_axis)//3, 3)
+        ncols = 3
+        nrows = int(np.ceil(n_vars / ncols))
+        rows = list(zip_longest(*[iter(y_axis)] * ncols, fillvalue=None))
 
-    f, a = plt.subplots(np.shape(y_axis)[0], np.shape(y_axis)[1], figsize = (3.5 * np.shape(y_axis)[1], 3.5 * np.shape(y_axis)[0]))
-    if 'All' in list(Results.keys()):
-        if type(phase) == str:
-            for i in range(np.shape(y_axis)[0]):
-                for j in range(np.shape(y_axis)[1]):
-                    if y_axis[i,j] != "None":
-                        if data is not None:
-                            a[i][j].plot(data.loc[:,data.columns.str.contains(x_axis)].values, data.loc[:,data.columns.str.contains(y_axis[i,j])].values, d_marker, markerfacecolor = d_color, markeredgecolor = 'k', markersize = 4)
+    # scale figure size dynamically
+    fig_width = 3.2 * ncols
+    fig_height = 3.0 * nrows
+    f, a = plt.subplots(nrows, ncols, figsize=(fig_width, fig_height))
+    a = np.atleast_2d(a)
 
-                        a[i][j].plot(Results['All'][x_axis + Names[phase]], Results['All'][y_axis[i,j] + Names[phase]], line_style, linewidth = 2, color = line_color)
-                        a[i][j].set_ylabel(y_axis[i][j] + " wt%")
-                        if i != np.shape(y_axis)[0] - 1:
-                            if i == np.shape(y_axis)[0] - 2:
-                                if y_axis[i+1,j] == "None":
-                                    a[i][j].set_xlabel(x_axis + " wt%")
-                        else:
-                            a[i][j].set_xlabel(x_axis + " wt%")
-
-                    else:
-                        a[i][j].axis('off')
-
+    # Color handling for models
+    color_cycle = plt.rcParams["axes.prop_cycle"].by_key()["color"]
+    if line_color is None:
+        def pick_color(i): return color_cycle[i % len(color_cycle)]
     else:
-        if type(phase) == str:
-            for i in range(np.shape(y_axis)[0]):
-                for j in range(np.shape(y_axis)[1]):
-                    if y_axis[i,j] != "None":
-                        if data is not None:
-                            a[i][j].plot(data.loc[:,data.columns.str.contains(x_axis)], data.loc[:,data.columns.str.contains(y_axis[i,j])], d_marker, markerfacecolor = d_color, markeredgecolor = 'k', markersize = 4, label = "Data")
+        def pick_color(i): return line_color
 
-                        a[i][j].set_ylabel(y_axis[i][j] + " wt%")
-                        if i != np.shape(y_axis)[0] - 1:
-                            if i == np.shape(y_axis)[0] - 2:
-                                if y_axis[i+1,j] == "None":
-                                    a[i][j].set_xlabel(x_axis + " wt%")
-                        else:
-                            a[i][j].set_xlabel(x_axis + " wt%")
+    # Color/marker cycles for user data
+    d_color_cycle = d_color if d_color else color_cycle
+    d_marker_cycle = d_marker if d_marker else ["o", "s", "^", "D", "v", "P", "*"]
 
-                    else:
-                        a[i][j].axis('off')
+    # -------------------- helper functions --------------------
+    def plot_panel(ax, x_var, y_var, idx=None, Res = None):
+        """Plot one panel (model + data) on given Axes."""
+        suffix = Names[phase] if phase in Names else ""
+        xcol, ycol = x_var + suffix, y_var + suffix
 
-        for r in Results:
-            Res = Results[r].copy()
-            if type(phase) == str:
-                for i in range(np.shape(y_axis)[0]):
-                    for j in range(np.shape(y_axis)[1]):
-                        if y_axis[i,j] != "None":
-                            a[i][j].plot(Res['All'][x_axis + Names[phase]], Res['All'][y_axis[i,j] + Names[phase]], line_style, linewidth = 2, label = r)
+        # plot model data
+        if Res is not None:
+            if xcol in Results[Res]["All"] and ycol in Results[Res]["All"]:
+                x = Results[Res]["All"][xcol].values
+                y = Results[Res]["All"][ycol].values
+                ax.plot(x, y, color=pick_color(idx), label=Res)
+        else:
+            if xcol in Results["All"] and ycol in Results["All"]:
+                x = Results["All"][xcol].values
+                y = Results["All"][ycol].values
+                ax.plot(x, y, color='k')
 
-        if label is not None:
-            a[0][0].legend()
+    def plot_data(ax, x_var, y_var):
+        # plot external data
+        suffix = Names[phase] if phase in Names else ""
+        xcol, ycol = x_var + suffix, y_var + suffix
+
+        if data is not None:
+            if isinstance(data, pd.DataFrame):
+                datasets = {"data": data}
+            else:
+                datasets = data
+
+            for k, df in datasets.items():
+                c = d_color_cycle[list(datasets.keys()).index(k) % len(d_color_cycle)]
+                m = d_marker_cycle[list(datasets.keys()).index(k) % len(d_marker_cycle)]
+
+                # try with suffix first
+                if xcol in df.columns:
+                    dx = df[xcol].values
+                elif x_var in df.columns:
+                    dx = df[x_var].values
+                else:
+                    dx = None
+                    print(f"x axis variable  {x_var} not found in data")
+
+                if ycol in df.columns:
+                    dy = df[ycol].values
+                elif y_var in df.columns:
+                    dy = df[y_var].values
+                else:
+                    dy = None
+                    print(f"y axis variable  {y_var} not found in data")
+
+                if dx is not None and dy is not None:
+                    ax.plot(dx, dy, m,
+                            markerfacecolor=c,
+                            markeredgecolor="k",
+                            markersize=4,
+                            linestyle="None",
+                            label=k)
+
+        ax.set(xlabel=x_var, ylabel=y_var)
+
+        if xlim:
+            ax.set_xlim(xlim)
+        if ylim:
+            ax.set_ylim(ylim)
+
+    # -------------------- main plotting --------------------
+    for i, row in enumerate(rows):
+        for j, y in enumerate(row):
+            if y is None:
+                a[i, j].axis("off")
+                continue
+            if 'All' in Results.keys():
+                if data is not None:
+                    plot_data(a[i,j], x_axis, y)
+                plot_panel(a[i,j], x_axis, y)
+            else:
+                if data is not None:
+                    plot_data(a[i,j], x_axis, y)
+                for idx, Res in enumerate(Results):
+                    plot_panel(a[i, j], x_axis, y, idx=idx, Res = Res)
+
+    # -------------------- legend --------------------
+    empty_axes = []
+    for i in range(a.shape[0]):
+        for j in range(a.shape[1]):
+            if i * a.shape[1] + j >= len(y_axis):  # beyond valid y variables
+                empty_axes.append(a[i][j])
+
+    handles, labels = a[0][0].get_legend_handles_labels()
+    if empty_axes and handles:
+        empty_axes[0].legend(handles, labels, loc = "center")
+        empty_axes[0].axis("off")
+    else:
+        if legend:
+            if legend_loc is None:
+                loc_i, loc_j = len(rows) - 1, 0
+            else:
+                loc_i, loc_j = legend_loc
+            a[loc_i, loc_j].legend()
 
     f.tight_layout()
+
+    return f, a
 
 def plot_surfaces(Results = None, P_bar = None, phases = None, H2O_Liq = None):
     if H2O_Liq is None:
@@ -358,69 +467,191 @@ def residualT_plot(Results = None, P_bar = None, phases = None, H2O_Liq = None, 
                         a[i][j].plot_surface(X_new, Y_new, z_plot, cmap = 'viridis')
                         a[i][j].set_zlim([0,50])
 
-def phase_plot(Results = None, y_axis = None, x_axis = None, 
-               phases = ['Liq', 'Ol', 'Opx', 'Cpx', 'Sp', 'Grt'], cmap = "Reds",
-               title = None, figsize = None):
+
+def phase_plot(Results, x_axis = None, y_axis = None, cmap = "Reds"):
+    """
+    Create stacked phase mass-fraction plots from thermodynamic model results.
+
+    This function generates diagrams of phase proportions from the results of 
+    crystallization or melting simulations. Mass fractions of crystalline and 
+    liquid phases are stacked either along the x-axis or y-axis, depending on 
+    user specification, to visualize how phase proportions evolve with pressure, 
+    temperature, or another variable.
+
+    Parameters
+    ----------
+    Results : dict
+        Dictionary containing model outputs. It should have one of the following structures:
+        - **Single-run results**:
+          ```
+          Results = {
+              "Mass": pandas.DataFrame,   # columns = phase names or phase_cumsum
+              "All":  pandas.DataFrame    # contains the axis variable (e.g., T_C, P_bar)
+          }
+          ```
+        - **Multi-run results**:
+          ```
+          Results = {
+              run_label: {
+                  "Mass": pandas.DataFrame,
+                  "All":  pandas.DataFrame
+              },
+              ...
+          }
+          ```
+
+        The `"Mass"` DataFrame must include mass fractions for each phase
+        (either raw values or cumulative values with `"_cumsum"` suffix).
+        The `"All"` DataFrame must contain the column specified by `x_axis` or `y_axis`.
+
+    x_axis : str, optional
+        Column name in `Results["All"]` (or equivalent) to plot on the x-axis. 
+        If provided, `y_axis` must be `None`. Typically something like `"T_C"`.
     
-    if type(Results) != list:
-        f, a = plt.subplots(1,1, figsize = (5, 8))
+    y_axis : str, optional
+        Column name in `Results["All"]` (or equivalent) to plot on the y-axis. 
+        If provided, `x_axis` must be `None`. Typically `"P_bar"`.
+    
+    cmap : str, default = "Reds"
+        Matplotlib colormap used to assign colors to phases.
+
+    Returns
+    -------
+    fig : matplotlib.figure.Figure or list of Figures
+        - If `Results` contains a single run: a single `Figure`.
+        - If `Results` contains multiple runs: a list of `Figure` objects, one per run.
+
+    axes : matplotlib.axes.Axes or list of Axes
+        - If `Results` contains a single run: a single `Axes` object.
+        - If `Results` contains multiple runs: a list of `Axes` objects, one per run.
+
+    Notes
+    -----
+    - If both `x_axis` and `y_axis` are provided, the function raises a `ValueError`.
+    - Phases are automatically ordered:
+        1. By the index where they first appear (highest pressure or temperature).
+        2. By the order specified in the petthermotools dictionaries `Names` and `Names_MM`, 
+           if available.
+    - The liquid phase (`"liq1"` or `"liquid1"`) is always plotted last.
+    - A legend with readable phase labels is added outside 
+      the plot area.
+
+    Examples
+    --------
+    >>> fig, ax = phase_plot(Results, y_axis="P_bar")
+    # Plots stacked phase proportions vs. pressure
+
+    >>> fig, axes = phase_plot(MultiRunResults, x_axis="T_C")
+    # Creates one stacked phase plot per run, vs. temperature
+    """
+    if x_axis is not None and y_axis is not None:
+        raise ValueError("Please provide either a x-axis or y-axis parameter to plot the mass fractions against")
+    
+    def makeplot(Mass, Res, title = None):
+        # --- Identify whether _cumsum columns exist ---
+        use_cumsum = any(col.endswith("_cumsum") for col in Mass.columns)
+        suffix = "_cumsum" if use_cumsum else ""
+
+        # --- Identify phases ---
+        exclude_cols = {'T_C', None}
+        phases = [
+            col.replace(suffix, "")
+            for col in Mass.columns
+            if col.endswith(suffix) or (not use_cumsum and not col.endswith("_cumsum") and col not in exclude_cols)
+        ]
+
+        # --- Handle liquid phase ---
+        liquid_name = None
+        for liq_name in ["liq1", "liquid1"]:
+            if liq_name in Mass.columns:
+                liquid_name = liq_name
+                if liq_name in phases:
+                    phases.remove(liq_name)
+                break  # use the first match
+
+        # --- Create dictionary priority (order in Names/Names_MM) ---
+        phase_priority = {}
+        for order_dict in [Names, Names_MM]:
+            for i, key in enumerate(order_dict.keys()):
+                phase_priority[key] = i  # smaller i = higher priority in tie
+
+        # --- Sort crystalline phases ---
+        phase_first_index = {}
+        for p in phases:
+            col = p + suffix if (use_cumsum and p + suffix in Mass.columns) else p
+            vals = Mass[col].values
+            nz = np.flatnonzero(vals > 0)
+            phase_first_index[p] = nz[0] if len(nz) > 0 else np.inf
+
+        def sort_key(p):
+            return (phase_first_index[p], phase_priority.get(p, 1e6))
+
+        phases = sorted(phases, key=sort_key)
+
+        # --- Append liquid last ---
+        if liquid_name is not None:
+            phases.append(liquid_name)
+
+        # --- Assign colors ---
         c = cm.get_cmap(cmap, len(phases))
-        x = c(np.arange(0,1,1/len(phases)))
+        PhaseColors = {p: c(i) for i, p in enumerate(phases)}
 
-        PhaseList = {}
-        for idx, p in enumerate(phases):
-            PhaseList[p] = x[idx]
+        # --- Setup figure ---
+        if y_axis == "P_bar":
+            f, a = plt.subplots(figsize=(4, 6))
+        else:
+            f, a = plt.subplots(figsize=(4, 3.5))
 
-        Stop = np.zeros(len(Results['All']['P_bar']))
-        for idx, p in enumerate(phases):
-            if 'mass_' + p in Results['All'].keys():
-                a.fill_betweenx(Results['All']['P_bar'], Stop, 
-                                x2= Stop + Results['All']['mass_' + p], alpha = 0.75, color = PhaseList[p], lw = 0)
+        # --- Determine orientation ---
+        coord = Res[y_axis] if y_axis else Res[x_axis]
+        horizontal = y_axis is not None
 
-                Stop = Stop + Results['All']['mass_' + p]
+        Stop = np.zeros(len(Mass))
+        for p in phases:
+            col = p + suffix if use_cumsum else p
+            vals = Mass[col].values
 
-        a.set_ylabel('Pressure (bars)')
-        a.set_xlabel('Mass (g)')
+            # --- Legend label mapping ---
+            label = Names.get(p, Names_MM.get(p, p))[1:]
 
-        a.set_xlim([0,np.nanmax(Stop)])
-        a.set_ylim([np.nanmax(Results['All']['P_bar']), np.nanmin(Results['All']['P_bar'])])
+            if horizontal:
+                a.fill_betweenx(coord, Stop, Stop + vals, color=PhaseColors[p], alpha=0.75, lw=0, label=label)
+            else:
+                a.fill_between(coord, Stop, Stop + vals, color=PhaseColors[p], alpha=0.75, lw=0, label=label)
+            Stop += vals
+
+        # --- Labels ---
+        if horizontal:
+            a.set_ylabel(y_axis)
+            a.set_xlabel("Mass fraction")
+        else:
+            a.set_xlabel(x_axis)
+            a.set_ylabel("Mass fraction")
+
+        if title is not None:
+            a.set_title(title)
+
+        # --- Remove whitespace ---
+        a.margins(0)
+        f.tight_layout()
+
+        a.legend(loc="center left", bbox_to_anchor=(1.02, 0.5))
+
+        return f, a
+    fig = []
+    axes = []
+
+    if 'All' in Results.keys():
+        fig, axes = makeplot(Results['Mass'], Results['All'])
     else:
-        if figsize is None:
-            figsize = (10,2*len(Results))
+        for val in Results.keys():
+            f, a = makeplot(Results[val]['Mass'],
+                            Results[val]['All'],
+                            title = val)
+            fig.append(f)
+            axes.append(a)
+    return fig, axes
 
-        f, a = plt.subplots(len(Results), 1, figsize = figsize, sharex = True)
-        c = cm.get_cmap(cmap, len(phases))
-        x = c(np.arange(0,1,1/len(phases)))
-
-        PhaseList = {}
-        for idx, p in enumerate(phases):
-            PhaseList[p] = x[idx]
-
-        for i in range(len(Results)):
-            Stop = np.zeros(len(Results[i]['All']['P_bar']))
-            for idx, p in enumerate(phases):
-                a[i].fill_between(Results[i]['All']['P_bar'], Stop, 
-                                y2= Stop + Results[i]['All']['mass_' + p], alpha = 0.75, color = PhaseList[p], lw = 0,
-                                label = p)
-
-                Stop = Stop + Results[i]['All']['mass_'+p]
-
-            if i == len(Results)-1:
-                a[i].set_xlabel('Pressure (bars)')
-                a[i].legend(loc = "lower right")
-            a[i].set_ylabel('Mass Fraction')
-
-            a[i].set_ylim([0,np.nanmax(Stop)])
-            a[i].set_xlim([np.nanmin(Results[i]['All']['P_bar']), np.nanmax(Results[i]['All']['P_bar'])])
-
-
-            if title is not None:
-                if type(title) != list:
-                    a[i].set_title(title)
-                else:
-                    a[i].set_title(title[i])
-
-    return f, a
 
 def plot_phaseDiagram(Model = "Holland", Combined = None, P_units = "bar", T_units = "C", 
                       lines = None, T_C = None, P_bar = None, label = True, colormap = None):

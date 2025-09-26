@@ -170,6 +170,8 @@ def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid 
     if "MELTS" not in Model:
         if fO2_buffer == "FMQ":
             fO2_buffer = "qfm"
+        if fO2_buffer == "NNO":
+            fO2_buffer = "nno"
 
     # ensure the bulk composition has the correct headers etc.
     comp = comp_fix(Model = Model, comp = comp, Fe3Fet_Liq = Fe3Fet_init, H2O_Liq = H2O_init, CO2_Liq = CO2_init)

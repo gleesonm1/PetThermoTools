@@ -10,37 +10,6 @@ from multiprocessing import Process
 import time
 import sys
 from tqdm.notebook import tqdm, trange
-# import pyMelt as m
-
-def comp_check(comp_lith, Model, MELTS_filter, Fe3Fet):
-    if type(comp_lith) == str:
-        if Model != "pyMelt":
-            comp = Compositions[comp_lith]
-        else:
-            comp = comp_lith
-    else:
-        comp = comp_lith.copy()
-
-    # if comp is entered as a pandas series, it must first be converted to a dict
-    if Model != "pyMelt":
-        if type(comp) == pd.core.series.Series:
-            comp = comp.to_dict()
-
-        comp = comp_fix(Model = Model, comp = comp, Fe3Fet_Liq = Fe3Fet)
-
-    if "MELTS" in Model and MELTS_filter == True:
-        if type(comp) == pd.core.frame.DataFrame:
-            comp['K2O_Liq'] = np.zeros(len(comp['SiO2_Liq']))
-            comp['P2O5_Liq'] = np.zeros(len(comp['SiO2_Liq']))
-            comp['H2O_Liq'] = np.zeros(len(comp['SiO2_Liq']))
-            comp['CO2_Liq'] = np.zeros(len(comp['SiO2_Liq']))
-        else:
-            comp['K2O_Liq'] = 0
-            comp['P2O5_Liq'] = 0
-            comp['H2O_Liq'] = 0
-            comp['CO2_Liq'] = 0
-    
-    return comp
 
 def AdiabaticDecompressionMelting(cores = multiprocessing.cpu_count(), 
                                   Model = "pMELTS", bulk = "KLB-1", comp_lith_1 = None, 
@@ -48,6 +17,67 @@ def AdiabaticDecompressionMelting(cores = multiprocessing.cpu_count(),
                                   P_start_bar = 30000, P_end_bar = 2000, dp_bar = 200, 
                                   P_path_bar = None, Frac = False, prop = None, 
                                   fO2_buffer = None, fO2_offset = None, Fe3Fet = None, MELTS_filter = True):
+    """
+    Perform adiabatic decompression melting calculations using MELTS, MAGEMin, or pyMelt.
+
+    Simulates mantle melting along an adiabatic upwelling path (e.g., ridge or plume) with user-defined 
+    starting potential temperature, pressure range, and step size. Supports single-lithology mantle sources 
+    (e.g., KLB-1) at present, with expansion to multi-lithology systems in development.
+
+    Parameters
+    ----------
+    cores : int, optional
+        Number of CPU cores to use for multiprocessing. Defaults to total available.
+    Model : str, optional
+        Thermodynamic model. MELTS variants: "MELTSv1.0.2", "MELTSv1.1.0", "MELTSv1.2.0", "pMELTS";
+        or MAGEMin: "Green2025", "Weller2024". Alternatively calculations can be performed using 
+        pyMelt (Matthews et al. 2020): "pyMelt"
+    bulk : dict ot str, optional
+        Bulk composition name or composition dictionary.
+        Default is "KLB-1".
+    Tp_C : float or np.ndarray, optional
+        Mantle potential temperature(s) in °C. Default is 1350.
+    Tp_Method : str, optional
+        Method to calculate the starting pressure for adiabatic melting. Default is "pyMelt".
+    P_start_bar, P_end_bar, dp_bar : float or array, optional
+        Starting, ending, and step size pressures (in bar) for adiabatic decompression. 
+        Defaults: 30000, 2000, and 200, respectively.
+    P_path_bar : np.ndarray, optional
+        User-specified pressure path (in bar). If given, overrides `P_start_bar`, `P_end_bar`, and `dp_bar`.
+    fO2_buffer : {"FMQ", "NNO"}, optional
+        Redox buffer for constraining oxygen fugacity.
+    fO2_offset : float, optional
+        Offset (log units) from the chosen fO2 buffer.
+    Fe3Fet : float, optional
+        Initial Fe³⁺/ΣFe ratio for the bulk composition. If None, values is taken from the "bulk" variable or set according to fO2 buffer positions.
+    MELTS_filter : bool, default=True
+        If True, filters oxide components to avoid issues in MELTS calculations (e.g., K2O content set to 0.0).
+
+    Returns
+    -------
+    Results : dict
+        Dictionary containing DataFrames for the system and phase compositions and properties.
+
+    Notes
+    -----
+    - Currently limited to single-lithology melting.
+    - Normalizes output mass so that total initial mass = 1.
+
+    Examples
+    --------
+    Run a single adiabatic decompression path from 3.0 GPa to 0.2 GPa:
+
+    >>> results = AdiabaticDecompressionMelting(Model="pMELTS", bulk="KLB-1",
+    ...                                        Tp_C=1350, P_start_bar=30000,
+    ...                                        P_end_bar=2000, dp_bar=200)
+
+    Run with an explicit pressure path:
+
+    >>> import numpy as np
+    >>> P_path = np.linspace(30000, 2000, 20)
+    >>> results = AdiabaticDecompressionMelting(Model="pMELTS", comp_lith_1="KLB-1",
+    ...                                        P_path_bar=P_path, Tp_C=1400)
+    """
     
     Tp_C        = to_float(Tp_C)
 
@@ -59,22 +89,33 @@ def AdiabaticDecompressionMelting(cores = multiprocessing.cpu_count(),
     Fe3Fet = to_float(Fe3Fet)
     fO2_offset = to_float(fO2_offset)
 
+    if fO2_buffer is not None:
+        if fO2_buffer != "NNO":
+            if fO2_buffer != "FMQ":
+                raise Warning("fO2 buffer specified is not an allowed input. This argument can only be 'FMQ' or 'NNO' \n if you want to offset from these buffers use the 'fO2_offset' argument.")
 
-    if Tp_Method == "pyMelt":
-        try:
-            import pyMelt as m
-            Lithologies = {'KLB-1': m.lithologies.matthews.klb1(),
-                        'KG1': m.lithologies.matthews.kg1(),
-                        'G2': m.lithologies.matthews.eclogite(),
-                        'hz': m.lithologies.shorttle.harzburgite()}
-        except ImportError:
-            raise RuntimeError('You havent installed pyMelt or there is an error when importing pyMelt. pyMelt is currently required to estimate the starting point for the melting calculations.')
+    if "MELTS" not in Model:
+        if fO2_buffer == "FMQ":
+            fO2_buffer = "qfm"
+        if fO2_buffer == "NNO":
+            fO2_buffer = "nno"
+
+    # if Tp_Method == "pyMelt":
+    #     try:
+    #         import pyMelt as m
+    #         Lithologies = {'KLB-1': m.lithologies.matthews.klb1(),
+    #                     'KG1': m.lithologies.matthews.kg1(),
+    #                     'G2': m.lithologies.matthews.eclogite(),
+    #                     'hz': m.lithologies.shorttle.harzburgite()}
+    #     except ImportError:
+    #         raise RuntimeError('You havent installed pyMelt or there is an error when importing pyMelt. pyMelt is currently required to estimate the starting point for the melting calculations.')
 
     if bulk is not None and comp_lith_1 is None:
         comp_lith_1 = bulk
 
     comp_1 = comp_check(comp_lith_1, Model, MELTS_filter, Fe3Fet)
 
+    # place holders for when code is expanded to account for multi-lithology mantle
     if comp_lith_2 is not None:
         comp_2 = comp_check(comp_lith_2, Model, MELTS_filter, Fe3Fet)
     else:
@@ -85,6 +126,8 @@ def AdiabaticDecompressionMelting(cores = multiprocessing.cpu_count(),
     else:
         comp_3 = None
 
+
+    # At present calculations only work for a single simulation - this represents a placeholder for when the code is expanded to account for multiple simulations
     One = 0
     if Model != "pyMelt":
         if type(comp_1) == pd.core.frame.DataFrame: # simplest scenario - one calculation per bulk composition imported
@@ -125,7 +168,7 @@ def AdiabaticDecompressionMelting(cores = multiprocessing.cpu_count(),
     if One == 1:
         p = Process(target = AdiabaticMelt, args = (q, 1),
                     kwargs = {'Model': Model, 'comp_1': comp_1, 'comp_2': comp_2, 'comp_3': comp_3,
-                              'Tp_C': Tp_C, 'P_path_bar': P_path_bar, 
+                              'Tp_C': Tp_C, 'Tp_Method': Tp_Method, 'P_path_bar': P_path_bar, 
                               'P_start_bar': P_start_bar, 'P_end_bar': P_end_bar, 'dp_bar': dp_bar,
                               'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset, 'Frac': Frac, 'prop': prop})
 
@@ -167,7 +210,7 @@ def AdiabaticDecompressionMelting(cores = multiprocessing.cpu_count(),
 
     return Results
 
-def AdiabaticMelt(q, index, *, Model = None, comp_1 = None, comp_2 = None, comp_3 = None, 
+def AdiabaticMelt(q, index, *, Model = None, comp_1 = None, comp_2 = None, comp_3 = None, Tp_Method = "pyMelt",
                   Tp_C = None, P_start_bar = None, P_end_bar = None, dp_bar = None, P_path_bar = None, 
                   Frac = None, fO2_buffer = None, fO2_offset = None, prop = None):
     '''
@@ -177,7 +220,7 @@ def AdiabaticMelt(q, index, *, Model = None, comp_1 = None, comp_2 = None, comp_
     Results = {}
     if "MELTS" in Model:
         try:
-            Results = AdiabaticDecompressionMelting_MELTS(Model = Model, comp = comp_1, Tp_C = Tp_C, 
+            Results = AdiabaticDecompressionMelting_MELTS(Model = Model, comp = comp_1, Tp_C = Tp_C, Tp_Method = "pyMelt",
                                                           P_path_bar = P_path_bar, P_start_bar = P_start_bar, P_end_bar = P_end_bar, dp_bar = dp_bar, 
                                                           fO2_buffer = fO2_buffer, fO2_offset = fO2_offset)
             q.put([Results, index])
@@ -250,10 +293,6 @@ def AdiabaticMelt(q, index, *, Model = None, comp_1 = None, comp_2 = None, comp_
         return
 
     else:
-        # import pyMAGEMINcalc as MM
-        # Results = MM.AdiabaticDecompressionMelting(comp = comp_1, T_p_C = Tp_C, P_start_kbar = P_start_bar/1000, P_end_kbar = P_end_bar/1000, dp_kbar = dp_bar/1000, Frac = 0)
-        # print('Note that the ability to use MAGEMin to performed adiabatic decompression melting in PetThermoTools has been temporarily disabled. The underlying issue will be fixed soon and this funciton will once again become available.')
-        
         try:
             import pyMelt as m
             Lithologies = {'KLB-1': m.lithologies.matthews.klb1(),
@@ -263,10 +302,13 @@ def AdiabaticMelt(q, index, *, Model = None, comp_1 = None, comp_2 = None, comp_
         except ImportError:
             raise RuntimeError('You havent installed pyMelt or there is an error when importing pyMelt. pyMelt is currently required to estimate the starting point for the melting calculations.')
 
-        lz = m.lithologies.matthews.klb1()
-        mantle = m.mantle([lz], [1], ['Lz'])
-        T_start_C = mantle.adiabat(P_start_bar/10000.0, Tp_C)
-        
+        if Tp_Method == "pyMelt":
+            lz = m.lithologies.matthews.klb1()
+            mantle = m.mantle([lz], [1], ['Lz'])
+            T_start_C = mantle.adiabat(P_start_bar/10000.0, Tp_C)
+        else:
+            T_start_C = None
+
         from juliacall import Main as jl, convert as jlconvert
 
         jl.seval("using MAGEMinCalc")

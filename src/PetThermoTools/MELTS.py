@@ -1572,7 +1572,9 @@ def findSatPressure_MELTS(Model = None, T_C_init = None, T_fixed_C = None, P_bar
     else:
         return out
 
-def AdiabaticDecompressionMelting_MELTS(Model = None, comp = None, Tp_C = None, P_path_bar = None, P_start_bar = None, P_end_bar = None, dp_bar = None, Frac = False, fO2_buffer = None, fO2_offset = None):
+def AdiabaticDecompressionMelting_MELTS(Model = None, comp = None, Tp_C = None, Tp_Method = None,
+                                        P_path_bar = None, P_start_bar = None, P_end_bar = None, dp_bar = None, 
+                                        Frac = False, fO2_buffer = None, fO2_offset = None):
     try:
         import pyMelt as m     
         Lithologies = {'KLB-1': m.lithologies.matthews.klb1(),
