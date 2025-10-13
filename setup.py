@@ -34,7 +34,6 @@ setup(
             'matplotlib',
             'scikit-learn',
             'scipy',
-            'julia',
             'tinynumpy',
             'shapely',
             'Thermobar',

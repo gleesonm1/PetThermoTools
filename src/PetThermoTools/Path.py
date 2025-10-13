@@ -491,9 +491,22 @@ def path_multi(q, index, *, Model = None, comp = None, Frac_solid = None, Frac_f
         elif Model == "MELTSv1.2.0":
             melts = MELTSdynamic(4)
     else:
-        from juliacall import Main as jl, convert as jlconvert
+        from juliacall import Main as jl
+
+        # import os, pathlib
+
+        # # 1. Where to install Julia + MAGEMin environment (user home dir, persistent)
+        # home = str(pathlib.Path.home())
+        # env_path = os.path.join(home, ".MAGEMinEnv")
+
+        # jl.seval(f"""
+        # import Pkg
+        # Pkg.activate("{env_path}")
+        # """)
 
         jl.seval("using MAGEMinCalc")
+
+        
   
     for i in index:
         try:
@@ -554,12 +567,22 @@ def path_multi(q, index, *, Model = None, comp = None, Frac_solid = None, Frac_f
                 #                                 T_C = T_C[i], T_path_C = T_path_C[i], P_start_bar = P_start_bar[i], P_end_bar = P_end_bar[i],
                 #                                 dp_bar = dp_bar[i], P_bar = P_bar[i], P_path_bar = P_path_bar[i], frac_xtal = Frac_solid,
                 #                                 fo2_buffer = fO2_buffer, fo2_offset = fO2_offset[i], find_liquidus = find_liquidus)
-                    
+                
+                if Suppress == ['rutile', 'tridymite']:
+                    Suppress = None
+
+                if Suppress is not None:
+                    jl.Suppress = Suppress
+                    jl.seval("Suppress = Vector{String}(Suppress)")
+                    julia_Suppress = jl.Suppress
+
+
                 Results_df = jl.MAGEMinCalc.path(
                                     comp=comp_julia, T_start_C=T_start_C[i], T_end_C=T_end_C[i], dt_C=dt_C[i],
                                     T_C=T_C[i], P_start_bar=P_start_bar[i], P_end_bar=P_end_bar[i], dp_bar=dp_bar[i],
                                     P_bar=P_bar[i], T_path_C=T_path_C[i], P_path_bar=P_path_bar[i], frac_xtal=Frac_solid,
-                                    Model=Model, fo2_buffer=fO2_buffer, fo2_offset=fO2_offset[i], find_liquidus=find_liquidus
+                                    Model=Model, fo2_buffer=fO2_buffer, fo2_offset=fO2_offset[i], find_liquidus=find_liquidus,
+                                    suppress = julia_Suppress
                                 )
                 
                 Results = dict(Results_df)
@@ -721,6 +744,16 @@ def path(q, index, *, Model = None, comp = None, Frac_solid = None, Frac_fluid =
 
         # import julia
         from juliacall import Main as jl, convert as jlconvert
+        # import os, pathlib
+
+        # # 1. Where to install Julia + MAGEMin environment (user home dir, persistent)
+        # home = str(pathlib.Path.home())
+        # env_path = os.path.join(home, ".MAGEMinEnv")
+
+        # jl.seval(f"""
+        # import Pkg
+        # Pkg.activate("{env_path}")
+        # """)
 
         jl.seval("using MAGEMinCalc")
 
@@ -739,11 +772,21 @@ def path(q, index, *, Model = None, comp = None, Frac_solid = None, Frac_fluid =
         else:
             P_path_bar_julia = P_path_bar
 
+        if Suppress == ['rutile', 'tridymite']:
+            Suppress = None
+
+        if Suppress is not None:
+            jl.Suppress = Suppress
+            jl.seval("Suppress = Vector{String}(Suppress)")
+            julia_Suppress = jl.Suppress
+
+
         Results = jl.MAGEMinCalc.path(
             comp=comp_julia, T_start_C=T_start_C, T_end_C=T_end_C, dt_C=dt_C,
             T_C=T_C, P_start_bar=P_start_bar, P_end_bar=P_end_bar, dp_bar=dp_bar,
             P_bar=P_bar, T_path_C=T_path_C_julia, P_path_bar=P_path_bar_julia, frac_xtal=Frac_solid,
-            Model=Model, fo2_buffer=fO2_buffer, fo2_offset=fO2_offset, find_liquidus=find_liquidus
+            Model=Model, fo2_buffer=fO2_buffer, fo2_offset=fO2_offset, find_liquidus=find_liquidus,
+            suppress = julia_Suppress
         )
         # Results = jl.pyconvert(dict, Results)
         Results_df = dict(Results)
