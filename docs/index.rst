@@ -60,6 +60,7 @@ Welcome to PetThermoTools's documentation!
 
    Examples/BarometryTests/MELTS_geobarometry_example1
    Examples/BarometryTests/MELTS_geobarometry_example2
+   Examples/BarometryTests/MELTS_geobarometry_example3
 
 .. toctree::
    :maxdepth: 2

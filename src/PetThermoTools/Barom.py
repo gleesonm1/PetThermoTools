@@ -223,6 +223,7 @@ def mineral_cosaturation(Model="MELTSv1.0.2", cores=int(np.floor(multiprocessing
         index_out = np.array([], dtype=int)
 
         while len(index_out) < len(index_in):
+            Start = time.time()
             index = np.setdiff1d(index_in, index_out)
             groups = np.array_split(index, cores)
             non_empty_groups = [g for g in groups if g.size > 0]
@@ -242,10 +243,19 @@ def mineral_cosaturation(Model="MELTSv1.0.2", cores=int(np.floor(multiprocessing
 
             for p, q, group in processes:
                 try:
-                    res = q.get(timeout=timeout)
+                    if time.time() - Start > timeout + 10:
+                        res = q.get(timeout = 10)
+                    else:
+                        res = q.get(timeout=timeout)
                 except:
+                    if "MELTS" not in Model:
+                        print(f"Timeout warning reached. Calculation P_bar = {P_bar[group[0]]} will not be returned. Try increasing the timeout.")
                     res = []
                     idx_chunks = np.array([group[0]], dtype = int)
+                    mask = np.ones(len(P_bar), dtype=bool)
+                    mask[idx_chunks] = False
+                    P_bar = P_bar[mask]
+
                 p.join(timeout = 2)
                 p.terminate()
 
@@ -290,7 +300,7 @@ def mineral_cosaturation(Model="MELTSv1.0.2", cores=int(np.floor(multiprocessing
                         phases=phases,
                         melts = melts
                     )
-                results[f"index = {i}"] = Results
+                results[f"Run {i}"] = Results
                 combined_results.update(results)
         else:
             if fO2_offset is None:
@@ -307,7 +317,7 @@ def mineral_cosaturation(Model="MELTSv1.0.2", cores=int(np.floor(multiprocessing
                                         )
                 
                 Results = dict(Results_df)
-                results[f"index = {i}"] = Results
+                results[f"Run {i}"] = Results
                 combined_results.update(results)
 
     results = combined_results

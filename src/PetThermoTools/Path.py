@@ -567,9 +567,11 @@ def path_multi(q, index, *, Model = None, comp = None, Frac_solid = None, Frac_f
                 #                                 T_C = T_C[i], T_path_C = T_path_C[i], P_start_bar = P_start_bar[i], P_end_bar = P_end_bar[i],
                 #                                 dp_bar = dp_bar[i], P_bar = P_bar[i], P_path_bar = P_path_bar[i], frac_xtal = Frac_solid,
                 #                                 fo2_buffer = fO2_buffer, fo2_offset = fO2_offset[i], find_liquidus = find_liquidus)
-                
+
+                julia_Suppress = None                
                 if Suppress == ['rutile', 'tridymite']:
                     Suppress = None
+                    julia_Suppress = None
 
                 if Suppress is not None:
                     jl.Suppress = Suppress
@@ -772,8 +774,10 @@ def path(q, index, *, Model = None, comp = None, Frac_solid = None, Frac_fluid =
         else:
             P_path_bar_julia = P_path_bar
 
+        julia_Suppress = None
         if Suppress == ['rutile', 'tridymite']:
             Suppress = None
+            julia_Suppress = None
 
         if Suppress is not None:
             jl.Suppress = Suppress

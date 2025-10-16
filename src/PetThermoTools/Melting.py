@@ -13,7 +13,7 @@ from tqdm.notebook import tqdm, trange
 
 def AdiabaticDecompressionMelting(cores = multiprocessing.cpu_count(), 
                                   Model = "pMELTS", bulk = "KLB-1", comp_lith_1 = None, 
-                                  comp_lith_2 = None, comp_lith_3 = None, Tp_C = 1350, Tp_Method = "pyMelt",
+                                  comp_lith_2 = None, comp_lith_3 = None, Tp_C = 1350, Tp_Method = None,
                                   P_start_bar = 30000, P_end_bar = 2000, dp_bar = 200, 
                                   P_path_bar = None, Frac = False, prop = None, 
                                   fO2_buffer = None, fO2_offset = None, Fe3Fet = None, MELTS_filter = True):
@@ -311,6 +311,17 @@ def AdiabaticMelt(q, index, *, Model = None, comp_1 = None, comp_2 = None, comp_
 
         from juliacall import Main as jl, convert as jlconvert
 
+        # import os, pathlib
+
+        # # 1. Where to install Julia + MAGEMin environment (user home dir, persistent)
+        # home = str(pathlib.Path.home())
+        # env_path = os.path.join(home, ".MAGEMinEnv")
+
+        # jl.seval(f"""
+        # import Pkg
+        # Pkg.activate("{env_path}")
+        # """)
+
         jl.seval("using MAGEMinCalc")
 
         comp_1['O'] = comp_1['Fe3Fet_Liq']*(((159.59/2)/71.844)*comp_1['FeOt_Liq'] - comp_1['FeOt_Liq'])
@@ -323,7 +334,8 @@ def AdiabaticMelt(q, index, *, Model = None, comp_1 = None, comp_2 = None, comp_
 
         Output_jl = jl.MAGEMinCalc.AdiabaticDecompressionMelting(comp = comp_julia, P_start_kbar = P_start_bar/1000.0, 
                                                               P_end_kbar = P_end_bar/1000.0, dp_kbar = dp_bar/1000.0,
-                                                              T_start_C = T_start_C, fo2_buffer = fO2_buffer, fo2_offset = fO2_offset, Model = Model)
+                                                              T_start_C = T_start_C, fo2_buffer = fO2_buffer, 
+                                                              fo2_offset = fO2_offset, Model = Model, Tp_C = Tp_C)
         Results = dict(Output_jl)
         # Results = stich(Results, Model = Model)
         
