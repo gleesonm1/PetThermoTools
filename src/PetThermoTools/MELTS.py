@@ -953,7 +953,6 @@ def path_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid = None, 
                 else:
                     return Results
 
-        print(Liq_Results)
         T_start_C = Liq_Results['T_Liq'] + 0.1
         if T_end_C is None and T_maxdrop_C is not None:
             T_end_C = T_start_C - T_maxdrop_C
@@ -965,6 +964,9 @@ def path_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid = None, 
             else:
                 melts.engine.setSystemProperties(["Log fO2 Path: " + fO2_buffer, "Log fO2 Offset: " + str(fO2_offset)])
 
+    T = None
+    P = None
+
     if T_path_C is None:
         if T_end_C is None and dt_C is None:
             T = T_start_C
@@ -972,6 +974,8 @@ def path_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid = None, 
             T = np.linspace(T_start_C, T_end_C, 1+round((T_start_C-T_end_C)/dt_C))
     elif T_path_C is not None:
         T = T_path_C
+
+    
 
     if P_path_bar is None:
         if P_end_bar is None and dp_bar is None:
@@ -981,12 +985,21 @@ def path_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid = None, 
     elif P_path_bar is not None:
         P = P_path_bar
 
+    print(P_path_bar)
+    print(P_end_bar)
+    print(P_start_bar)
+    print(dp_bar)
+
+    if type(P) == np.ndarray and T_end_C is not None and dt_C is None:
+        T = np.linspace(T_start_C, T_end_C, len(P))
+
     if type(T) == np.ndarray and P_end_bar is None and dp_bar is not None:
         P = np.linspace(P_start_bar, P_start_bar - dp_bar*(len(T)-1), len(T))
     if type(T) == np.ndarray and P_end_bar is not None and dp_bar is None:
         P = np.linspace(P_start_bar, P_end_bar, len(T))
     elif type(P) == np.ndarray and T_end_C is None and dt_C is not None:
         T = np.linspace(T_start_C, T_start_C - dt_C*(len(P)-1), len(P))
+   
 
     if type(T) == np.ndarray and type(P) == np.ndarray:
         if len(T) != len(P):

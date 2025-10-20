@@ -185,7 +185,7 @@ def polybaric_crystallisation_path(Model = None, bulk = None, Frac_solid = None,
                                    Fe3Fet_init = None, Fe3Fet_Liq = None, H2O_init = None, H2O_Liq = None, 
                                    CO2_init = None, CO2_Liq = None, find_liquidus = None, fO2_buffer = None, 
                                    fO2_offset = None, label = None, timeout = None, multi_processing=True,
-                                   Suppress = ['rutile', 'tridymite'], Suppress_except=False):
+                                   Suppress = ['rutile', 'tridymite'], Suppress_except=False, multiprocessing = True):
     """
     Simulates polybaric crystallization along a user-specified P-T path using the `multi_path` function.
 
@@ -275,7 +275,8 @@ def polybaric_crystallisation_onestep(Model = None, bulk = None, Frac_solid = No
                                       P_start_bar = None, P_end_bar = None, Fe3Fet_Liq = None, Fe3Fet_init = None,
                                       H2O_Liq = None, H2O_init = None, CO2_Liq = None, CO2_init = None, 
                                       find_liquidus = None, fO2_buffer = None, fO2_offset = None, label = None, 
-                                      timeout = None, multi_processing = True, Suppress = ['rutile', 'tridymite'], Suppress_except=False,):
+                                      timeout = None, multi_processing = True, Suppress = ['rutile', 'tridymite'], 
+                                      Suppress_except=False,multiprocessing=True):
     """
     Simulates polybaric crystallization along a user-specified P-T path using the `multi_path` function.
 
