@@ -52,6 +52,7 @@ Welcome to PetThermoTools's documentation!
    :caption: Phase Diagram calcualtions
 
    Examples/PhaseDiagrams/PhaseDiagram_example
+   Examples/PhaseDiagrams/GalapagosGabbros
 
 
 .. toctree::
