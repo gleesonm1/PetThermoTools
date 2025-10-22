@@ -39,6 +39,13 @@ Welcome to PetThermoTools's documentation!
 
    Examples/CrystallisationTests/BasalticCrystallisation
    Examples/CrystallisationTests/BasalticCrystallisation_withMAGEMin
+   Examples/CrystallisationTests/BasalticCrystallisation_polybaric
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Crystallisation calculations
+
+   Examples/DecompressionTests/StHelens_decompress_simple
 
 .. toctree::
    :maxdepth: 2

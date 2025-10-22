@@ -31,6 +31,7 @@ Names = {'liquid1': '_Liq',
         'quartz2': '_Qtz2',
         'orthopyroxene2': '_Opx2',
         'apatite2': '_Apa2',
+        'fluid1': '_Fl',
         'liquid2': '_Liq2',
         'liquid3': '_Liq3',
         'liquid4': '_Liq4'}
@@ -48,6 +49,7 @@ Names_MM = {'liq1': '_Liq',
             'g2': '_Grt2',
             'fsp2': '_Plag2',
             'spl2': '_Sp2',
+            'fl1': '_Fl',
             'liq2': '_Liq2',
             'liq3': '_Liq3',
             'liq4': '_Liq4'}
@@ -389,18 +391,18 @@ def stich_work(Results = None, Order = None, Model = "MELTS", Frac_fluid = None,
             for n in SN:
                 if n != 'liquid1' and n!= 'fluid1' and n != 'liq1' and n != 'fl1':
                     Results_Mass[n + '_cumsum'] = Results_Mass[n].cumsum()
-            if 'liq1' in SN:
-                Results_Mass[n + '_cumsum'] = Results_Mass.loc[0, 'liq1'] - Results_Mass.loc[:,Results_Mass.columns.str.contains('_cumsum')].sum(axis = 1)
-            elif 'liquid1' in SN:
-                Results_Mass[n + '_cumsum'] = Results_Mass.loc[0, 'liquid1'] - Results_Mass.loc[:,Results_Mass.columns.str.contains('_cumsum')].sum(axis = 1)
+            # if 'liq1' in SN:
+            #     Results_Mass[n + '_cumsum'] = Results_Mass.loc[0, 'liq1'] - Results_Mass.loc[:,Results_Mass.columns.str.contains('_cumsum')].sum(axis = 1)
+            # elif 'liquid1' in SN:
+            #     Results_Mass[n + '_cumsum'] = Results_Mass.loc[0, 'liquid1'] - Results_Mass.loc[:,Results_Mass.columns.str.contains('_cumsum')].sum(axis = 1)
         else:
             for n in SN:
                 if n != 'liquid1' and n != 'liq1':
                     Results_Mass[n + '_cumsum'] = Results_Mass[n].cumsum()
-            if 'liq1' in SN:
-                Results_Mass[n + '_cumsum'] = Results_Mass.loc[0, 'liq1'] - Results_Mass.loc[:,Results_Mass.columns.str.contains('_cumsum')].sum(axis = 1)
-            elif 'liquid1' in SN:
-                Results_Mass[n + '_cumsum'] = Results_Mass.loc[0, 'liquid1'] - Results_Mass.loc[:,Results_Mass.columns.str.contains('_cumsum')].sum(axis = 1)
+            # if 'liq1' in SN:
+            #     Results_Mass[n + '_cumsum'] = Results_Mass.loc[0, 'liq1'] - Results_Mass.loc[:,Results_Mass.columns.str.contains('_cumsum')].sum(axis = 1)
+            # elif 'liquid1' in SN:
+            #     Results_Mass[n + '_cumsum'] = Results_Mass.loc[0, 'liquid1'] - Results_Mass.loc[:,Results_Mass.columns.str.contains('_cumsum')].sum(axis = 1)
 
     Results_All = Results['Conditions'].copy()
     for R in Results:

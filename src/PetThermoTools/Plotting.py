@@ -132,7 +132,7 @@ def harker(Results=None, x_axis="MgO", y_axis=("SiO2", "TiO2", "Al2O3", "Cr2O3",
 
     # -------------------- helper functions --------------------
     def plot_panel(ax, x_var, y_var, idx=None, Res = None):
-        """Plot one panel (model + data) on given Axes."""
+        """Plot one panel (model) on given Axes."""
         suffix = Names[phase] if phase in Names else ""
         xcol, ycol = x_var + suffix, y_var + suffix
 
@@ -598,7 +598,7 @@ def phase_plot(Results, x_axis = None, y_axis = None, cmap = "Reds"):
 
         # --- Setup figure ---
         if y_axis == "P_bar":
-            f, a = plt.subplots(figsize=(4, 6))
+            f, a = plt.subplots(figsize=(3.5, 5))
         else:
             f, a = plt.subplots(figsize=(4, 3.5))
 
@@ -608,7 +608,7 @@ def phase_plot(Results, x_axis = None, y_axis = None, cmap = "Reds"):
 
         Stop = np.zeros(len(Mass))
         for p in phases:
-            col = p + suffix if use_cumsum else p
+            col = p + suffix if (use_cumsum and p + suffix in Mass.columns) else p
             vals = Mass[col].values
 
             # --- Legend label mapping ---
@@ -622,7 +622,11 @@ def phase_plot(Results, x_axis = None, y_axis = None, cmap = "Reds"):
 
         # --- Labels ---
         if horizontal:
-            a.set_ylabel(y_axis)
+            if y_axis == "P_bar":
+                a.set_ylabel("Pressure (bar)")
+                a.invert_yaxis()
+            else:
+                a.set_ylabel(y_axis)
             a.set_xlabel("Mass fraction")
         else:
             a.set_xlabel(x_axis)
