@@ -95,7 +95,7 @@ Version 0.2.40 (August 2025)
 ====================================
 Adding melting calculations to MAGEMinCalc extension - works with MAGEMin_C up to v1.9.6.
 
-Version 0.2.48 (October 2025)
+Version 0.2.49 (October 2025)
 ====================================
 In all notebooks ptt must now be imported as `import petthermotools`, `import PetThermoTools` is depreciated.
 Major update to MAGEMinCalc - please use v0.5.0 and MAGEMin_C v2.0.6.
