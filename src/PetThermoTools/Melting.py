@@ -100,16 +100,6 @@ def AdiabaticDecompressionMelting(cores = multiprocessing.cpu_count(),
         if fO2_buffer == "NNO":
             fO2_buffer = "nno"
 
-    # if Tp_Method == "pyMelt":
-    #     try:
-    #         import pyMelt as m
-    #         Lithologies = {'KLB-1': m.lithologies.matthews.klb1(),
-    #                     'KG1': m.lithologies.matthews.kg1(),
-    #                     'G2': m.lithologies.matthews.eclogite(),
-    #                     'hz': m.lithologies.shorttle.harzburgite()}
-    #     except ImportError:
-    #         raise RuntimeError('You havent installed pyMelt or there is an error when importing pyMelt. pyMelt is currently required to estimate the starting point for the melting calculations.')
-
     if bulk is not None and comp_lith_1 is None:
         comp_lith_1 = bulk
 
@@ -166,47 +156,91 @@ def AdiabaticDecompressionMelting(cores = multiprocessing.cpu_count(),
 
     # perform calculation if only 1 calculation is specified
     if One == 1:
-        p = Process(target = AdiabaticMelt, args = (q, 1),
-                    kwargs = {'Model': Model, 'comp_1': comp_1, 'comp_2': comp_2, 'comp_3': comp_3,
-                              'Tp_C': Tp_C, 'Tp_Method': Tp_Method, 'P_path_bar': P_path_bar, 
-                              'P_start_bar': P_start_bar, 'P_end_bar': P_end_bar, 'dp_bar': dp_bar,
-                              'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset, 'Frac': Frac, 'prop': prop})
+        if "MELTS" in Model or "pyMelt" in Model:
+            p = Process(target = AdiabaticMelt, args = (q, 1),
+                        kwargs = {'Model': Model, 'comp_1': comp_1, 'comp_2': comp_2, 'comp_3': comp_3,
+                                'Tp_C': Tp_C, 'Tp_Method': Tp_Method, 'P_path_bar': P_path_bar, 
+                                'P_start_bar': P_start_bar, 'P_end_bar': P_end_bar, 'dp_bar': dp_bar,
+                                'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset, 'Frac': Frac, 'prop': prop})
 
-        p.start()
-        try:
-            ret = q.get(timeout = 600)
-        except:
-            ret = []
+            p.start()
+            try:
+                ret = q.get(timeout = 600)
+            except:
+                ret = []
 
-        TIMEOUT = 5
-        start = time.time()
-        if p.is_alive():
-            while time.time() - start <= TIMEOUT:
-                if not p.is_alive():
-                    p.join()
+            TIMEOUT = 5
+            start = time.time()
+            if p.is_alive():
+                while time.time() - start <= TIMEOUT:
+                    if not p.is_alive():
+                        p.join()
+                        p.terminate()
+                        break
+                    time.sleep(.1)
+                else:
                     p.terminate()
-                    break
-                time.sleep(.1)
+                    p.join(5)
             else:
+                p.join()
                 p.terminate()
-                p.join(5)
-        else:
-            p.join()
-            p.terminate()
 
-        if len(ret) > 0:
-            Results, index = ret
-            if Model != "pyMelt":
-                Results = stich(Results, Model = Model)
+            if len(ret) > 0:
+                Results, index = ret
+                if Model != "pyMelt":
+                    Results = stich(Results, Model = Model)
 
-                # make mass relative to 1 at the start of the model
-                Tot = Results['Mass'].sum(axis = 1)[0]
-                Results['Mass'] = Results['Mass']/Tot
-                Results['All'].loc[:,Results['All'].columns.str.contains('mass')] = Results['All'].loc[:,Results['All'].columns.str.contains('mass')]/Tot
-            return Results
+                    # make mass relative to 1 at the start of the model
+                    Tot = Results['Mass'].sum(axis = 1)[0]
+                    Results['Mass'] = Results['Mass']/Tot
+                    Results['All'].loc[:,Results['All'].columns.str.contains('mass')] = Results['All'].loc[:,Results['All'].columns.str.contains('mass')]/Tot
+                return Results
+            else:
+                Results = {}
+                return Results
         else:
-            Results = {}
-            return Results
+            if Tp_Method == "pyMelt":
+                try:
+                    import pyMelt as m
+                    Lithologies = {'KLB-1': m.lithologies.matthews.klb1(),
+                                'KG1': m.lithologies.matthews.kg1(),
+                                'G2': m.lithologies.matthews.eclogite(),
+                                'hz': m.lithologies.shorttle.harzburgite()}
+                except ImportError:
+                    raise RuntimeError('You havent installed pyMelt or there is an error when importing pyMelt. pyMelt is currently required to estimate the starting point for the melting calculations.')
+
+                lz = m.lithologies.matthews.klb1()
+                mantle = m.mantle([lz], [1], ['Lz'])
+                T_start_C = mantle.adiabat(P_start_bar/10000.0, Tp_C)
+            else:
+                T_start_C = None
+
+            from juliacall import Main as jl, convert as jlconvert
+
+            if not jl.seval("isdefined(Main, :MAGEMinCalc)"):
+                jl.seval("using MAGEMinCalc")
+            
+
+            comp_1['O'] = comp_1['Fe3Fet_Liq']*(((159.59/2)/71.844)*comp_1['FeOt_Liq'] - comp_1['FeOt_Liq'])
+
+            if type(comp_1) == dict:
+                comp_julia = jl.seval("Dict")(comp_1) 
+            else:
+                comp_new = comp_1.loc[0].to_dict()
+                comp_julia = jl.seval("Dict")(comp_new)
+
+            Output_jl = jl.MAGEMinCalc.AdiabaticDecompressionMelting(comp = comp_julia, P_start_kbar = P_start_bar/1000.0, 
+                                                                P_end_kbar = P_end_bar/1000.0, dp_kbar = dp_bar/1000.0,
+                                                                T_start_C = T_start_C, fo2_buffer = fO2_buffer, 
+                                                                fo2_offset = fO2_offset, Model = Model, Tp_C = Tp_C)
+            Results = dict(Output_jl)
+
+            Results = stich(Results, Model = Model)
+
+            # make mass relative to 1 at the start of the model
+            Tot = Results['Mass'].sum(axis = 1)[0]
+            Results['Mass'] = Results['Mass']/Tot
+            Results['All'].loc[:,Results['All'].columns.str.contains('mass')] = Results['All'].loc[:,Results['All'].columns.str.contains('mass')]/Tot
 
     return Results
 

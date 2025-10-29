@@ -101,7 +101,7 @@ def supCalc(Model = "MELTSv1.0.2", bulk = None, phase = None, T_C = None, P_bar 
     
     comp = comp_fix(Model = Model, comp = comp, H2O_Liq = H2O_Liq, CO2_Liq = CO2_Liq, Fe3Fet_Liq = Fe3Fet_Liq)
 
-    Results = supCalc_MELTS(Model = "MELTSv1.0.2", comp = comp, phase = phase, T_C = T_C, P_bar = P_bar,
+    Results = supCalc_MELTS(Model = Model, comp = comp, phase = phase, T_C = T_C, P_bar = P_bar,
              fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, 
              melts = melts)
     

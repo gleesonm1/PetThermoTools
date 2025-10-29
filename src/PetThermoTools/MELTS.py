@@ -88,6 +88,20 @@ def equilibrate_MELTS(Model = None, P_bar = None, T_C = None, comp = None,
             Results['Conditions'].loc[0,R] = melts.engine.getProperty(R, 'bulk')
 
     for phase in PhaseList:
+        # melts.engine.calcPhaseProperties(phase, melts.engine.dispComposition[phase])
+        # melts.engine.calcEndMemberProperties(phase, melts.engine.dispComposition[phase])
+
+        # endmembers = melts.endMemberFormulas[phase]
+        # thermo = ['activity', 'activity0', 'mu','mu0', 'X']
+        # thermo_properties = []
+        # thermodynamics = np.empty(len(endmembers)*len(thermo))
+        # idx = 0
+        # for i in thermo:
+        #     for j in endmembers:
+        #         thermo_properties.append(i+'_'+j)
+        #         thermodynamics[idx] = melts.engine.getProperty(i, phase, j)
+        #         idx = idx + 1
+
         if phase not in list(Results.keys()):
             Results[phase] = pd.DataFrame(data = np.zeros((length, 14)), columns = ['SiO2', 'TiO2', 'Al2O3', 'Fe2O3', 'Cr2O3', 'FeO', 'MnO', 'MgO', 'CaO', 'Na2O', 'K2O', 'P2O5', 'H2O', 'CO2'])
             Results[phase + '_prop'] = pd.DataFrame(data = np.zeros((length, 5)), columns = ['g','h', 'mass', 'v', 'rho'])
@@ -97,6 +111,16 @@ def equilibrate_MELTS(Model = None, P_bar = None, T_C = None, comp = None,
 
         for pr in Results[phase + '_prop']:
             Results[phase + '_prop'][pr].loc[0] = melts.engine.getProperty(pr, phase)
+
+        # df1 = Results[phase + '_prop']
+        # df2 = pd.DataFrame(columns=thermo_properties, data=thermodynamics)
+
+        # # Ensure both have matching indices (fill missing rows with NaN)
+        # max_len = max(len(df1), len(df2))
+        # df1 = df1.reindex(range(max_len))
+        # df2 = df2.reindex(range(max_len))
+
+        # Results[phase + '_prop'] = pd.concat([df1, df2], axis=1)
     
     PhaseList = melts.engine.calcSaturationState()
     Affinity_raw = melts.engine.getProperty('affinity', PhaseList)
@@ -558,6 +582,7 @@ def supCalc_MELTS(Model = "MELTSv1.0.2", comp = None, phase = None, T_C = None, 
             L = -1
 
     if melts is None:
+        from meltsdynamic import MELTSdynamic
         if Model is None or Model == "MELTSv1.0.2":
             melts = MELTSdynamic(1)
         elif Model == "pMELTS":

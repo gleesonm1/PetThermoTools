@@ -94,3 +94,9 @@ Please ensure you're updated to MAGEMinCalc v0.4.3 (see instructions) if running
 Version 0.2.40 (August 2025)
 ====================================
 Adding melting calculations to MAGEMinCalc extension - works with MAGEMin_C up to v1.9.6.
+
+Version 0.2.47 (October 2025)
+====================================
+Major update to MAGEMinCalc - please use v0.5.0 and MAGEMin_C v2.0.6.
+Phase Diagram code has better optimization and should have less calculation time
+More plotting options added.

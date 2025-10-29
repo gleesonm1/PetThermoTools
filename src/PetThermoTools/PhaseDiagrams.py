@@ -120,11 +120,6 @@ def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar
     if Model is None:
         Model = "MELTSv1.0.2"
 
-    if Model == "Holland":
-        import pyMAGEMINcalc as MM
-        import julia
-        from julia import MAGEMinCalc
-
     # if comp is entered as a pandas series, it must first be converted to a dict
     if type(comp) == pd.core.series.Series:
         comp = comp.to_dict()
@@ -197,9 +192,9 @@ def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar
                     T_path_C = T_path_C[:99]
                     P_path_bar = P_path_bar[:99]
             else:
-                if len(T_path_C) > 300:
-                    T_path_C = T_path_C[:249]
-                    P_path_bar = P_path_bar[:249]
+                if len(T_path_C) > 500:
+                    T_path_C = T_path_C[:499]
+                    P_path_bar = P_path_bar[:499]
 
             if "MELTS" in Model:
                 if j % 3 == 0:
@@ -224,7 +219,7 @@ def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar
         if "MELTS" in Model:
             TIMEOUT = 240
         else:
-            TIMEOUT = 900
+            TIMEOUT = 1200
 
         start = time.time()
         first = True
@@ -281,12 +276,12 @@ def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar
                 else:
                     Combined = pd.concat([Combined, Results[i]['All']], axis = 0, ignore_index = True)
 
-            Combined['T_C'] = np.round(Combined['T_C'], 2)
-            Combined['P_bar'] = np.round(Combined['P_bar'], 2)
-            Combined = Combined.sort_values(['T_C', 'P_bar'])
-            Combined = Combined.reset_index(drop = True)
-            if "MELTS" in Model:
-                Combined = Combined.dropna(subset = ['h'])
+                Combined['T_C'] = np.round(Combined['T_C'], 2)
+                Combined['P_bar'] = np.round(Combined['P_bar'], 2)
+                Combined = Combined.sort_values(['T_C', 'P_bar'])
+                Combined = Combined.reset_index(drop = True)
+                if "MELTS" in Model:
+                    Combined = Combined.dropna(subset = ['h'])
 
         Res_flat = np.array([Combined['T_C'], Combined['P_bar']]).T
         new_flat = flat[np.where((flat[:, None] == Res_flat).all(-1).any(-1) == False)]
@@ -331,7 +326,9 @@ def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar
 
 def phaseDiagram_refine(Data = None, Model = None, bulk = None, Fe3Fet_Liq = None, H2O_Liq = None, CO2_Liq = None, 
                         fO2_buffer = None, fO2_offset = None, i_max = 150):
+    
     Combined = Data.copy()
+
     # find existing T,P data
     T_C = Combined['T_C'].unique()
     P_bar = Combined['P_bar'].unique()
@@ -345,7 +342,7 @@ def phaseDiagram_refine(Data = None, Model = None, bulk = None, Fe3Fet_Liq = Non
 
     # extract the phase information from the current dataframe
     def combine_headers(row):
-        return ','.join([col[5:] for col in Combined.loc[:, Combined.columns.str.contains('mass')].columns if row[col] > 0.0 or pd.isna(row[col])])
+        return ','.join([col[5:] for col in Combined.loc[:, Combined.columns.str.contains('mass')].columns if row[col] > 0.0 and not pd.isna(row[col])])
 
     # Apply the function to each row
     Combined['PhaseResults'] = Combined.apply(combine_headers, axis=1).tolist()
@@ -383,7 +380,6 @@ def phaseDiagram_refine(Data = None, Model = None, bulk = None, Fe3Fet_Liq = Non
                     A[0] = flattened_T[i]
                     A[1] = flattened_P[i]
                 else:
-
                     B = (matching_df.iloc[np.where((Combined['T_C'].values == flattened_T[i]) & (Combined['P_bar'].values == below))[0][0],:].values + matching_df.iloc[np.where((Combined['T_C'].values == flattened_T[i]) & (Combined['P_bar'].values == above))[0][0],:].values)/2
                     B[0] = flattened_T[i]
                     B[1] = flattened_P[i]
@@ -435,12 +431,12 @@ def phaseDiagram_refine(Data = None, Model = None, bulk = None, Fe3Fet_Liq = Non
             if Combined['PhaseResults'].loc[index_1] == Combined['PhaseResults'].loc[index_2] == Combined['PhaseResults'].loc[index_3] == Combined['PhaseResults'].loc[index_4]:
                 if A is None:
                     A = (matching_df.iloc[index_1,:] + matching_df.iloc[index_2,:] + matching_df.iloc[index_3,:] + matching_df.iloc[index_4,:])/4
-                    A[0] = flattened_T[i]
-                    A[1] = flattened_P[i]
+                    A["T_C"] = flattened_T[i]
+                    A["P_bar"] = flattened_P[i]
                 else:
                     B = (matching_df.iloc[index_1,:] + matching_df.iloc[index_2,:] + matching_df.iloc[index_3,:] + matching_df.iloc[index_4,:])/4
-                    B[0] = flattened_T[i]
-                    B[1] = flattened_P[i]
+                    B["T_C"] = flattened_T[i]
+                    B["P_bar"] = flattened_P[i]
                     A = np.vstack((A,B))
 
             else:
@@ -459,16 +455,18 @@ def phaseDiagram_refine(Data = None, Model = None, bulk = None, Fe3Fet_Liq = Non
     matching_df = matching_df.reset_index(drop = True)
     matching_df = matching_df.dropna(subset = ['T_C'])
 
-    idx_add = np.where(matching_df['h'] == 0.0)[0]
     
     T_C = np.array(T_C)
     P_bar = np.array(P_bar)
 
-    T_C = np.round(np.concatenate((T_C, matching_df.loc[idx_add,'T_C'].values)),2)
-    P_bar = np.round(np.concatenate((P_bar, matching_df.loc[idx_add,'P_bar'].values)),2)
+    if "MELTS" in Model:
+        idx_add = np.where(matching_df['h'] == 0.0)[0]
 
-    matching_df = matching_df.loc[np.where(matching_df['h'] != 0.0)[0],:]
-    matching_df = matching_df.reset_index(drop = True)
+        T_C = np.round(np.concatenate((T_C, matching_df.loc[idx_add,'T_C'].values)),2)
+        P_bar = np.round(np.concatenate((P_bar, matching_df.loc[idx_add,'P_bar'].values)),2)
+
+        matching_df = matching_df.loc[np.where(matching_df['h'] != 0.0)[0],:]
+        matching_df = matching_df.reset_index(drop = True)
 
     New = phaseDiagram_calc(cores = multiprocessing.cpu_count(), 
                             Model = Model, bulk = bulk, T_C = T_C, P_bar = P_bar, Fe3Fet_init = Fe3Fet_Liq, H2O_init = H2O_Liq, CO2_init = CO2_Liq, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, i_max = i_max, grid = False)
