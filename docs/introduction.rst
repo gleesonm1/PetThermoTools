@@ -4,6 +4,10 @@ Introduction
 
 Welome to PetThermoTools - an open-source Python3 tool for performing phase equilibria calculations using the MELTS or Holland et al. (2018) thermodynamic models.
 
+Important Notice
+===========
+As of v0.2.48 the package is hosted on PyPI as `petthermotools` (i.e., all lower case). This means that installation and import of PetThermoTools must ALWAYS use the lower case name.
+
 Using MELTS
 ===========
 

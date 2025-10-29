@@ -4,7 +4,7 @@ from shapely.geometry import MultiPoint, Point, Polygon
 import matplotlib.pyplot as plt
 from matplotlib import cm
 import matplotlib.colors as mc
-from PetThermoTools.GenFuncs import *
+from petthermotools.GenFuncs import *
 from itertools import zip_longest
 
 def harker(Results=None, x_axis="MgO", y_axis=("SiO2", "TiO2", "Al2O3", "Cr2O3", "FeOt", "CaO", "Na2O", "K2O"),
@@ -23,7 +23,7 @@ def harker(Results=None, x_axis="MgO", y_axis=("SiO2", "TiO2", "Al2O3", "Cr2O3",
     y_axis : tuple of str, default=("SiO2","TiO2","Al2O3","Cr2O3","FeOt","CaO","Na2O","K2O")
         Oxides to plot on y-axes. Plotted in groups of three per row.
     phase : str, default="liquid1"
-        Phase to plot (must be in PetThermoTools.GenFuncs.Names).
+        Phase to plot (must be in petthermotools.GenFuncs.Names).
     line_color : str or None, optional
         Line color. If None, uses matplotlib's default cycle.
     data : pd.DataFrame, dict of DataFrames, or str, optional

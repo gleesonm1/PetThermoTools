@@ -1,9 +1,9 @@
 import numpy as np
 import pandas as pd
-from PetThermoTools.GenFuncs import *
-from PetThermoTools.Plotting import *
-from PetThermoTools.Path import *
-from PetThermoTools.MELTS import *
+from petthermotools.GenFuncs import *
+from petthermotools.Plotting import *
+from petthermotools.Path import *
+from petthermotools.MELTS import *
 import multiprocessing
 from multiprocessing import Queue
 from multiprocessing import Process

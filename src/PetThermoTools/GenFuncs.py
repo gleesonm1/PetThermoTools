@@ -1,12 +1,12 @@
 import numpy as np
 import pandas as pd
-# from PetThermoTools.Barom import *
-# from PetThermoTools.Liq import *
-# from PetThermoTools.Crystallise import *
-from PetThermoTools.MELTS import *
-from PetThermoTools.Compositions import *
+# from petthermotools.Barom import *
+# from petthermotools.Liq import *
+# from petthermotools.Crystallise import *
+from petthermotools.MELTS import *
+from petthermotools.Compositions import *
 # try:
-#     from PetThermoTools.Holland import *
+#     from petthermotools.Holland import *
 # except:
 #     pass
 

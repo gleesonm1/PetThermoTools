@@ -6,11 +6,11 @@ try:
 except:
     print('Thermobar cannot be imported, please check your numpy version')
 
-from PetThermoTools.GenFuncs import *
-from PetThermoTools.Plotting import *
-from PetThermoTools.Liq import *
-from PetThermoTools.MELTS import *
-from PetThermoTools.Path import *
+from petthermotools.GenFuncs import *
+from petthermotools.Plotting import *
+from petthermotools.Liq import *
+from petthermotools.MELTS import *
+from petthermotools.Path import *
 import multiprocessing
 from multiprocessing import Queue
 from multiprocessing import Process

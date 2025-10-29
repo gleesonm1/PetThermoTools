@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from PetThermoTools.Path import *
+from petthermotools.Path import *
 
 def isobaric_crystallisation(Model = None, bulk = None, Frac_solid = None, Frac_fluid = None, 
                              T_path_C = None, T_start_C = None, T_end_C = None, dt_C = None, 

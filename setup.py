@@ -5,7 +5,7 @@ from os import path
 
 this_directory = path.abspath(path.dirname(__file__))
 
-with open(path.join(this_directory, 'src', 'PetThermoTools', '_version.py'), encoding='utf-8') as f:
+with open(path.join(this_directory, 'src', 'petthermotools', '_version.py'), encoding='utf-8') as f:
     exec(f.read())
 
 with open(path.join(this_directory, 'README.md'), encoding='utf-8') as f:
@@ -17,12 +17,12 @@ setup(
     version=__version__,
     author="Matthew Gleeson",
     author_email="gleesonm@berkeley.edu",
-    description="PetThermoTools",
+    description="petthermotools",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/gleesonm1/PetThermoTools",
     package_dir={'': 'src'},  # Optional
-    packages=find_packages(where='src'),  # Required
+    packages=find_packages(where='src', include=['petthermotools', 'petthermotools.*']),  # Required
 
     package_data={
         # Include all pickle files
