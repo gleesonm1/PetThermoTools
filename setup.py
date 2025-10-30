@@ -35,7 +35,8 @@ setup(
             'scikit-learn',
             'scipy',
             'tinynumpy',
-            'shapely'
+            'shapely',
+            'tqdm'
             ],
 
     classifiers=[
