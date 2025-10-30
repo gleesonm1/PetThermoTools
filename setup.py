@@ -35,9 +35,7 @@ setup(
             'scikit-learn',
             'scipy',
             'tinynumpy',
-            'shapely',
-            'Thermobar',
-            'pyMelt'
+            'shapely'
             ],
 
     classifiers=[
