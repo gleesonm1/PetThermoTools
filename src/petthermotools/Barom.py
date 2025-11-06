@@ -22,6 +22,7 @@ import numpy as np
 import pandas as pd
 import multiprocessing
 import time
+from pathlib import Path
 
 def path_4_saturation_multi(q, index, *, Model = None, P_bar = None, comp = None, T_maxdrop_C = None, dt_C = None, T_initial_C = None, fO2_buffer = None,
                       fO2_offset = 0.0, H2O_Sat = None, phases = None):
@@ -77,6 +78,13 @@ def path_4_saturation_multi(q, index, *, Model = None, P_bar = None, comp = None
             melts = MELTSdynamic(4)
     else:
         from juliacall import Main as jl, convert as jlconvert
+        env_dir = Path.home() / ".petthermotools_julia_env"
+        jl_env_path = env_dir.as_posix()
+
+        jl.seval(f"""
+            import Pkg
+            Pkg.activate("{jl_env_path}")
+            """)
 
         jl.seval("using MAGEMinCalc")
 
@@ -278,6 +286,13 @@ def mineral_cosaturation(Model="MELTSv1.0.2", cores=int(np.floor(multiprocessing
                 melts = MELTSdynamic(4)
         else:
             from juliacall import Main as jl, convert as jlconvert
+            env_dir = Path.home() / ".petthermotools_julia_env"
+            jl_env_path = env_dir.as_posix()
+
+            jl.seval(f"""
+                import Pkg
+                Pkg.activate("{jl_env_path}")
+                """)
 
             jl.seval("using MAGEMinCalc")
 

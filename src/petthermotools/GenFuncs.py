@@ -54,6 +54,11 @@ Names_MM = {'liq1': '_Liq',
             'liq3': '_Liq3',
             'liq4': '_Liq4'}
 
+def activate_petthermotools_env():
+    env_dir = Path.home() / ".petthermotools_julia_env"
+    jl_env_path = env_dir.as_posix()
+    jl.seval(f'import Pkg; Pkg.activate("{jl_env_path}")')
+
 def to_float(x):
     if x is None:
         return None

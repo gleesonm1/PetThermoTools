@@ -9,6 +9,7 @@ from multiprocessing import Process
 import time
 import sys
 from tqdm.notebook import tqdm, trange
+from pathlib import Path
 
 try:
     shell = get_ipython().__class__.__name__
@@ -492,6 +493,13 @@ def path_multi(q, index, *, Model = None, comp = None, Frac_solid = None, Frac_f
             melts = MELTSdynamic(4)
     else:
         from juliacall import Main as jl
+        env_dir = Path.home() / ".petthermotools_julia_env"
+        jl_env_path = env_dir.as_posix()
+
+        jl.seval(f"""
+            import Pkg
+            Pkg.activate("{jl_env_path}")
+            """)
 
         # import os, pathlib
 
@@ -746,6 +754,13 @@ def path(q, index, *, Model = None, comp = None, Frac_solid = None, Frac_fluid =
 
         # import julia
         from juliacall import Main as jl, convert as jlconvert
+        env_dir = Path.home() / ".petthermotools_julia_env"
+        jl_env_path = env_dir.as_posix()
+
+        jl.seval(f"""
+            import Pkg
+            Pkg.activate("{jl_env_path}")
+            """)
         # import os, pathlib
 
         # # 1. Where to install Julia + MAGEMin environment (user home dir, persistent)

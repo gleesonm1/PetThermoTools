@@ -10,6 +10,7 @@ from multiprocessing import Process
 import time
 import sys
 from tqdm.notebook import tqdm, trange
+from pathlib import Path
 
 def AdiabaticDecompressionMelting(cores = multiprocessing.cpu_count(), 
                                   Model = "pMELTS", bulk = "KLB-1", comp_lith_1 = None, 
@@ -216,6 +217,13 @@ def AdiabaticDecompressionMelting(cores = multiprocessing.cpu_count(),
                 T_start_C = None
 
             from juliacall import Main as jl, convert as jlconvert
+            env_dir = Path.home() / ".petthermotools_julia_env"
+            jl_env_path = env_dir.as_posix()
+
+            jl.seval(f"""
+                import Pkg
+                Pkg.activate("{jl_env_path}")
+                """)
 
             if not jl.seval("isdefined(Main, :MAGEMinCalc)"):
                 jl.seval("using MAGEMinCalc")
@@ -344,6 +352,13 @@ def AdiabaticMelt(q, index, *, Model = None, comp_1 = None, comp_2 = None, comp_
             T_start_C = None
 
         from juliacall import Main as jl, convert as jlconvert
+        env_dir = Path.home() / ".petthermotools_julia_env"
+        jl_env_path = env_dir.as_posix()
+
+        jl.seval(f"""
+            import Pkg
+            Pkg.activate("{jl_env_path}")
+            """)
 
         # import os, pathlib
 

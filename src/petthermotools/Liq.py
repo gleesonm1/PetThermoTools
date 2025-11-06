@@ -11,6 +11,7 @@ import multiprocessing
 from multiprocessing import Queue
 from multiprocessing import Process
 from tqdm.notebook import tqdm, trange
+from pathlib import Path
 
 def equilibrate_multi(cores = None, Model = None, bulk = None, T_C = None, P_bar = None, 
                       Fe3Fet_Liq = None, H2O_Liq = None, CO2_Liq = None, fO2_buffer = None, fO2_offset = None,
@@ -384,6 +385,13 @@ def equilibrate_multi(cores = None, Model = None, bulk = None, T_C = None, P_bar
         return Combined
     else:
         from juliacall import Main as jl, convert as jlconvert
+        env_dir = Path.home() / ".petthermotools_julia_env"
+        jl_env_path = env_dir.as_posix()
+
+        jl.seval(f"""
+            import Pkg
+            Pkg.activate("{jl_env_path}")
+            """)
 
         jl.seval("using MAGEMinCalc")
 
