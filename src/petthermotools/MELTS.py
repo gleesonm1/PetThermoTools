@@ -1068,7 +1068,9 @@ def path_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid = None, 
 
     Results['Conditions'] = pd.DataFrame(data = np.zeros((length, 8)), columns = ['temperature', 'pressure', 'h', 's', 'v', 'mass', 'dvdp', 'logfO2'])
     Results['liquid1'] = pd.DataFrame(data = np.zeros((length, 14)), columns = ['SiO2', 'TiO2', 'Al2O3', 'Fe2O3', 'Cr2O3', 'FeO', 'MnO', 'MgO', 'CaO', 'Na2O', 'K2O', 'P2O5', 'H2O', 'CO2'])
-    Results['liquid1_prop'] = pd.DataFrame(data = np.zeros((length, 4)), columns = ['h', 'mass', 'v', 'rho'])
+    Results['liquid1_prop'] = pd.DataFrame(data = np.zeros((length, 4)), columns = ['h', 'mass', 'v', 'rho']) # ['g', 'h', 's', 'v', 'cp', 'dcpdt',
+                # 'dvdt', 'dpdt', 'd2vdt2', 'd2vdtdp',
+                # 'd2vdp2', 'molwt', 'rho', 'mass']) #['h', 'mass', 'v', 'rho'])
 
     for i in range(length):
         if i == 1:
@@ -1190,7 +1192,9 @@ def path_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid = None, 
         for phase in PhaseList:
             if phase not in list(Results.keys()):
                 Results[phase] = pd.DataFrame(data = np.zeros((length, 14)), columns = ['SiO2', 'TiO2', 'Al2O3', 'Fe2O3', 'Cr2O3', 'FeO', 'MnO', 'MgO', 'CaO', 'Na2O', 'K2O', 'P2O5', 'H2O', 'CO2'])
-                Results[phase + '_prop'] = pd.DataFrame(data = np.zeros((length, 4)), columns = ['h', 'mass', 'v', 'rho'])
+                Results[phase + '_prop'] = pd.DataFrame(data = np.zeros((length, 14)), columns = ['g', 'h', 's', 'v', 'cp', 'dcpdt',
+                                                                                                'dvdt', 'dpdt', 'd2vdt2', 'd2vdtdp',
+                                                                                                'd2vdp2', 'molwt', 'rho', 'mass']) #['h', 'mass', 'v', 'rho'])
 
             if phase in list(Results.keys()):
                 for el in Results[phase]:
