@@ -86,10 +86,8 @@ bibtex_reference_style = 'author_year'
 # `env.config.html_context['var']`.
 nbsphinx_prolog = r"""
 {% set docname = 'docs' / env.doc2path(env.docname, base=None) %}
-{% set git_ref = 'master' if not env.config.html_context['READTHEDOCS'] else
-                 env.config.html_context['github_version']
-                 if '.' not in env.config.html_context['current_version'] else
-                 'v' + env.config.release %}
+{% set git_ref = 'main' %}
+
 .. raw:: html
 
     <div class="admonition note">
