@@ -6,6 +6,8 @@ import site
 import sysconfig
 import importlib
 from pathlib import Path
+import platform
+from petthermotools.Melting import *
 
 def install_MAGEMinCalc():
     '''
@@ -116,50 +118,74 @@ def test_MAGEMinCalc():
 
     """)
 
-def install_alphaMELTS(chip="Linux", file_location = None, admin = False):
+def install_alphaMELTS(file_location = None, admin = False):
     '''
     Download, extract, and add the alphaMELTS for Python files to the Python path.
     Either store the files in the current working directory or (using the file_location kwarg) add them to a location of your choice.
-    chip - string variable with 4 options based on OS and chip type.
-        'Apple' - M1, M2, M3 etc. chips for MacOS
-        'Intel4Mac' - older MacBooks etc. that use an Intel chip.
-        'Windows' - windows operating systems
-        'Linux' - Default.
     '''
     try:
         from meltsdynamic import meltsdynamic
         print('alphaMELTS already installed and added to Python path')
         return
     except:
-        # URL of the file
-        if chip == "Apple":
-            url = "https://github.com/magmasource/alphaMELTS/releases/download/v2.3.1/alphamelts-py-2.3.1-macos-arm64.zip"
-        elif chip == "Intel4Mac":
-            url = "https://github.com/magmasource/alphaMELTS/releases/download/v2.3.1/alphamelts-py-2.3.1-macos-x86_64.zip"
-        elif chip == "Windows":
-            url = "https://github.com/magmasource/alphaMELTS/releases/download/v2.3.1/alphamelts-py-2.3.1-win64.zip"
+        system = platform.system()
+        machine = platform.machine().lower()
+        version = "2.3.1"
+
+        base_url = f"https://github.com/magmasource/alphaMELTS/releases/download/v{version}"
+
+        # macOS
+        if system == "Darwin":
+            if "arm" in machine:  # Apple Silicon
+                url = f"{base_url}/alphamelts-py-{version}-macos-arm64.zip"
+            else:  # Intel Mac
+                url = f"{base_url}/alphamelts-py-{version}-macos-x86_64.zip"
+
+        # Windows
+        elif system == "Windows":
+            url = f"{base_url}/alphamelts-py-{version}-win64.zip"
+
+        # Linux (default fallback)
+        elif system == "Linux":
+            url = f"{base_url}/alphamelts-py-{version}-linux.zip"
+
         else:
-            url = "https://github.com/magmasource/alphaMELTS/releases/download/v2.3.1/alphamelts-py-2.3.1-linux.zip"
+            raise OSError(f"Unsupported system: {system}")
+        
+        # if chip == "Apple":
+        #     url = "https://github.com/magmasource/alphaMELTS/releases/download/v2.3.1/alphamelts-py-2.3.1-macos-arm64.zip"
+        # elif chip == "Intel4Mac":
+        #     url = "https://github.com/magmasource/alphaMELTS/releases/download/v2.3.1/alphamelts-py-2.3.1-macos-x86_64.zip"
+        # elif chip == "Windows":
+        #     url = "https://github.com/magmasource/alphaMELTS/releases/download/v2.3.1/alphamelts-py-2.3.1-win64.zip"
+        # else:
+        #     url = "https://github.com/magmasource/alphaMELTS/releases/download/v2.3.1/alphamelts-py-2.3.1-linux.zip"
 
         # Path to save the file
         if file_location is None:
-            if chip == "Apple":
-                zip_path = "alphamelts-py-2.3.1-macos-arm64.zip"
-            elif chip == "Intel4Mac":
-                zip_path = "alphamelts-py-2.3.1-macos-x86_64.zip"
-            elif chip == "Windows":
+            if system == "Darwin":
+                if "arm" in machine:
+                    zip_path = "alphamelts-py-2.3.1-macos-arm64.zip"
+                else:
+                    zip_path = "alphamelts-py-2.3.1-macos-x86_64.zip"
+            elif system == "Windows":
                 zip_path = "alphamelts-py-2.3.1-win64.zip"
-            else:
+            elif system == "Linux":
                 zip_path = "alphamelts-py-2.3.1-linux.zip"
-        else:
-            if chip == "Apple":
-                zip_path = file_location + "alphamelts-py-2.3.1-macos-arm64.zip"
-            elif chip == "Intel4Mac":
-                zip_path = file_location + "alphamelts-py-2.3.1-macos-x86_64.zip"
-            elif chip == "Windows":
-                zip_path = file_location + "alphamelts-py-2.3.1-win64.zip"
             else:
+                raise OSError(f"Unsupporte system: {system}")
+        else:
+            if system == "Darwin":
+                if "arm" in machine:
+                    zip_path = file_location + "alphamelts-py-2.3.1-macos-arm64.zip"
+                else:
+                    zip_path = file_location + "alphamelts-py-2.3.1-macos-x86_64.zip"
+            elif system == "Windows":
+                zip_path = file_location + "alphamelts-py-2.3.1-win64.zip"
+            elif system == "Linux":
                 zip_path = file_location + "alphamelts-py-2.3.1-linux.zip"
+            else:
+                raise OSError(f"Unsupporte system: {system}")
 
 
         # Download the file with error handling
@@ -190,14 +216,17 @@ def install_alphaMELTS(chip="Linux", file_location = None, admin = False):
             if file_location is None:
                 sys.path.append(os.path.join(extract_path, zip_path[:-4]))
             else:
-                if chip == "Apple":
-                    sys.path.append(os.path.join(extract_path,"alphamelts-py-2.3.1-macos-arm64"))
-                elif chip == "Intel4Mac":
-                    sys.path.append(os.path.join(extract_path,"alphamelts-py-2.3.1-macos-x86_64"))
-                elif chip == "Windows":
+                if system == "Darwin":
+                    if "arm" in machine:
+                        sys.path.append(os.path.join(extract_path,"alphamelts-py-2.3.1-macos-arm64"))
+                    else:
+                        sys.path.append(os.path.join(extract_path,"alphamelts-py-2.3.1-macos-x86_64"))
+                elif system == "Windows":
                     sys.path.append(os.path.join(extract_path,"alphamelts-py-2.3.1-win64"))
-                else:
+                elif system == "Linux":
                     sys.path.append(os.path.join(extract_path,"alphamelts-py-2.3.1-linux"))
+                else:
+                    raise OSError(f"Unsupporte system: {system}")
 
             try:
                 import meltsdynamic
@@ -254,7 +283,7 @@ def install_alphaMELTS(chip="Linux", file_location = None, admin = False):
 
         return
     
-def update_alphaMELTS_path(chip="Linux", file_location = None, admin = False):
+def update_alphaMELTS_path(file_location = None, admin = False):
     '''
     Update the alphaMELTS for Python files to the latest version. \n Please keep an eye of the alphaMELTS Discord Server for information on when a new version of alphaMELTS for Python is published.
     '''
@@ -281,6 +310,36 @@ def update_alphaMELTS_path(chip="Linux", file_location = None, admin = False):
         else:
             print(f".pth file not found: {pth_file_path}")
 
-    install_alphaMELTS(chip=chip, file_location = file_location, admin = admin)
+    install_alphaMELTS(file_location = file_location, admin = admin)
 
     return
+
+def remove_alphaMELTS_path():
+    site_packages_dirs = site.getsitepackages()
+
+    for dir in site_packages_dirs:
+        print(f"Checking {dir} for .pth files")
+        for file in os.listdir(dir):
+            if file.endswith(".pth"):
+                print(f"Found .pth file: {file}")
+
+    # Path to your site-packages directory (adjust as needed)
+    site_packages_path = site.getsitepackages()[0]
+
+    # Path to the .pth file
+    pth_file_path = os.path.join(site_packages_path, "my_MELTS_path.pth")
+
+    # Remove the .pth file
+    if os.path.exists(pth_file_path):
+        os.remove(pth_file_path)
+        print(f"Removed {pth_file_path}")
+    else:
+        print(f".pth file not found: {pth_file_path}")
+
+def test_alphaMELTS(path = None):
+    if path is not None:
+        sys.path.append(path)
+    
+    Res = AdiabaticDecompressionMelting(Model = "pMELTS")
+
+    print(Res['liquid1'])

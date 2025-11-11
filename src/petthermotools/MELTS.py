@@ -63,6 +63,7 @@ def equilibrate_MELTS(Model = None, P_bar = None, T_C = None, comp = None,
     # Props = ['mass', 'rho']
 
     Results['Conditions'] = pd.DataFrame(data = np.zeros((length, 7)), columns = ['temperature', 'pressure', 'g', 'h', 's', 'v', 'dvdp'])
+    properties = ['g', 'h', 's', 'v', 'cp', 'dcpdt', 'dvdt', 'dpdt', 'd2vdt2', 'd2vdtdp', 'd2vdp2', 'molwt', 'rho', 'mass']
     # Results['liquid1'] = pd.DataFrame(data = np.zeros((length+1, 14)), columns = ['SiO2', 'TiO2', 'Al2O3', 'Fe2O3', 'Cr2O3', 'FeO', 'MnO', 'MgO', 'CaO', 'Na2O', 'K2O', 'P2O5', 'H2O', 'CO2'])
     # Results['liquid1_prop'] = pd.DataFrame(data = np.zeros((length+1, 4)), columns = ['h', 'mass', 'v', 'rho'])
 
@@ -71,13 +72,19 @@ def equilibrate_MELTS(Model = None, P_bar = None, T_C = None, comp = None,
     except:
         return Results
 
-    SolidPhase = melts.engine.solidNames
-    if SolidPhase is not None:
-        PhaseList = ['liquid1'] + SolidPhase
-    else:
-        PhaseList = ['liquid1']
+    # SolidPhase = melts.engine.solidNames
+    # if SolidPhase is not None:
+    #     PhaseList = ['liquid1'] + SolidPhase
+    # else:
+    #     PhaseList = ['liquid1']
 
-    print(PhaseList)
+    
+    if melts.engine.getProperty('mass', 'liquid1') > 0.0:
+        PhaseList = ['liquid1'] + melts.engine.solidNames
+    else:
+        PhaseList = melts.engine.solidNames
+
+    # print(PhaseList)
 
     for R in Results['Conditions']:
         if R == 'temperature':
@@ -88,6 +95,29 @@ def equilibrate_MELTS(Model = None, P_bar = None, T_C = None, comp = None,
             Results['Conditions'].loc[0,R] = melts.engine.getProperty(R, 'bulk')
 
     for phase in PhaseList:
+        if phase not in list(Results.keys()):
+            thermo_properties = []
+            endmembers = melts.endMemberFormulas[phase[:-1]]
+            thermo = ['activity', 'activity0', 'mu','mu0', 'X']
+            for iii in thermo:
+                for jjj in endmembers:
+                    thermo_properties.append(iii+'_'+jjj)
+
+            Results[phase] = pd.DataFrame(data = np.zeros((length, 14)), columns = ['SiO2', 'TiO2', 'Al2O3', 'Fe2O3', 'Cr2O3', 'FeO', 'MnO', 'MgO', 'CaO', 'Na2O', 'K2O', 'P2O5', 'H2O', 'CO2'])
+            Results[phase + '_prop'] = pd.DataFrame(data = np.zeros((length, len(properties) + len(thermo_properties))), columns = properties + thermo_properties) #['h', 'mass', 'v', 'rho'])
+
+        if phase in list(Results.keys()):
+            for el in Results[phase]:
+                Results[phase].loc[0,el] = melts.engine.getProperty('dispComposition', phase, el)
+                
+            melts.engine.calcEndMemberProperties(phase, melts.engine.getProperty('dispComposition', phase))
+
+            for pr in Results[phase + '_prop']:
+                if pr in properties:
+                    Results[phase + '_prop'].loc[0,pr] = melts.engine.getProperty(pr, phase)
+                else:
+                    # melts.engine.calcPhaseProperties(phase[:-1], melts.engine.getProperty('dispComposition', phase))
+                    Results[phase + '_prop'].loc[0, pr] = melts.engine.getProperty(pr.split('_')[0], phase, pr.split('_')[1])
         # melts.engine.calcPhaseProperties(phase, melts.engine.dispComposition[phase])
         # melts.engine.calcEndMemberProperties(phase, melts.engine.dispComposition[phase])
 
@@ -102,15 +132,15 @@ def equilibrate_MELTS(Model = None, P_bar = None, T_C = None, comp = None,
         #         thermodynamics[idx] = melts.engine.getProperty(i, phase, j)
         #         idx = idx + 1
 
-        if phase not in list(Results.keys()):
-            Results[phase] = pd.DataFrame(data = np.zeros((length, 14)), columns = ['SiO2', 'TiO2', 'Al2O3', 'Fe2O3', 'Cr2O3', 'FeO', 'MnO', 'MgO', 'CaO', 'Na2O', 'K2O', 'P2O5', 'H2O', 'CO2'])
-            Results[phase + '_prop'] = pd.DataFrame(data = np.zeros((length, 5)), columns = ['g','h', 'mass', 'v', 'rho'])
+        # if phase not in list(Results.keys()):
+        #     Results[phase] = pd.DataFrame(data = np.zeros((length, 14)), columns = ['SiO2', 'TiO2', 'Al2O3', 'Fe2O3', 'Cr2O3', 'FeO', 'MnO', 'MgO', 'CaO', 'Na2O', 'K2O', 'P2O5', 'H2O', 'CO2'])
+        #     Results[phase + '_prop'] = pd.DataFrame(data = np.zeros((length, 5)), columns = ['g','h', 'mass', 'v', 'rho'])
 
-        for el in Results[phase]:
-            Results[phase].loc[0,el] = melts.engine.getProperty('dispComposition', phase, el)
+        # for el in Results[phase]:
+        #     Results[phase].loc[0,el] = melts.engine.getProperty('dispComposition', phase, el)
 
-        for pr in Results[phase + '_prop']:
-            Results[phase + '_prop'][pr].loc[0] = melts.engine.getProperty(pr, phase)
+        # for pr in Results[phase + '_prop']:
+        #     Results[phase + '_prop'][pr].loc[0] = melts.engine.getProperty(pr, phase)
 
         # df1 = Results[phase + '_prop']
         # df2 = pd.DataFrame(columns=thermo_properties, data=thermodynamics)
@@ -818,7 +848,8 @@ def path_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid = None, 
                P_bar = None, P_path_bar = None, P_start_bar = None, P_end_bar = None, dp_bar = None, 
                isenthalpic = None, isentropic = None, isochoric = None, find_liquidus = None, 
                fO2_buffer = None, fO2_offset = None, fluid_sat = None, Crystallinity_limit = None, 
-               Suppress = ['rutile', 'tridymite'], Suppress_except=False, phases=None, trail = None, melts = None):
+               Suppress = ['rutile', 'tridymite'], Suppress_except=False, phases=None, trail = None, melts = None,
+               thermo_prop = True):
     '''
     Perform a single  calculation in MELTS. WARNING! Running this function directly from the command land/jupyter notebook will initiate the MELTS C library in the main python process. Once this has been initiated the MELTS C library cannot be re-loaded and failures during the calculation will likely cause a terminal error to occur.
 
@@ -1067,10 +1098,11 @@ def path_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid = None, 
         length = len(P)
 
     Results['Conditions'] = pd.DataFrame(data = np.zeros((length, 8)), columns = ['temperature', 'pressure', 'h', 's', 'v', 'mass', 'dvdp', 'logfO2'])
-    Results['liquid1'] = pd.DataFrame(data = np.zeros((length, 14)), columns = ['SiO2', 'TiO2', 'Al2O3', 'Fe2O3', 'Cr2O3', 'FeO', 'MnO', 'MgO', 'CaO', 'Na2O', 'K2O', 'P2O5', 'H2O', 'CO2'])
-    Results['liquid1_prop'] = pd.DataFrame(data = np.zeros((length, 4)), columns = ['h', 'mass', 'v', 'rho']) # ['g', 'h', 's', 'v', 'cp', 'dcpdt',
-                # 'dvdt', 'dpdt', 'd2vdt2', 'd2vdtdp',
-                # 'd2vdp2', 'molwt', 'rho', 'mass']) #['h', 'mass', 'v', 'rho'])
+    properties = ['g', 'h', 's', 'v', 'cp', 'dcpdt', 'dvdt', 'dpdt', 'd2vdt2', 'd2vdtdp', 'd2vdp2', 'molwt', 'rho', 'mass']
+    # Results['liquid1'] = pd.DataFrame(data = np.zeros((length, 14)), columns = ['SiO2', 'TiO2', 'Al2O3', 'Fe2O3', 'Cr2O3', 'FeO', 'MnO', 'MgO', 'CaO', 'Na2O', 'K2O', 'P2O5', 'H2O', 'CO2'])
+    # Results['liquid1_prop'] = pd.DataFrame(data = np.zeros((length, 14)), columns = ['g', 'h', 's', 'v', 'cp', 'dcpdt',
+    #             'dvdt', 'dpdt', 'd2vdt2', 'd2vdtdp',
+    #             'd2vdp2', 'molwt', 'rho', 'mass']) #['h', 'mass', 'v', 'rho'])
 
     for i in range(length):
         if i == 1:
@@ -1182,7 +1214,10 @@ def path_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid = None, 
                 Results['Conditions'][R].loc[i] = melts.engine.getProperty(R, 'bulk')
 
         try:
-            PhaseList = ['liquid1'] + melts.engine.solidNames
+            if melts.engine.getProperty('mass', 'liquid1') > 0.0:
+                PhaseList = ['liquid1'] + melts.engine.solidNames
+            else:
+                PhaseList = melts.engine.solidNames
         except:
             if trail is not None:
                 trail = False
@@ -1191,17 +1226,27 @@ def path_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid = None, 
 
         for phase in PhaseList:
             if phase not in list(Results.keys()):
+                thermo_properties = []
+                endmembers = melts.endMemberFormulas[phase[:-1]]
+                thermo = ['activity', 'activity0', 'mu','mu0', 'X']
+                for iii in thermo:
+                    for jjj in endmembers:
+                        thermo_properties.append(iii+'_'+jjj)
+
                 Results[phase] = pd.DataFrame(data = np.zeros((length, 14)), columns = ['SiO2', 'TiO2', 'Al2O3', 'Fe2O3', 'Cr2O3', 'FeO', 'MnO', 'MgO', 'CaO', 'Na2O', 'K2O', 'P2O5', 'H2O', 'CO2'])
-                Results[phase + '_prop'] = pd.DataFrame(data = np.zeros((length, 14)), columns = ['g', 'h', 's', 'v', 'cp', 'dcpdt',
-                                                                                                'dvdt', 'dpdt', 'd2vdt2', 'd2vdtdp',
-                                                                                                'd2vdp2', 'molwt', 'rho', 'mass']) #['h', 'mass', 'v', 'rho'])
+                Results[phase + '_prop'] = pd.DataFrame(data = np.zeros((length, len(properties) + len(thermo_properties))), columns = properties + thermo_properties) #['h', 'mass', 'v', 'rho'])
 
             if phase in list(Results.keys()):
+                melts.engine.calcEndMemberProperties(phase, melts.engine.getProperty('dispComposition', phase))
                 for el in Results[phase]:
                     Results[phase][el].loc[i] = melts.engine.getProperty('dispComposition', phase, el)
 
                 for pr in Results[phase + '_prop']:
-                    Results[phase + '_prop'][pr].loc[i] = melts.engine.getProperty(pr, phase)
+                    if pr in properties:
+                        Results[phase + '_prop'][pr].loc[i] = melts.engine.getProperty(pr, phase)
+                    else:
+                        # melts.engine.calcPhaseProperties(phase[:-1], melts.engine.getProperty('dispComposition', phase))
+                        Results[phase + '_prop'].loc[i, pr] = melts.engine.getProperty(pr.split('_')[0], phase, pr.split('_')[1])
 
         if Crystallinity_limit is not None:
             Volume = 0
@@ -1224,7 +1269,8 @@ def path_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid = None, 
             if ll == len(phases):
                 break
 
-        melts = melts.addNodeAfter()
+        if i != length - 1:
+            melts = melts.addNodeAfter()
 
     
     if trail is not None:
