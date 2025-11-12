@@ -3,93 +3,44 @@ YouTube Tutorials
 #################
 .. contents::
 
-Subscribe to `PetThermoTools on youtube <https://www.youtube.com/channel/UC3J8Lj6Yv_87nvdjjKKcG0g>`_ to get notified when we create new tutorial videos. Or watch tutorials below.
+Subscribe to `PetThermoTools on youtube <https://www.youtube.com/@PetThermoTools>`_ to get notified when we create new tutorial videos. Or watch tutorials below.
 
-We recommend readers go through the associated notebooks for each of their tutorials in their own time to read the detailed descriptions. These videos are only an introductory guide! Files available from: https://github.com/PennyWieser/PetThermoTools. Click the green "Code" button in the top right, then "download zip", unzip, and open the "Examples" folder. Or you can download the files directly from this website.
+We recommend readers go through the associated notebooks for each of their tutorials in their own time to read the detailed descriptions. 
+These videos are only an introductory guide! Files available from: https://github.com/gleesonm1/PetThermoTools, and also on read the docs: https://petthermotools.readthedocs.io/en/latest/ 
 
 
-Why did we develop PetThermoTools
+Why did we develop PetThermoTools?
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 A short introduction to the motivation behind developing PetThermoTools
 
-.. raw:: html
+Coming soon!
 
-    <iframe width="560" height="315" src="https://www.youtube.com/embed/HkmHEMscV6I" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
----------
-
-
-
-
-
-Example PetThermoTools calculation for a Petrolog3 fractionation path
+Installation help
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-This video shows how to perform SCSS and SCAS calculations for a Petrolog3 fractionation path
+This video walks you through how to install PetThermoTools on MAC
 
 .. raw:: html
-
-    <iframe width="560" height="315" src="https://www.youtube.com/embed/MOQTw_6praE" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+    <iframe width="560" height="315" src="https://www.youtube.com/embed/yHNiX8P7xXw?si=mNHmrpKU772H7zIu" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
 ---------
 
-Integrating PetThermoTools with PetThermoTools
+Example fractional crystallization calculation
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-This video shows how to integrate MELTS calculations and SCSS calculations in a single Jupyter Notebook.
+This video shows how to perform a fractional crystallization calculation and compare it to measured melt inclusion and matrix glass data 
 
 .. raw:: html
 
-    <iframe width="560" height="315" src="https://www.youtube.com/embed/CJTl09zMnjE" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+    <iframe width="560" height="315" src="https://www.youtube.com/embed/5bN-mNSh-H0?si=4wJpayll-kAnveil" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
 ---------
 
-
-Accounting for presence of both S species (2- and 6+)
+Example degassing calculation
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-This video shows how to correct modelled SCSS and SCAS values into total S contents
+This video shows how to track volatile and melt chemistry during degassing.
 
 .. raw:: html
 
-    <iframe width="560" height="315" src="https://www.youtube.com/embed/CC0vpA_Xqcs" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
----------
-
-Modelling Mantle Melting
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-This video shows how to model Cu and Ba behavoir during mantle melting in the presence of different amounts of sulfur.
-
-.. raw:: html
-
-    <iframe width="560" height="315" src="https://www.youtube.com/embed/AwK2TfGFkYI" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
+    <iframe width="560" height="315" src="https://www.youtube.com/embed/5p1CxClyju8?si=84AUFradAGfsFucS" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
 ---------
 
 
-Monte Carlo Simulations 1
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-This video gives an introduction to how to perform Monte Carlo simulations in PetThermoTools
-
-.. raw:: html
-
-    <iframe width="560" height="315" src="https://www.youtube.com/embed/kpTxGvGTSCI" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
----------
-
-Monte Carlo Simulations 2
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-This video shows a real life example, propagating uncertainty in calculated S6/ST for Muth and Wallace (2021)
-
-.. raw:: html
-
-    <iframe width="560" height="315" src="https://www.youtube.com/embed/5YUKIx3op9w" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
----------
 
 
-Other useful things
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-This video shows how to plot the calibration datasets for different SCSS and SCAS models, and your data in comparison
-
-.. raw:: html
-
-    <iframe width="560" height="315" src="https://www.youtube.com/embed/Z_JIFL3myW8" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
----------
-
-This video shows how to calculate KD using Kiseeva et al. (2015) and Brenan (2015)
-
-.. raw:: html
-
-    <iframe width="560" height="315" src="https://www.youtube.com/embed/KSdy9HFKIvw" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
----------
