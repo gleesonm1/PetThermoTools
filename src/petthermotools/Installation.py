@@ -7,7 +7,8 @@ import sysconfig
 import importlib
 from pathlib import Path
 import platform
-from petthermotools.Melting import *
+from petthermotools.Path_wrappers import *
+from petthermotools.Compositions import *
 
 def install_MAGEMinCalc():
     '''
@@ -282,39 +283,10 @@ def install_alphaMELTS(file_location = None, admin = False):
                   sys.path.append(r"{custom_path}") """)
 
         return
-    
-def update_alphaMELTS_path(file_location = None, admin = False):
-    '''
-    Update the alphaMELTS for Python files to the latest version. \n Please keep an eye of the alphaMELTS Discord Server for information on when a new version of alphaMELTS for Python is published.
-    '''
-    if admin:
-        print('Please note this does not remove the previously downloaded alphaMELTS files. That has to be done manually. \n This function simply removes the Python path to those files so that you can install/update to a new version of alphaMELTS for Python.')
-        site_packages_dirs = site.getsitepackages()
 
-        for dir in site_packages_dirs:
-            print(f"Checking {dir} for .pth files")
-            for file in os.listdir(dir):
-                if file.endswith(".pth"):
-                    print(f"Found .pth file: {file}")
-
-        # Path to your site-packages directory (adjust as needed)
-        site_packages_path = site.getsitepackages()[0]
-
-        # Path to the .pth file
-        pth_file_path = os.path.join(site_packages_path, "my_MELTS_path.pth")
-
-        # Remove the .pth file
-        if os.path.exists(pth_file_path):
-            os.remove(pth_file_path)
-            print(f"Removed {pth_file_path}")
-        else:
-            print(f".pth file not found: {pth_file_path}")
-
-    install_alphaMELTS(file_location = file_location, admin = admin)
-
-    return
 
 def remove_alphaMELTS_path():
+    print('Please note this does not remove the previously downloaded alphaMELTS files. That has to be done manually. \n This function simply removes the Python path to those files so that you can install/update to a new version of alphaMELTS for Python.')
     site_packages_dirs = site.getsitepackages()
 
     for dir in site_packages_dirs:
@@ -324,22 +296,46 @@ def remove_alphaMELTS_path():
                 print(f"Found .pth file: {file}")
 
     # Path to your site-packages directory (adjust as needed)
-    site_packages_path = site.getsitepackages()[0]
+    site_packages_path = site.getsitepackages()
 
-    # Path to the .pth file
-    pth_file_path = os.path.join(site_packages_path, "my_MELTS_path.pth")
+    fail = True
+    for i in range(len(site_packages_path)):
+        # Path to the .pth file
+        pth_file_path = os.path.join(site_packages_path[i], "my_MELTS_path.pth")
 
-    # Remove the .pth file
-    if os.path.exists(pth_file_path):
-        os.remove(pth_file_path)
-        print(f"Removed {pth_file_path}")
-    else:
-        print(f".pth file not found: {pth_file_path}")
+        # Remove the .pth file
+        if os.path.exists(pth_file_path):
+            os.remove(pth_file_path)
+            fail = False
+            print(f"Removed {pth_file_path}")
+            break
+    
+    if fail:
+        print(f"Unable to locate {pth_file_path}")
+
+def update_alphaMELTS_path(file_location = None, admin = True):
+    '''
+    Update the alphaMELTS for Python files to the latest version. \n Please keep an eye of the alphaMELTS Discord Server for information on when a new version of alphaMELTS for Python is published.
+    '''
+    if admin:
+        remove_alphaMELTS_path()
+
+    install_alphaMELTS(file_location = file_location, admin = admin)
+
+    return
 
 def test_alphaMELTS(path = None):
     if path is not None:
         sys.path.append(path)
+
+    bulk = Compositions['G2']
     
-    Res = AdiabaticDecompressionMelting(Model = "pMELTS")
+    Res = isobaric_crystallisation(Model = "MELTSv1.0.2",
+                                   bulk = bulk,
+                                   P_bar = 2000, 
+                                   T_end_C = 1100.0,
+                                   dt_C = 5.0,
+                                   find_liquidus = True,
+                                   H2O_init = 0.2)
 
     print(Res['liquid1'])

@@ -158,6 +158,11 @@ def AdiabaticDecompressionMelting(cores = multiprocessing.cpu_count(),
     # perform calculation if only 1 calculation is specified
     if One == 1:
         if "MELTS" in Model or "pyMelt" in Model:
+            try:
+                import pyMelt as m 
+            except ImportError:
+                raise RuntimeError('You havent installed pyMelt or there is an error when importing pyMelt. pyMelt is currently required to estimate the starting point for the melting calculations. Try running %pip install pyMelt')
+            
             p = Process(target = AdiabaticMelt, args = (q, 1),
                         kwargs = {'Model': Model, 'comp_1': comp_1, 'comp_2': comp_2, 'comp_3': comp_3,
                                 'Tp_C': Tp_C, 'Tp_Method': Tp_Method, 'P_path_bar': P_path_bar, 
@@ -335,16 +340,17 @@ def AdiabaticMelt(q, index, *, Model = None, comp_1 = None, comp_2 = None, comp_
         return
 
     else:
-        try:
-            import pyMelt as m
-            Lithologies = {'KLB-1': m.lithologies.matthews.klb1(),
-                        'KG1': m.lithologies.matthews.kg1(),
-                        'G2': m.lithologies.matthews.eclogite(),
-                        'hz': m.lithologies.shorttle.harzburgite()}
-        except ImportError:
-            raise RuntimeError('You havent installed pyMelt or there is an error when importing pyMelt. pyMelt is currently required to estimate the starting point for the melting calculations.')
-
         if Tp_Method == "pyMelt":
+            try:
+                import pyMelt as m
+                Lithologies = {'KLB-1': m.lithologies.matthews.klb1(),
+                            'KG1': m.lithologies.matthews.kg1(),
+                            'G2': m.lithologies.matthews.eclogite(),
+                            'hz': m.lithologies.shorttle.harzburgite()}
+            except ImportError:
+                raise RuntimeError('You havent installed pyMelt or there is an error when importing pyMelt. pyMelt is currently required to estimate the starting point for the melting calculations.')
+
+        
             lz = m.lithologies.matthews.klb1()
             mantle = m.mantle([lz], [1], ['Lz'])
             T_start_C = mantle.adiabat(P_start_bar/10000.0, Tp_C)
