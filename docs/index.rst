@@ -14,23 +14,19 @@ Welcome to PetThermoTools's documentation!
    Installation/InstallationScript
    Installation/MAGEMin_PythonCall
    available_functions_pdf
+   youtube
 
-.. importing_data
+.. toctree::
+   :maxdepth: 2
+   :caption: Narrated You Tube videos
 
+   youtube
 
+.. toctree::
+   :maxdepth: 2
+   :caption: Melt liquidus temperature
 
-
-.. .. toctree::
-..    :maxdepth: 2
-..    :caption: Narrated YouTube Videos
-
-..    youtube
-
-.. .. toctree::
-..    :maxdepth: 2
-..    :caption: Melt liquidus temperature
-
-..    Examples/LiquidusTests/LiquidusTest
+   Examples/LiquidusTests/LiquidusTest
 
 
 .. toctree::
@@ -75,67 +71,6 @@ Welcome to PetThermoTools's documentation!
    :caption: Updates and Version Information
 
    Changelog 
-
-
-
-
-
-
-
-.. .. toctree::
-..    :maxdepth: 2
-..    :caption: Integrating SCSS modelling, MI, Sulfide Chemistry
-
-..    Examples/Sulf_Evolution_During_FC/Sulfide_sat_magma_evolution_Iceland
-
-
-
-.. .. toctree::
-..    :maxdepth: 2
-..    :caption: Mantle Melting
-
-..    Examples/Mantle_Melting_Lee_Wieser/Simple_Melting_Cu_S_Ba
-..    Examples/Mantle_Melting_Lee_Wieser/Complex_melt_changing_SCSS
-
-
-
-.. .. toctree::
-..    :maxdepth: 2
-..    :caption: S6+ corrections
-
-..    Examples/S6_S2_Corrections/S6_S2_Corrections_Nash_Jugo_Kleinsasser
-..    Examples/S6_S2_Corrections/CS6_S6ST_Correction
-
-.. .. toctree::
-..    :maxdepth: 2
-..    :caption: Monte Carlo Simulations
-
-..    Examples/Monte_Carlo_Simulations/Propagating_error
-..    Examples/S6_S2_Corrections/CalcS6ST_Muth
-
-
-
-.. .. toctree::
-..    :maxdepth: 2
-..    :caption: Other useful functions
-
-
-..    Examples/Other_Useful_Functions/Calculating_KDs_Kiseeva
-..    Examples/Other_Useful_Functions/Converting_S_values
-..    Examples/Other_Useful_Functions/Plotting_Cali_Datasets
-..    Examples/S_isotope_Fractionation_Models/Frac_factors
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
