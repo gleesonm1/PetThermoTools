@@ -14,7 +14,7 @@ Welcome to PetThermoTools's documentation!
    Installation/InstallationScript
    Installation/MAGEMin_PythonCall
    available_functions_pdf
-   youtube
+   
 
 .. toctree::
    :maxdepth: 2
@@ -39,13 +39,13 @@ Welcome to PetThermoTools's documentation!
 
 .. toctree::
    :maxdepth: 2
-   :caption: Crystallisation calculations
+   :caption: Decompression Calculations
 
    Examples/DecompressionTests/StHelens_decompress_simple
 
 .. toctree::
    :maxdepth: 2
-   :caption: Phase Diagram calcualtions
+   :caption: Phase Diagram calculations
 
    Examples/PhaseDiagrams/PhaseDiagram_example
    Examples/PhaseDiagrams/GalapagosGabbros
