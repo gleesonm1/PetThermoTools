@@ -29,7 +29,7 @@ def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid 
                Fe3Fet_init = None, Fe3Fet_Liq = None, H2O_init = None, H2O_Liq = None, CO2_init = None, CO2_Liq = None, 
                isenthalpic = None, isentropic = None, isochoric = None, find_liquidus = None, 
                fO2_buffer = None, fO2_offset = None, 
-               Print_suppress = None, fluid_sat = None, Crystallinity_limit = None, Combined = None,
+               Print_suppress = None, fluid_sat = False, Crystallinity_limit = None, Combined = None,
                label = None, timeout = None, print_label = True, Suppress = ['rutile', 'tridymite'], Suppress_except=False,
                multi_processing = True):
     """
@@ -421,7 +421,7 @@ def path_multi(q, index, *, Model = None, comp = None, Frac_solid = None, Frac_f
             T_C = None, T_path_C = None, T_start_C = None, T_end_C = None, dt_C = None,
             P_bar = None, P_path_bar = None, P_start_bar = None, P_end_bar = None, dp_bar = None,
             isenthalpic = None, isentropic = None, isochoric = None, find_liquidus = None,
-            fO2_buffer = None, fO2_offset = None, fluid_sat = None, Crystallinity_limit = None,
+            fO2_buffer = None, fO2_offset = None, fluid_sat = False, Crystallinity_limit = None,
             Suppress = None, Suppress_except = None, trail = True):
     """
     Worker function to run a subset of crystallization/decompression models (MELTS or MAGEMin) in parallel.

@@ -109,7 +109,7 @@ def equilibrate_MELTS(Model = None, P_bar = None, T_C = None, comp = None,
         if phase in list(Results.keys()):
             for el in Results[phase]:
                 Results[phase].loc[0,el] = melts.engine.getProperty('dispComposition', phase, el)
-                
+
             melts.engine.calcEndMemberProperties(phase, melts.engine.getProperty('dispComposition', phase))
 
             for pr in Results[phase + '_prop']:
@@ -847,9 +847,9 @@ def path_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid = None, 
                T_C = None, T_path_C = None, T_start_C = None, T_end_C = None, dt_C = None, T_maxdrop_C = None,
                P_bar = None, P_path_bar = None, P_start_bar = None, P_end_bar = None, dp_bar = None, 
                isenthalpic = None, isentropic = None, isochoric = None, find_liquidus = None, 
-               fO2_buffer = None, fO2_offset = None, fluid_sat = None, Crystallinity_limit = None, 
+               fO2_buffer = None, fO2_offset = None, fluid_sat = False, Crystallinity_limit = None, 
                Suppress = ['rutile', 'tridymite'], Suppress_except=False, phases=None, trail = None, melts = None,
-               thermo_prop = True):
+               thermo_prop = False):
     '''
     Perform a single  calculation in MELTS. WARNING! Running this function directly from the command land/jupyter notebook will initiate the MELTS C library in the main python process. Once this has been initiated the MELTS C library cannot be re-loaded and failures during the calculation will likely cause a terminal error to occur.
 
@@ -1088,7 +1088,7 @@ def path_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid = None, 
     melts = melts.addNodeAfter()
     melts.engine.setBulkComposition(bulk)
 
-    if fluid_sat is not None:
+    if fluid_sat:
         melts.engine.setSystemProperties("Mode", "Fractionate Fluids")
         melts.engine.calcEquilibriumState(1,1)
 
@@ -1234,19 +1234,25 @@ def path_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid = None, 
                         thermo_properties.append(iii+'_'+jjj)
 
                 Results[phase] = pd.DataFrame(data = np.zeros((length, 14)), columns = ['SiO2', 'TiO2', 'Al2O3', 'Fe2O3', 'Cr2O3', 'FeO', 'MnO', 'MgO', 'CaO', 'Na2O', 'K2O', 'P2O5', 'H2O', 'CO2'])
-                Results[phase + '_prop'] = pd.DataFrame(data = np.zeros((length, len(properties) + len(thermo_properties))), columns = properties + thermo_properties) #['h', 'mass', 'v', 'rho'])
+                if thermo_prop:
+                    Results[phase + '_prop'] = pd.DataFrame(data = np.zeros((length, len(properties) + len(thermo_properties))), columns = properties + thermo_properties) #['h', 'mass', 'v', 'rho'])
+                else:
+
+                    Results[phase + '_prop'] = pd.DataFrame(data = np.zeros((length, len(properties))), columns = properties)
 
             if phase in list(Results.keys()):
-                melts.engine.calcEndMemberProperties(phase, melts.engine.getProperty('dispComposition', phase))
                 for el in Results[phase]:
                     Results[phase][el].loc[i] = melts.engine.getProperty('dispComposition', phase, el)
 
+                if thermo_prop:
+                    melts.engine.calcEndMemberProperties(phase, melts.engine.getProperty('dispComposition', phase))
                 for pr in Results[phase + '_prop']:
                     if pr in properties:
                         Results[phase + '_prop'][pr].loc[i] = melts.engine.getProperty(pr, phase)
                     else:
                         # melts.engine.calcPhaseProperties(phase[:-1], melts.engine.getProperty('dispComposition', phase))
-                        Results[phase + '_prop'].loc[i, pr] = melts.engine.getProperty(pr.split('_')[0], phase, pr.split('_')[1])
+                        if thermo_prop:
+                            Results[phase + '_prop'].loc[i, pr] = melts.engine.getProperty(pr.split('_')[0], phase, pr.split('_')[1])
 
         if Crystallinity_limit is not None:
             Volume = 0

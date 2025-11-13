@@ -7,7 +7,7 @@ def isobaric_crystallisation(Model = None, bulk = None, Frac_solid = None, Frac_
                              P_bar = None, Fe3Fet_init = None, Fe3Fet_Liq = None, 
                              H2O_init = None, CO2_init = None, H2O_Liq = None, CO2_Liq = None, 
                              find_liquidus = None, fO2_buffer = None, fO2_offset = None, 
-                             label = None, Crystallinity_limit = None, fluid_sat = None, timeout = None,
+                             label = None, Crystallinity_limit = None, fluid_sat = False, timeout = None,
                              Suppress = ['rutile', 'tridymite'], Suppress_except=False,
                              multi_processing = True):
     """
@@ -97,7 +97,7 @@ def isochoric_crystallisation(Model = None, bulk = None, Frac_solid = None, Frac
                               P_bar = None, Fe3Fet_init = None, Fe3Fet_Liq = None, 
                               H2O_init = None, H2O_Liq = None, CO2_init = None, CO2_Liq = None, 
                               find_liquidus = None, fO2_buffer = None, fO2_offset = None, 
-                              label = None, Crystallinity_limit = None, fluid_sat = None, 
+                              label = None, Crystallinity_limit = None, fluid_sat = False, 
                               timeout = None, Suppress = ['rutile', 'tridymite'], Suppress_except=False,
                               multi_processing = True):
     """
@@ -184,8 +184,8 @@ def polybaric_crystallisation_path(Model = None, bulk = None, Frac_solid = None,
                                    P_path_bar = None, P_start_bar = None, P_end_bar = None, dp_bar = None, 
                                    Fe3Fet_init = None, Fe3Fet_Liq = None, H2O_init = None, H2O_Liq = None, 
                                    CO2_init = None, CO2_Liq = None, find_liquidus = None, fO2_buffer = None, 
-                                   fO2_offset = None, label = None, timeout = None, multi_processing=True,
-                                   Suppress = ['rutile', 'tridymite'], Suppress_except=False, multiprocessing = True):
+                                   fO2_offset = None, label = None, timeout = None, multi_processing=True, fluid_sat = False,
+                                   Suppress = ['rutile', 'tridymite'], Suppress_except=False):
     """
     Simulates polybaric crystallization along a user-specified P-T path using the `multi_path` function.
 
@@ -266,7 +266,7 @@ def polybaric_crystallisation_path(Model = None, bulk = None, Frac_solid = None,
                          Fe3Fet_init = Fe3Fet_init, H2O_init = H2O_init, CO2_init = CO2_init, find_liquidus = find_liquidus, 
                          fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, 
                          label = label, timeout = timeout, Suppress = Suppress, Suppress_except=Suppress_except,
-                         multi_processing=multi_processing)
+                         multi_processing=multi_processing, fluid_sat=fluid_sat)
 
     return Results
 
@@ -276,7 +276,7 @@ def polybaric_crystallisation_onestep(Model = None, bulk = None, Frac_solid = No
                                       H2O_Liq = None, H2O_init = None, CO2_Liq = None, CO2_init = None, 
                                       find_liquidus = None, fO2_buffer = None, fO2_offset = None, label = None, 
                                       timeout = None, multi_processing = True, Suppress = ['rutile', 'tridymite'], 
-                                      Suppress_except=False,multiprocessing=True):
+                                      Suppress_except=False, fluid_sat = False):
     """
     Simulates polybaric crystallization along a user-specified P-T path using the `multi_path` function.
 
@@ -384,7 +384,7 @@ def polybaric_crystallisation_onestep(Model = None, bulk = None, Frac_solid = No
                         H2O_init = H2O_init, CO2_init = CO2_init, 
                         find_liquidus = find_liquidus, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, 
                         label = label, timeout = timeout, Suppress = Suppress, Suppress_except=Suppress_except,
-                        multi_processing=multi_processing)
+                        multi_processing=multi_processing, fluid_sat=fluid_sat)
 
     return Results
 
@@ -478,7 +478,7 @@ def isothermal_decompression(Model = None, bulk = None, Frac_solid = None, Frac_
                              T_C = None, P_start_bar = None, P_end_bar = None, dp_bar = None, 
                              Fe3Fet_Liq = None, Fe3Fet_init = None, H2O_Liq = None, H2O_init = None,
                              CO2_Liq = None, CO2_init = None, find_liquidus = None, fO2_buffer = None, 
-                             fO2_offset = None, label = None, timeout = None, fluid_sat = None, 
+                             fO2_offset = None, label = None, timeout = None, fluid_sat = False, 
                              Suppress = ['rutile', 'tridymite'], Suppress_except=False, multi_processing = True):
     """
     Simulates isothermal (constant-temperature) decompression calculations using the `multi_path` function.
@@ -560,7 +560,7 @@ def isentropic_decompression(Model = None, bulk = None, Frac_solid = None, Frac_
                              T_C = None, P_start_bar = None, P_end_bar = None, dp_bar = None, 
                              Fe3Fet_Liq = None, Fe3Fet_init = None, H2O_Liq = None, H2O_init = None,
                              CO2_Liq = None, CO2_init = None, find_liquidus = None, fO2_buffer = None, 
-                             fO2_offset = None, label = None, timeout = None, fluid_sat = None, 
+                             fO2_offset = None, label = None, timeout = None, fluid_sat = False, 
                              Suppress = ['rutile', 'tridymite'], Suppress_except=False, multi_processing = True):
     """
     Simulates isentropic (constant-entropy) decompression calculations using the `multi_path` function.
