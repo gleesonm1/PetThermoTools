@@ -16,7 +16,7 @@ def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar
                       P_min_bar = None, P_max_bar = None, P_num = None, 
                       Fe3Fet_Liq = None, H2O_Liq = None, CO2_Liq = None,
                       Fe3Fet_init = None, H2O_init = None, CO2_init = None,
-                      fO2_buffer = None, fO2_offset = None, i_max = 25, grid = True, refine = None):
+                      fO2_buffer = None, fO2_offset = None, i_max = 15, grid = True, refine = None):
     """
     Calculate phase diagrams for igneous systems (rocks and magmas).
 
@@ -281,7 +281,7 @@ def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar
                 Combined = Combined.sort_values(['T_C', 'P_bar'])
                 Combined = Combined.reset_index(drop = True)
                 if "MELTS" in Model:
-                    Combined = Combined.dropna(subset = ['h'])
+                    Combined = Combined.dropna(subset = ['h_J'])
 
         Res_flat = np.array([Combined['T_C'], Combined['P_bar']]).T
         new_flat = flat[np.where((flat[:, None] == Res_flat).all(-1).any(-1) == False)]
@@ -325,7 +325,7 @@ def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar
     return Combined
 
 def phaseDiagram_refine(Data = None, Model = None, bulk = None, Fe3Fet_Liq = None, H2O_Liq = None, CO2_Liq = None, 
-                        fO2_buffer = None, fO2_offset = None, i_max = 150):
+                        fO2_buffer = None, fO2_offset = None, i_max = 15):
     
     Combined = Data.copy()
 
@@ -342,7 +342,7 @@ def phaseDiagram_refine(Data = None, Model = None, bulk = None, Fe3Fet_Liq = Non
 
     # extract the phase information from the current dataframe
     def combine_headers(row):
-        return ','.join([col[5:] for col in Combined.loc[:, Combined.columns.str.contains('mass')].columns if row[col] > 0.0 and not pd.isna(row[col])])
+        return ','.join([col[5:] for col in Combined.loc[:, Combined.columns.str.contains('mass_g')].columns if row[col] > 0.0 and not pd.isna(row[col])])
 
     # Apply the function to each row
     Combined['PhaseResults'] = Combined.apply(combine_headers, axis=1).tolist()
@@ -460,12 +460,12 @@ def phaseDiagram_refine(Data = None, Model = None, bulk = None, Fe3Fet_Liq = Non
     P_bar = np.array(P_bar)
 
     if "MELTS" in Model:
-        idx_add = np.where(matching_df['h'] == 0.0)[0]
+        idx_add = np.where(matching_df['h_J'] == 0.0)[0]
 
         T_C = np.round(np.concatenate((T_C, matching_df.loc[idx_add,'T_C'].values)),2)
         P_bar = np.round(np.concatenate((P_bar, matching_df.loc[idx_add,'P_bar'].values)),2)
 
-        matching_df = matching_df.loc[np.where(matching_df['h'] != 0.0)[0],:]
+        matching_df = matching_df.loc[np.where(matching_df['h_J'] != 0.0)[0],:]
         matching_df = matching_df.reset_index(drop = True)
 
     New = phaseDiagram_calc(cores = multiprocessing.cpu_count(), 

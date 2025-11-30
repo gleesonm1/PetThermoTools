@@ -7,6 +7,19 @@ import matplotlib.colors as mc
 from petthermotools.GenFuncs import *
 from itertools import zip_longest
 
+labelling = {'SiO2': 'SiO$_2$',
+             'TiO2': 'TiO$_2$',
+             'Al2O3': 'Al$_2$O$_3$',
+             'FeOt': 'FeO$_t$',
+             'Cr2O3': 'Cr$_2$O$_3$',
+             'MnO': 'MnO',
+             'MgO': 'MgO',
+             'CaO': 'CaO',
+             'Na2O': 'Na$_2$O',
+             'K2O': 'K$_2$O',
+             'H2O': 'H$_2$O',
+             'CO2': 'CO$_2$'}
+
 def harker(Results=None, x_axis="MgO", y_axis=("SiO2", "TiO2", "Al2O3", "Cr2O3", "FeOt", "CaO", "Na2O", "K2O"),
     phase="liquid1", line_color=None, data=None, d_color=None, d_marker=None,
     legend=True, legend_loc=None,
@@ -188,7 +201,7 @@ def harker(Results=None, x_axis="MgO", y_axis=("SiO2", "TiO2", "Al2O3", "Cr2O3",
                             linestyle="None",
                             label=k)
 
-        ax.set(xlabel=x_var, ylabel=y_var)
+        ax.set(xlabel=labelling[x_var], ylabel=labelling[y_var])
 
         if xlim:
             ax.set_xlim(xlim)
@@ -612,7 +625,9 @@ def phase_plot(Results, x_axis = None, y_axis = None, cmap = "Reds"):
             vals = Mass[col].values
 
             # --- Legend label mapping ---
-            label = Names.get(p, Names_MM.get(p, p))[1:]
+            label = Names.get(p, Names_MM.get(p, p))
+            if '_' in label:
+                label = label[1:]
 
             if horizontal:
                 a.fill_betweenx(coord, Stop, Stop + vals, color=PhaseColors[p], alpha=0.75, lw=0, label=label)
@@ -646,10 +661,10 @@ def phase_plot(Results, x_axis = None, y_axis = None, cmap = "Reds"):
     axes = []
 
     if 'All' in Results.keys():
-        fig, axes = makeplot(Results['Mass'], Results['All'])
+        fig, axes = makeplot(Results['mass_g'], Results['All'])
     else:
         for val in Results.keys():
-            f, a = makeplot(Results[val]['Mass'],
+            f, a = makeplot(Results[val]['mass_g'],
                             Results[val]['All'],
                             title = val)
             fig.append(f)
@@ -686,7 +701,7 @@ def plot_phaseDiagram(Model = "Holland", Combined = None, P_units = "bar", T_uni
         A plot of the phase diagram.
     '''
     Results = Combined.copy()
-    Phases = list(Results.columns[Results.columns.str.contains('mass')])
+    Phases = list(Results.columns[(Results.columns.str.contains('mass_g') & (~Results.columns.str.contains('%')) & (~Results.columns.str.contains('mole')))])
 
     if T_C is None:
         T_C = np.unique(Results['T_C'])
@@ -698,9 +713,9 @@ def plot_phaseDiagram(Model = "Holland", Combined = None, P_units = "bar", T_uni
         for p in Phases:
             if (~np.isnan(Results[p].loc[i])) & (Results[p].loc[i] > 0.0):
                 if A[i] is None:
-                    A[i] = p[5:]
+                    A[i] = p[7:]
                 else:
-                    A[i] = A[i] + ' ' + p[5:]
+                    A[i] = A[i] + ' ' + p[7:]
 
         if A[i] is None:
             A[i] = "None"

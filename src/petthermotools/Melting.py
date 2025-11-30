@@ -197,9 +197,9 @@ def AdiabaticDecompressionMelting(cores = multiprocessing.cpu_count(),
                     Results = stich(Results, Model = Model)
 
                     # make mass relative to 1 at the start of the model
-                    Tot = Results['Mass'].sum(axis = 1)[0]
-                    Results['Mass'] = Results['Mass']/Tot
-                    Results['All'].loc[:,Results['All'].columns.str.contains('mass')] = Results['All'].loc[:,Results['All'].columns.str.contains('mass')]/Tot
+                    Tot = Results['mass_g'].sum(axis = 1)[0]
+                    Results['mass_frac'] = Results['mass_g']/Tot
+                    Results['All'].loc[:,Results['All'].columns.str.contains('mass_g_')] = Results['All'].loc[:,Results['All'].columns.str.contains('mass_g_')]/Tot
                 return Results
             else:
                 Results = {}
@@ -251,9 +251,9 @@ def AdiabaticDecompressionMelting(cores = multiprocessing.cpu_count(),
             Results = stich(Results, Model = Model)
 
             # make mass relative to 1 at the start of the model
-            Tot = Results['Mass'].sum(axis = 1)[0]
-            Results['Mass'] = Results['Mass']/Tot
-            Results['All'].loc[:,Results['All'].columns.str.contains('mass')] = Results['All'].loc[:,Results['All'].columns.str.contains('mass')]/Tot
+            Tot = Results['mass_g'].sum(axis = 1)[0]
+            Results['mass_frac'] = Results['mass_g']/Tot
+            Results['All'].loc[:,Results['All'].columns.str.contains('mass_g_')] = Results['All'].loc[:,Results['All'].columns.str.contains('mass_g_')]/Tot
 
     return Results
 

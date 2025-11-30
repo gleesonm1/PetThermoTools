@@ -16,6 +16,8 @@ def equilibrate_MELTS(Model = None, P_bar = None, T_C = None, comp = None,
         else:
             bulk = [comp['SiO2_Liq'], comp['TiO2_Liq'], comp['Al2O3_Liq'], comp['Fe3Fet_Liq']*((159.59/2)/71.844)*comp['FeOt_Liq'], comp['Cr2O3_Liq'], (1 - comp['Fe3Fet_Liq'])*comp['FeOt_Liq'], comp['MnO_Liq'], comp['MgO_Liq'], 0.0, 0.0, comp['CaO_Liq'], comp['Na2O_Liq'], comp['K2O_Liq'], comp['P2O5_Liq'], comp['H2O_Liq'], comp['CO2_Liq'], 0.0, 0.0, 0.0]
 
+    bulk = list(100*np.array(bulk)/np.sum(bulk))
+
     from meltsdynamic import MELTSdynamic
     if Model is None or Model == "MELTSv1.0.2":
         melts = MELTSdynamic(1)
@@ -62,7 +64,7 @@ def equilibrate_MELTS(Model = None, P_bar = None, T_C = None, comp = None,
     # PhaseProp = {}
     # Props = ['mass', 'rho']
 
-    Results['Conditions'] = pd.DataFrame(data = np.zeros((length, 7)), columns = ['temperature', 'pressure', 'g', 'h', 's', 'v', 'dvdp'])
+    Results['Conditions'] = pd.DataFrame(data = np.zeros((length, 8)), columns = ['temperature', 'pressure', 'h', 's', 'v', 'mass', 'dvdp', 'logfO2'])
     properties = ['g', 'h', 's', 'v', 'cp', 'dcpdt', 'dvdt', 'dpdt', 'd2vdt2', 'd2vdtdp', 'd2vdp2', 'molwt', 'rho', 'mass']
     # Results['liquid1'] = pd.DataFrame(data = np.zeros((length+1, 14)), columns = ['SiO2', 'TiO2', 'Al2O3', 'Fe2O3', 'Cr2O3', 'FeO', 'MnO', 'MgO', 'CaO', 'Na2O', 'K2O', 'P2O5', 'H2O', 'CO2'])
     # Results['liquid1_prop'] = pd.DataFrame(data = np.zeros((length+1, 4)), columns = ['h', 'mass', 'v', 'rho'])
@@ -91,6 +93,11 @@ def equilibrate_MELTS(Model = None, P_bar = None, T_C = None, comp = None,
             Results['Conditions'].loc[0,R] = melts.engine.temperature
         elif R == 'pressure':
             Results['Conditions'].loc[0,R] = melts.engine.pressure
+        elif R == 'logfO2':
+            try:
+                Results['Conditions'].loc[0,R] = melts.engine.getProperty(R)
+            except:
+                Results['Conditions'].loc[0,R] = np.nan
         else:
             Results['Conditions'].loc[0,R] = melts.engine.getProperty(R, 'bulk')
 
@@ -167,6 +174,8 @@ def findCO2_MELTS(P_bar = None, Model = None, T_C = None, comp = None, melts = N
             bulk = comp.copy()
         else:
             bulk = [comp['SiO2_Liq'], comp['TiO2_Liq'], comp['Al2O3_Liq'], comp['Fe3Fet_Liq']*((159.59/2)/71.844)*comp['FeOt_Liq'], comp['Cr2O3_Liq'], (1 - comp['Fe3Fet_Liq'])*comp['FeOt_Liq'], comp['MnO_Liq'], comp['MgO_Liq'], 0.0, 0.0, comp['CaO_Liq'], comp['Na2O_Liq'], comp['K2O_Liq'], comp['P2O5_Liq'], comp['H2O_Liq'], comp['CO2_Liq'], 0.0, 0.0, 0.0]
+
+    bulk = list(100*np.array(bulk)/np.sum(bulk))
 
     from meltsdynamic import MELTSdynamic
 
@@ -389,7 +398,8 @@ def findLiq_MELTS(P_bar = None, Model = None, T_C_init = None, comp = None, melt
             bulk = comp
         else:
             bulk = [comp['SiO2_Liq'], comp['TiO2_Liq'], comp['Al2O3_Liq'], comp['Fe3Fet_Liq']*((159.59/2)/71.844)*comp['FeOt_Liq'], comp['Cr2O3_Liq'], (1 - comp['Fe3Fet_Liq'])*comp['FeOt_Liq'], comp['MnO_Liq'], comp['MgO_Liq'], 0.0, 0.0, comp['CaO_Liq'], comp['Na2O_Liq'], comp['K2O_Liq'], comp['P2O5_Liq'], comp['H2O_Liq'], comp['CO2_Liq'], 0.0, 0.0, 0.0]
-
+    
+    bulk = list(100*np.array(bulk)/np.sum(bulk))
     # pd.DataFrame(data = np.zeros((1, 17)), columns = ['T_Liq', 'liquidus_phase', 'fluid_saturated', 'SiO2', 'TiO2', 'Al2O3', 'Fe2O3', 'Cr2O3', 'FeO', 'MnO', 'MgO', 'CaO', 'Na2O', 'K2O', 'P2O5', 'H2O', 'CO2'])
 
     # T_Liq = 0
@@ -1031,8 +1041,6 @@ def path_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid = None, 
     elif T_path_C is not None:
         T = T_path_C
 
-    
-
     if P_path_bar is None:
         if P_end_bar is None and dp_bar is None:
             P = P_start_bar
@@ -1040,11 +1048,6 @@ def path_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid = None, 
             P = np.linspace(P_start_bar, P_end_bar, 1+round((P_start_bar-P_end_bar)/dp_bar))
     elif P_path_bar is not None:
         P = P_path_bar
-
-    print(P_path_bar)
-    print(P_end_bar)
-    print(P_start_bar)
-    print(dp_bar)
 
     if type(P) == np.ndarray and T_end_C is not None and dt_C is None:
         T = np.linspace(T_start_C, T_end_C, len(P))
@@ -1718,8 +1721,10 @@ def AdiabaticDecompressionMelting_MELTS(Model = None, comp = None, Tp_C = None, 
     else:
         P = np.linspace(P_start_bar, P_end_bar, 1+int(round((P_start_bar - P_end_bar)/dp_bar)))
 
-    Results['Conditions'] = pd.DataFrame(data = np.zeros((len(P), 7)), columns = ['temperature', 'pressure', 'h', 's', 'v', 'dvdp', 'logfO2'])
-
+    # Results['Conditions'] = pd.DataFrame(data = np.zeros((len(P), 7)), columns = ['temperature', 'pressure', 'h', 's', 'v', 'dvdp', 'logfO2'])
+    Results['Conditions'] = pd.DataFrame(data = np.zeros((len(P), 8)), columns = ['temperature', 'pressure', 'h', 's', 'v', 'mass', 'dvdp', 'logfO2'])
+    properties = ['g', 'h', 's', 'v', 'cp', 'dcpdt', 'dvdt', 'dpdt', 'd2vdt2', 'd2vdtdp', 'd2vdp2', 'molwt', 'rho', 'mass']
+    
     for k in range(len(P)):
         if k != 0:
             melts = melts.addNodeAfter()
@@ -1799,8 +1804,9 @@ def AdiabaticDecompressionMelting_MELTS(Model = None, comp = None, Tp_C = None, 
         for phase in PhaseList:
             if phase not in list(Results.keys()):
                 Results[phase] = pd.DataFrame(data = np.zeros((len(P), 14)), columns = ['SiO2', 'TiO2', 'Al2O3', 'Fe2O3', 'Cr2O3', 'FeO', 'MnO', 'MgO', 'CaO', 'Na2O', 'K2O', 'P2O5', 'H2O', 'CO2'])
-                Results[phase + '_prop'] = pd.DataFrame(data = np.zeros((len(P), 4)), columns = ['h', 'mass', 'v', 'rho'])
-
+                # Results[phase + '_prop'] = pd.DataFrame(data = np.zeros((len(P), 4)), columns = ['h', 'mass', 'v', 'rho'])
+                Results[phase + '_prop'] = pd.DataFrame(data = np.zeros((len(P), len(properties))), columns = properties)
+                                                        
             if phase in list(Results.keys()):
                 for el in Results[phase]:
                     Results[phase][el].loc[k] = melts.engine.getProperty('dispComposition', phase, el)

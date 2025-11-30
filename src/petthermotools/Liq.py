@@ -13,7 +13,7 @@ from multiprocessing import Process
 from tqdm.notebook import tqdm, trange
 from pathlib import Path
 
-def equilibrate_multi(cores = None, Model = None, bulk = None, T_C = None, P_bar = None, 
+def equilibrate_multi(cores = multiprocessing.cpu_count(), Model = "MELTSv1.0.2", bulk = None, T_C = None, P_bar = None, 
                       Fe3Fet_Liq = None, H2O_Liq = None, CO2_Liq = None, fO2_buffer = None, fO2_offset = None,
                       timeout = None, copy_columns = None, Suppress = None):
 
@@ -44,16 +44,6 @@ def equilibrate_multi(cores = None, Model = None, bulk = None, T_C = None, P_bar
             Warning('alphaMELTS for Python files are not on the python path. \n Please add these files to the path running \n import sys \n sys.path.append(r"insert_your_path_to_melts_here") \n You are looking for the location of the meltsdynamic.py file')
 
     comp = bulk.copy()
-
-    if Model is None:
-        Model = "MELTSv1.0.2"
-
-    # if Model == "Holland":
-    #     import pyMAGEMINcalc as MM
-    #     print('pyMAGEMinCalc version: ' + str(MM.__version__))
-
-    if cores is None:
-        cores = multiprocessing.cpu_count()
 
     # if comp is entered as a pandas series, it must first be converted to a dict
     if type(comp) == pd.core.series.Series:
@@ -382,6 +372,8 @@ def equilibrate_multi(cores = None, Model = None, bulk = None, T_C = None, P_bar
 
         Af_Combined = Af_Combined.add_suffix('_affinity')
         Combined = pd.concat([Combined, Af_Combined], axis = 1)
+
+        Output['Affinity'] = Af_Combined
         return Combined
     else:
         from juliacall import Main as jl, convert as jlconvert
@@ -430,6 +422,145 @@ def equilibrate_multi(cores = None, Model = None, bulk = None, T_C = None, P_bar
                     j = j + 1
 
         return Combined['All']
+
+def multi_equilibrate(q, index, *, Model = None, comp = None,
+            T_C = None, P_bar = None, fO2_buffer = None, fO2_offset = None,
+            Suppress = None, Suppress_except = None, trail = True):
+    """
+    Worker function to run a subset of equilibration models (MELTS or MAGEMin) in parallel.
+
+    This function is intended to be run in a separate process. It takes a set of indices representing model runs,
+    executes them using the appropriate model interface, and returns the results via a multiprocessing queue.
+
+    Parameters
+    ----------
+    q : multiprocessing.Queue
+        Output queue for sending back results.
+    index : list of int
+        Indices of the simulations to be run by this worker.
+    Model : str
+        The thermodynamic model ("MELTSv1.0.2", "MELTSv1.1.0", "MELTSv1.2.0", "pMELTS", or MAGEMin variant: "Green2025" or "Weller2024").
+    comp : dict or pd.DataFrame
+        Starting compositions. Either a single dictionary or a DataFrame with one row per simulation.
+    Frac_solid : bool
+        If True, removes solids at each step.
+    Frac_fluid : bool
+        If True, removes fluids at each step.
+    T_C, T_path_C, T_start_C, T_end_C, dt_C : float or np.ndarray
+        Temperature constraints or paths for each simulation.
+    P_bar, P_path_bar, P_start_bar, P_end_bar, dp_bar : float or np.ndarray
+        Pressure constraints or paths for each simulation.
+    isenthalpic, isentropic, isochoric : bool
+        Apply respective thermodynamic constraints.
+    find_liquidus : bool
+        If True, finds the liquidus temperature before starting.
+    fO2_buffer : str
+        Oxygen fugacity buffer ("FMQ" or "NNO").
+    fO2_offset : float or array
+        Offset from specified fO2 buffer in log units.
+    fluid_sat : bool
+        If True, terminates runs at fluid saturation.
+    Crystallinity_limit : float
+        Ends run when crystallinity exceeds this value.
+    Suppress : list of str
+        Phases to exclude from results.
+    Suppress_except : bool
+        If True, treat `Suppress` as a whitelist.
+    trail : bool
+        If True, include trailing properties from model output.
+
+    Returns
+    -------
+    None
+        The function returns results using `q.put()`:
+        q.put([idx, results])
+        where `idx` is the list of completed indices and `results` is a dictionary of output per run.
+    """
+
+    results = {}
+    idx = []
+
+    if len(index) > 15:
+        index = index[:15]
+    
+    if "MELTS" in Model:
+        from meltsdynamic import MELTSdynamic
+
+        if Model is None or Model == "MELTSv1.0.2":
+            melts = MELTSdynamic(1)
+        elif Model == "pMELTS":
+            melts = MELTSdynamic(2)
+        elif Model == "MELTSv1.1.0":
+            melts = MELTSdynamic(3)
+        elif Model == "MELTSv1.2.0":
+            melts = MELTSdynamic(4)
+    else:
+        from juliacall import Main as jl
+        env_dir = Path.home() / ".petthermotools_julia_env"
+        jl_env_path = env_dir.as_posix()
+
+        jl.seval(f"""
+            import Pkg
+            Pkg.activate("{jl_env_path}")
+            """)
+
+        jl.seval("using MAGEMinCalc")
+
+    for i in index:
+        try:
+            if "MELTS" in Model:
+                if type(comp) == dict:
+                    Results, tr = equilibrate_MELTS(Model = Model, comp = comp, 
+                                            T_C = T_C[i], P_bar = P_bar[i], 
+                                            fO2_buffer = fO2_buffer, fO2_offset = fO2_offset[i], 
+                                            Suppress = Suppress, Suppress_except=Suppress_except, trail = trail, melts = melts)
+                else:
+                    Results, tr = equilibrate_MELTS(Model = Model, comp = comp.loc[i].to_dict(), 
+                                            T_C = T_C[i], P_bar = P_bar[i], 
+                                            fO2_buffer = fO2_buffer, fO2_offset = fO2_offset[i], 
+                                            Suppress = Suppress, Suppress_except=Suppress_except, trail = trail, melts = melts)
+            
+                idx.append(i)
+
+                results[f"Run {i}"] = Results
+
+                if tr is False:
+                    break
+        except:
+            idx.append(i)
+            break
+    
+    if "MELTS" not in Model:
+        jl.seval("using MAGEMinCalc")
+
+        comp['O'] = comp['Fe3Fet_Liq']*(((159.59/2)/71.844)*comp['FeOt_Liq'] - comp['FeOt_Liq'])
+
+        if Model == "Weller2024":
+            bulk = comp[['SiO2_Liq', 'Al2O3_Liq', 'CaO_Liq', 'MgO_Liq', 'FeOt_Liq', 'K2O_Liq', 'Na2O_Liq', 'TiO2_Liq', 'O', 'Cr2O3_Liq']].astype(float).values
+        else:
+            bulk = comp[['SiO2_Liq', 'Al2O3_Liq', 'CaO_Liq', 'MgO_Liq', 'FeOt_Liq', 'K2O_Liq', 'Na2O_Liq', 'TiO2_Liq', 'O', 'Cr2O3_Liq', 'H2O_Liq']].astype(float).values
+
+        print(np.shape(bulk))
+        bulk_jl = jl.seval("collect")(bulk)
+
+        if type(T_C) == np.ndarray:
+            T_C = jl.seval("collect")(T_C)
+        if type(P_bar) == np.ndarray:
+            P_kbar = jl.seval("collect")(P_bar/1000.0)
+        else:
+            P_kbar = P_bar/1000.0
+        if type(fO2_offset) == np.ndarray:
+            fO2_offset = jl.seval("collect")(fO2_offset)
+
+        Output = jl.MAGEMinCalc.equilibrate(bulk = bulk_jl, P_kbar = P_kbar, T_C = T_C, fo2_buffer = fO2_buffer, fo2_offset = fO2_offset, Model = Model)
+        results = dict(Output)
+        # results = stich(Output, Model = Model)
+
+        idx = index
+
+    q.put([idx, results])
+    return
+
 
 def findCO2_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P_bar = None, Fe3Fet_Liq = None, H2O_Liq = None, fO2_buffer = None, fO2_offset = None):
 
@@ -798,7 +929,7 @@ def findLiq_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P
             else:
                 Results, index = qs[0]
 
-        Res = comp_fix(Model = Model, comp = Results)
+        Res = comp_fix(Model = Model, comp = Results, keep_columns=True)
         if type(Res) == dict:
             Res = pd.DataFrame.from_dict(Res, orient = "index").T
 

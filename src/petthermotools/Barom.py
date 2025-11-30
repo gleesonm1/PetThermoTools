@@ -334,7 +334,7 @@ def mineral_cosaturation(Model="MELTSv1.0.2", cores=int(np.floor(multiprocessing
                 Results = dict(Results_df)
                 results[f"Run {i}"] = Results
                 combined_results.update(results)
-
+            
     results = combined_results
 
     Results = stich(Res=results, multi=True, Model=Model)
@@ -346,8 +346,8 @@ def mineral_cosaturation(Model="MELTSv1.0.2", cores=int(np.floor(multiprocessing
         columns = ['P_bar'] + phases + [phases[0] + ' - ' + phases[1], phases[0] + ' - ' + phases[2], phases[1] + ' - ' + phases[2], '3 Phase Saturation']
         for i, r in enumerate(Results.keys()):
             for idx, p in enumerate(phases):
-                if p in Results[r]['Mass'].keys():
-                    arr[i, idx+1] = Results[r]['Conditions'].loc[Results[r]['Mass'][p] > 0.0, 'T_C'].values[0]
+                if p in Results[r]['mass_g'].keys():
+                    arr[i, idx+1] = Results[r]['Conditions'].loc[Results[r]['mass_g'][p] > 0.0, 'T_C'].values[0]
                 else:
                     arr[i, idx + 1] = np.nan
 
@@ -368,8 +368,8 @@ def mineral_cosaturation(Model="MELTSv1.0.2", cores=int(np.floor(multiprocessing
         columns = ['P_bar'] + phases + [phases[0]+' - '+phases[1]]
         for i, r in enumerate(Results.keys()):
             for idx, p in enumerate(phases):
-                if p in Results[r]['Mass'].keys():
-                    arr[i, idx+1] = Results[r]['Conditions'].loc[Results[r]['Mass'][p] > 0.0, 'T_C'].values[0]
+                if p in Results[r]['mass_g'].keys():
+                    arr[i, idx+1] = Results[r]['Conditions'].loc[Results[r]['mass_g'][p] > 0.0, 'T_C'].values[0]
                 else:
                     arr[i, idx + 1] = np.nan
 

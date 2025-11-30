@@ -101,3 +101,8 @@ In all notebooks ptt must now be imported as `import petthermotools`, `import Pe
 Major update to MAGEMinCalc - please use v0.5.0 and MAGEMin_C v2.0.6.
 Phase Diagram code has better optimization and should have less calculation time
 More plotting options added.
+
+Version 0.2.55 (November 2025)
+====================================
+Outputs between MELTS and MAGEMin calculations are now consistent and indicated with correct units.
+Update MAGEMinCalc to v0.5.1 - use `ptt.update_MAGEMinCalc()` function

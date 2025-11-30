@@ -501,17 +501,6 @@ def path_multi(q, index, *, Model = None, comp = None, Frac_solid = None, Frac_f
             Pkg.activate("{jl_env_path}")
             """)
 
-        # import os, pathlib
-
-        # # 1. Where to install Julia + MAGEMin environment (user home dir, persistent)
-        # home = str(pathlib.Path.home())
-        # env_path = os.path.join(home, ".MAGEMinEnv")
-
-        # jl.seval(f"""
-        # import Pkg
-        # Pkg.activate("{env_path}")
-        # """)
-
         jl.seval("using MAGEMinCalc")
 
         
@@ -570,11 +559,6 @@ def path_multi(q, index, *, Model = None, comp = None, Frac_solid = None, Frac_f
                 else:
                     comp_new = comp.loc[i].to_dict()
                     comp_julia = jl.seval("Dict")(comp_new)
-            
-                # Results_df = jl.MAGEMinCalc.path(Model = Model, comp=comp_julia, T_start_C = T_start_C[i], T_end_C = T_end_C[i], dt_C=dt_C,
-                #                                 T_C = T_C[i], T_path_C = T_path_C[i], P_start_bar = P_start_bar[i], P_end_bar = P_end_bar[i],
-                #                                 dp_bar = dp_bar[i], P_bar = P_bar[i], P_path_bar = P_path_bar[i], frac_xtal = Frac_solid,
-                #                                 fo2_buffer = fO2_buffer, fo2_offset = fO2_offset[i], find_liquidus = find_liquidus)
 
                 julia_Suppress = None                
                 if Suppress == ['rutile', 'tridymite']:
