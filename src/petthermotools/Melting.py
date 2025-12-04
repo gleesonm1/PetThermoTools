@@ -291,10 +291,10 @@ def AdiabaticMelt(q, index, *, Model = None, comp_1 = None, comp_2 = None, comp_
         if prop is None:
             mantle = m.mantle([lith_1],[1],[comp_1])
             column = mantle.adiabaticMelt(Tp_C, Pstart = P_start_bar/10000, Pend = P_end_bar/10000, dP = -dp_bar/10000)
-            Results['All'] = pd.DataFrame(data = np.zeros((len(column.P), 3)), columns = ['T_C', 'P_bar', 'mass_Liq'])
+            Results['All'] = pd.DataFrame(data = np.zeros((len(column.P), 3)), columns = ['T_C', 'P_bar', 'mass_g_Liq'])
             Results['All']['T_C'] = column.T
             Results['All']['P_bar'] = column.P*10000
-            Results['All']['mass_Liq'] = column.F
+            Results['All']['mass_g_Liq'] = column.F
         
         if prop is not None:
             if type(prop) == float or type(prop) == int:
@@ -303,21 +303,21 @@ def AdiabaticMelt(q, index, *, Model = None, comp_1 = None, comp_2 = None, comp_
                 Results['All'] = pd.DataFrame(data = np.zeros((len(column.P), 3)), columns = ['T_C', 'P_bar', 'mass_Liq'])
                 Results['All']['T_C'] = column.T
                 Results['All']['P_bar'] = column.P*10000
-                Results['All']['mass_Liq'] = column.F
+                Results['All']['mass_g_Liq'] = column.F
             else:
                 if len(prop) == 2:
                     lith_2 = Lithologies[comp_2]
 
                     mantle = m.mantle([lith_1, lith_2], [prop[0], prop[1]], [comp_1, comp_2])
                     column = mantle.adiabaticMelt(Tp_C, Pstart = P_start_bar/10000, Pend = P_end_bar/10000, dP = -dp_bar/10000)
-                    Results['All'] = pd.DataFrame(data = np.zeros((len(column.P), 5)), columns = ['T_C', 'P_bar', 'mass_Liq_tot',
-                                                                                                  'mass_Liq_'+comp_1,
-                                                                                                  'mass_Liq_'+comp_2])
+                    Results['All'] = pd.DataFrame(data = np.zeros((len(column.P), 5)), columns = ['T_C', 'P_bar', 'mass_g_Liq_tot',
+                                                                                                  'mass_g_Liq_'+comp_1,
+                                                                                                  'mass_g_Liq_'+comp_2])
                     Results['All']['T_C'] = column.T
                     Results['All']['P_bar'] = column.P*10000
-                    Results['All']['mass_Liq_tot'] = column.F
-                    Results['All']['mass_Liq_'+comp_1] = column.lithologies[comp_1].F
-                    Results['All']['mass_Liq_'+comp_2] = column.lithologies[comp_2].F
+                    Results['All']['mass_g_Liq_tot'] = column.F
+                    Results['All']['mass_g_Liq_'+comp_1] = column.lithologies[comp_1].F
+                    Results['All']['mass_g_Liq_'+comp_2] = column.lithologies[comp_2].F
 
                 if len(prop) == 3:
                     lith_2 = Lithologies[comp_2]
@@ -325,16 +325,16 @@ def AdiabaticMelt(q, index, *, Model = None, comp_1 = None, comp_2 = None, comp_
                         
                     mantle = m.mantle([lith_1, lith_2, lith_3], [prop[0], prop[1], prop[2]], [comp_1, comp_2, comp_3])
                     column = mantle.adiabaticMelt(Tp_C, Pstart = P_start_bar/10000, Pend = P_end_bar/10000, dP = -dp_bar/10000)
-                    Results['All'] = pd.DataFrame(data = np.zeros((len(column.P), 6)), columns = ['T_C', 'P_bar', 'mass_Liq_tot',
-                                                                                                  'mass_Liq_'+comp_1,
-                                                                                                  'mass_Liq_'+comp_2,
-                                                                                                  'mass_Liq_'+comp_3])
+                    Results['All'] = pd.DataFrame(data = np.zeros((len(column.P), 6)), columns = ['T_C', 'P_bar', 'mass_g_Liq_tot',
+                                                                                                  'mass_g_Liq_'+comp_1,
+                                                                                                  'mass_g_Liq_'+comp_2,
+                                                                                                  'mass_g_Liq_'+comp_3])
                     Results['All']['T_C'] = column.T
                     Results['All']['P_bar'] = column.P*10000
-                    Results['All']['mass_Liq_tot'] = column.F
-                    Results['All']['mass_Liq_'+comp_1] = column.lithologies[comp_1].F
-                    Results['All']['mass_Liq_'+comp_2] = column.lithologies[comp_2].F
-                    Results['All']['mass_Liq_'+comp_3] = column.lithologies[comp_3].F
+                    Results['All']['mass_g_Liq_tot'] = column.F
+                    Results['All']['mass_g_Liq_'+comp_1] = column.lithologies[comp_1].F
+                    Results['All']['mass_g_Liq_'+comp_2] = column.lithologies[comp_2].F
+                    Results['All']['mass_g_Liq_'+comp_3] = column.lithologies[comp_3].F
         
         q.put([Results, index])
         return

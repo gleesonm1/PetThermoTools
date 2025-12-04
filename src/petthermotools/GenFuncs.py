@@ -421,12 +421,20 @@ def comp_fix(Model=None, comp=None, Fe3Fet_Liq=None, H2O_Liq=None, CO2_Liq=None,
                 comp['FeOt_Liq'] = comp['FeO_Liq'] + 0.8998 * comp['Fe2O3_Liq']
             if "Fe3Fet_Liq" not in comp.columns:
                 comp['Fe3Fet_Liq'] = (1 - comp['FeO_Liq'] / (comp['FeO_Liq'] + 0.8998 * comp['Fe2O3_Liq']))
+        elif "FeOt_Liq" not in comp.columns and "FeO_Liq" in comp.columns and "Fe2O3_Liq" not in comp.columns:
+            comp['FeOt_Liq'] = comp["FeO_Liq"]
+        elif "FeOt_Liq" not in comp.columns and "FeO_Liq" not in comp.columns and "Fe2O3_Liq" in comp.columns:
+            comp['FeOt_Liq'] = 0.8998*comp['Fe2O3_Liq']
         
         if "FeO" in comp.columns and "Fe2O3" in comp.columns:
             if "FeOt" not in comp.columns:
                 comp['FeOt'] = comp['FeO'] + 0.8998 * comp['Fe2O3']
             if "Fe3Fet" not in comp.columns:
                 comp['Fe3Fet'] = 1 - comp['FeO'] / (comp['FeO'] + 0.8998 * comp['Fe2O3'])
+        elif "FeOt" not in comp.columns and "FeOt_Liq" not in comp.columns and "FeO" in comp.columns and "Fe2O3" not in comp.columns:
+            comp['FeOt'] = comp["FeO"]
+        elif "FeOt" not in comp.columns and "FeOt_Liq" not in comp.columns and "FeO" not in comp.columns and "Fe2O3" in comp.columns:
+            comp['FeOt'] = 0.8998*comp['Fe2O3']
 
         Comp_start = comp.copy()
     
@@ -439,12 +447,20 @@ def comp_fix(Model=None, comp=None, Fe3Fet_Liq=None, H2O_Liq=None, CO2_Liq=None,
                 comp['FeOt_Liq'] = comp['FeO_Liq'] + 0.8998 * comp['Fe2O3_Liq']
             if "Fe3Fet_Liq" not in comp:
                 comp['Fe3Fet_Liq'] = (1 - comp['FeO_Liq'] / (comp['FeO_Liq'] + 0.8998 * comp['Fe2O3_Liq']))
+        elif "FeOt_Liq" not in comp and "FeO_Liq" in comp and "Fe2O3_Liq" not in comp:
+            comp['FeOt_Liq'] = comp["FeO_Liq"]
+        elif "FeOt_Liq" not in comp and "FeO_Liq" not in comp and "Fe2O3_Liq" in comp:
+            comp['FeOt_Liq'] = 0.8998*comp['Fe2O3_Liq']
                 
         if "FeO" in comp and "Fe2O3" in comp:
             if "FeOt" not in comp:
                 comp['FeOt'] = comp['FeO'] + 0.8998 * comp['Fe2O3']
             if "Fe3Fet" not in comp:
                 comp['Fe3Fet'] = 1 - comp['FeO'] / (comp['FeO'] + 0.8998 * comp['Fe2O3'])
+        elif "FeOt_Liq" not in comp and "FeOt" not in comp and "FeO" in comp and "Fe2O3" not in comp:
+            comp['FeOt'] = comp["FeO"]
+        elif "FeOt_Liq" not in comp and "FeOt" not in comp and "FeO" not in comp and "Fe2O3" in comp:
+            comp['FeOt'] = 0.8998*comp['Fe2O3']
         
         Comp_start = comp.copy()
 
