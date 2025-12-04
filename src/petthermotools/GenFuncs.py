@@ -120,6 +120,10 @@ def label_results(Result,label):
         for r in Results:
             new_out['P = ' + str(Results[r]['Input']['P_bar']) + ' bars'] = Results[r].copy()
         new_out = dict(sorted(new_out.items(), key=lambda x: float(x[0].split('=')[1].split(' ')[1])))
+    elif label == "P_start_bar":
+        for r in Results:
+            new_out['P_start = ' + str(Results[r]['Input']['P_start_bar']) + ' bars'] = Results[r].copy()
+        new_out = dict(sorted(new_out.items(), key=lambda x: float(x[0].split('=')[1].split(' ')[1])))
     elif label == "fO2" or label == "fO2_offset":
         for r in Results:
             new_out['fO2 = ' + Results[r]['Input']['fO2_buffer'] + ' ' + str(round(Results[r]['Input']['fO2_offset'],2))] = Results[r].copy()

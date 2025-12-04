@@ -2,6 +2,8 @@
 from setuptools import setup, find_packages
 from os import path
 
+print("If you are using ptt to run calculations through MAGEMin, please run 'ptt.install_MAGEMinCalc()' or 'ptt.update_MAGEMinCalc()' to update the associated julia code.")
+print("If you notice any bugs/issues please contact me at gleesonm@berkeley.edu")
 
 this_directory = path.abspath(path.dirname(__file__))
 
