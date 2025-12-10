@@ -16,8 +16,51 @@ from pathlib import Path
 def equilibrate_multi(cores = multiprocessing.cpu_count(), Model = "MELTSv1.0.2", bulk = None, T_C = None, P_bar = None, 
                       Fe3Fet_Liq = None, H2O_Liq = None, CO2_Liq = None, fO2_buffer = None, fO2_offset = None,
                       timeout = None, copy_columns = None, Suppress = None):
+    '''
+    Runs single-step phase equilibrium calculations (isothermal and isobaric) for a batch of 
+    compositions and/or P-T conditions in parallel using MELTS or MAGEMinCalc.
+    
+    This function handles input type conversion, broadcasting of scalar P-T inputs to 
+    match DataFrame compositions, parallel process management, result stitching, and unit standardization.
 
-    T_C        = to_float(T_C)
+    Parameters
+    ----------
+    cores : int, default multiprocessing.cpu_count()
+        Number of parallel processes to use.
+    Model : str, default "MELTSv1.0.2"
+        The thermodynamic model to use (e.g., "MELTSv1.0.2", "pMELTS", or MAGEMin variant).
+    bulk : dict or pd.DataFrame
+        Input bulk composition(s). If a DataFrame, each row is a separate calculation.
+        If a dict, it will be replicated for scalar P/T arrays.
+    T_C : float or np.ndarray
+        Temperature(s) in Celsius for the equilibrium step. Must match the number of compositions  
+        if `bulk` is a DataFrame.
+    P_bar : float or np.ndarray
+        Pressure(s) in bars for the equilibrium step. Must match the number of compositions
+        if 'bulk' is a DataFrame.
+    Fe3Fet_Liq, H2O_Liq, CO2_Liq : float or np.ndarray, optional
+        Overrides for initial liquid redox state and volatile contents.
+    fO2_buffer : str, optional
+        Oxygen fugacity buffer ("FMQ" or "NNO").
+    fO2_offset : float, optional
+        Offset in log units from the specified fO2 buffer.
+    timeout : int, optional
+        Timeout (in seconds) for each individual calculation process. Default is 20s.
+    copy_columns : str or list of str, optional
+        Column name(s) from the original `bulk` DataFrame to include in the final output 
+        DataFrame (e.g., 'Sample_ID').
+    Suppress : list of str, optional
+        List of phases (e.g., ['rutile']) to exclude from the calculation (MELTS only).
+
+    Returns
+    -------
+    Combined : pd.DataFrame
+        A comprehensive DataFrame where each row is an equilibrium calculation result.
+        It contains stitched results (Conditions, phase compositions, and phase properties)
+        and, for MELTS, the affinity values (suffix `_affinity`).
+    '''
+
+    T_C = to_float(T_C)
 
     P_bar = to_float(P_bar)
 
@@ -427,6 +470,8 @@ def multi_equilibrate(q, index, *, Model = None, comp = None,
             T_C = None, P_bar = None, fO2_buffer = None, fO2_offset = None,
             Suppress = None, Suppress_except = None, trail = True):
     """
+    NOT CURRENTLY IN USE
+    
     Worker function to run a subset of equilibration models (MELTS or MAGEMin) in parallel.
 
     This function is intended to be run in a separate process. It takes a set of indices representing model runs,
@@ -563,11 +608,50 @@ def multi_equilibrate(q, index, *, Model = None, comp = None,
 
 
 def findCO2_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P_bar = None, Fe3Fet_Liq = None, H2O_Liq = None, fO2_buffer = None, fO2_offset = None):
+    '''
+    Calculates the $\text{CO}_2$ saturation limit (solubility) in the melt at 
+    given P-T conditions using a $\text{CO}_2$-incorporating thermodynamic model (MELTSv1.1.0 or MELTSv1.2.0).
 
-    try:
-        from meltsdynamic import MELTSdynamic
-    except:
-        Warning('alphaMELTS for Python files are not on the python path. \n Please add these files to the path running \n import sys \n sys.path.append(r"insert_your_path_to_melts_here") \n You are looking for the location of the meltsdynamic.py file')
+    This function runs the calculation for multiple compositions or pressure points in parallel.
+
+    Note: This function is currently only available for **MELTS** thermodynamic models 
+    that incorporate $\text{CO}_2$ into the fluid (MELTSv1.1.0 or MELTSv1.2.0).
+
+    Parameters
+    ----------
+    cores : int, optional
+        Number of parallel processes to use. Defaults to all available CPU cores.
+    Model : str
+        The thermodynamic model to use (must be a MELTS version supporting $\text{CO}_2$).
+    bulk : dict or pd.DataFrame
+        Input bulk composition(s).
+    T_initial_C : float or np.ndarray, optional
+        Starting temperature(s) in Celsius for the calculation. If None, defaults to $1300\,^{\circ}\text{C}$.
+    P_bar : float or np.ndarray
+        Pressure(s) in bars at which to determine the $\text{CO}_2$ saturation.
+    Fe3Fet_Liq : float or np.ndarray, optional
+        Initial $\text{Fe}^{3+}/\text{Fe}_{\text{total}}$ ratio override.
+    H2O_Liq : float or np.ndarray, optional
+        Initial $\text{H}_2\text{O}$ content in the system (wt%).
+    fO2_buffer : str, optional
+        Oxygen fugacity buffer ("FMQ" or "NNO").
+    fO2_offset : float or np.ndarray, optional
+        Offset in log units from the specified $\text{f}\text{O}_2$ buffer.
+
+    Returns
+    -------
+    T_Liq : np.ndarray
+        Liquid temperature ($^{\circ}\text{C}$) at which the $\text{CO}_2$ saturation was determined.
+    H2O : np.ndarray
+        $\text{H}_2\text{O}$ content (wt%) in the liquid at $\text{CO}_2$ saturation.
+    CO2 : np.ndarray
+        $\text{CO}_2$ content (wt%) in the liquid at saturation.
+    '''
+
+    # try:
+    #     from meltsdynamic import MELTSdynamic
+    # except:
+    #     Warning('alphaMELTS for Python files are not on the python path. \n Please add these files to the path running \n import sys \n sys.path.append(r"insert_your_path_to_melts_here") \n You are looking for the location of the meltsdynamic.py file')
 
     if fO2_buffer is not None:
         if fO2_buffer != "NNO":
@@ -585,8 +669,10 @@ def findCO2_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P
     if Model is None:
         Model = "MELTSv1.0.2"
 
-    if Model == "Holland":
-        import pyMAGEMINcalc as MM
+    if "MELTS" not in Model:
+        return "the find CO2 function is only available for thermodynamic models incorporating CO2 into the fluid"
+    # if Model == "Holland":
+    #     import pyMAGEMINcalc as MM
 
     # if comp is entered as a pandas series, it must first be converted to a dict
     if type(comp) == pd.core.series.Series:
@@ -720,60 +806,49 @@ def findCO2_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P
 def findLiq_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P_bar = None, 
                   Fe3Fet_Liq = None, H2O_Liq = None, CO2_Liq = None, fO2_buffer = None, fO2_offset = None, Affinity = False):
     '''
-    Perform multiple liquidus temperature (findLiq) calculations in parallel.
+    Performs multiple liquidus (`findLiq`) calculations for a batch of 
+    compositions and/or P-fO2-H2O conditions in parallel using the MELTS dynamic library.
+
+    It manages the creation of parallel processes, distributes the workload, collects 
+    results from the queue, and compiles them into a clean DataFrame.
+
+    Note: Currently, liquidus calculation is only fully implemented for MELTS models.
 
     Parameters:
     ----------
-    cores: int, optional
-        Number of processes to run in parallel. If not provided, the number of available CPU cores is used.
-
-    Model: str, optional
-        The thermodynamic model to use for calculations: "MELTS..." or "Holland". 
-        If "MELTS..." is selected, the version needs to be specified (e.g., "MELTSv1.0.2", "MELTSv1.1.0", "MELTSv1.2.0", or "pMELTS").
-        Default is "MELTSv1.0.2".
-
-    bulk: pd.DataFrame
-        A dataframe containing the oxide compositions required for the calculations.
-
-    T_initial_C: float or np.ndarray, optional
-        Initial guess for the temperature in Celsius for the findLiq calculations. If not provided, the default is 1300°C.
-
-    P_bar: float or np.ndarray
-        Pressure (in bars) for the calculations. Can be a single value or an array with length matching the number of compositions in the bulk.
-
-    Fe3Fet_Liq: float or np.ndarray, optional
-        Fe³⁺/total Fe ratio in the liquid. If the composition is provided as a dictionary, this can be an array to vary the Fe³⁺/Fe ratio across compositions. 
-        If the composition is a DataFrame, a single value or array (matching the number of compositions) can be used. 
-        If not provided, the redox state must be defined elsewhere (e.g., via the fO2 buffer or directly in the bulk variable).
-
-    H2O_Liq: float or np.ndarray, optional
-        Initial water content in the liquid phase. Can be a single value for all compositions or an array with values for each composition. 
-        If not provided, H2O content must be included in the composition.
-
-    CO2_Liq: float or np.ndarray, optional
-        Initial CO₂ content in the liquid phase. Like H2O_Liq, this can be a single value or an array matching the number of compositions.
-
-    fO2_buffer: str, optional
-        Oxygen fugacity buffer to control oxidation states during crystallization or decompression. Options include "FMQ" (Fayalite-Magnetite-Quartz) or "NNO" (Nickel-Nickel Oxide).
-
-    fO2_offset: float or np.ndarray, optional
-        Offset from the specified fO2 buffer (in log units). Can be a single value or an array.
-
-    Affinity: bool, optional
-        If True, the function will return additional information related to chemical affinity (interaction between phases) during crystallization. Default is False.
+    cores : int, optional
+        Number of processes to run in parallel. If not provided, uses all available CPU cores.
+    Model : str, optional
+        The thermodynamic model to use (e.g., "MELTSv1.0.2", "pMELTS"). Default is "MELTSv1.0.2".
+    bulk : pd.DataFrame or dict
+        A DataFrame (preferred for multiple runs) or dictionary containing oxide compositions (wt%).
+    T_initial_C : float or np.ndarray, optional
+        Initial guess temperature in Celsius for the liquidus search. Default is $1300\,^{\circ}\text{C}$.
+    P_bar : float or np.ndarray
+        Pressure(s) in bars for the calculations. If an array, the length must match the number of compositions 
+        if `bulk` is a DataFrame.
+    Fe3Fet_Liq, H2O_Liq, CO2_Liq : float or np.ndarray, optional
+        Overrides for initial liquid redox state and volatile contents (wt%).
+    fO2_buffer : str, optional
+        Oxygen fugacity buffer ("FMQ" or "NNO").
+    fO2_offset : float or np.ndarray, optional
+        Offset from the specified $\text{f}\text{O}_2$ buffer (in log units).
+    Affinity : bool, optional, default False
+        If True, returns additional DataFrame containing chemical **affinity** (driving force for crystallization) 
+        data for all phases.
 
     Returns:
     ----------
-    Res: pd.DataFrame
-        DataFrame containing liquidus temperature, liquidus phase, fluid saturation, and normalized melt chemistry.
-
-    Af_Combined: pd.DataFrame, optional
-        If Affinity is True, an additional DataFrame containing chemical affinity data for each sample is returned.
+    Res : pd.DataFrame
+        DataFrame containing the calculated liquidus temperature ($T_{\text{Liq}}$), the liquidus phase, 
+        fluid saturation status, and the normalized melt composition at the liquidus.
+    Af_Combined : pd.DataFrame, optional
+        Returned only if `Affinity=True`. Contains chemical affinity data for the liquidus phase.
     '''
-    try:
-        from meltsdynamic import MELTSdynamic
-    except:
-        Warning('alphaMELTS for Python files are not on the python path. \n Please add these files to the path running \n import sys \n sys.path.append(r"insert_your_path_to_melts_here") \n You are looking for the location of the meltsdynamic.py file')
+    # try:
+    #     from meltsdynamic import MELTSdynamic
+    # except:
+    #     Warning('alphaMELTS for Python files are not on the python path. \n Please add these files to the path running \n import sys \n sys.path.append(r"insert_your_path_to_melts_here") \n You are looking for the location of the meltsdynamic.py file')
 
     comp = bulk.copy()
 
@@ -834,7 +909,6 @@ def findLiq_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P
                 T_initial_C = np.array([T_initial_C])
             
     if "MELTS" in Model:
-
         if cores is None:
             cores = multiprocessing.cpu_count()
 
@@ -977,6 +1051,37 @@ def findLiq_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P
         return "find liquidus calculations are currently not available through the MAGEMin models. This is an issue I'm working to fix as soon as possible."
 
 def findCO2(q, index, *, Model = None, P_bar = None, T_initial_C = None, comp = None, fO2_buffer = None, fO2_offset = None):
+    '''
+    Worker function to determine $\text{CO}_2$ saturation (solubility) 
+    in a melt at specified P-T conditions using a $\text{CO}_2$-incorporating MELTS model.
+    
+    This function is executed in a separate process by `findCO2_multi`.
+
+    Parameters:
+    ----------
+    q : multiprocessing.Queue
+        Output queue for sending back results.
+    index : int
+        Index of the calculation (row number) in the master dataset for result indexing.
+    Model : str, optional
+        MELTS thermodynamic model version (must support $\text{CO}_2$, e.g., "MELTSv1.1.0").
+    P_bar : float
+        Pressure in bars.
+    T_initial_C : float
+        Starting temperature in Celsius.
+    comp : dict
+        Dictionary containing the oxide composition (wt%).
+    fO2_buffer : str, optional
+        Oxygen fugacity buffer.
+    fO2_offset : float, optional
+        Offset from the specified $\text{f}\text{O}_2$ buffer (log units).
+
+    Returns:
+    ----------
+    None
+        The function returns results via `q.put()`:
+        `q.put([T_Liq, H2O_Melt, CO2_Melt, index])`
+    '''
     T_Liq = 0
     H2O_Melt = 0
     CO2_Melt = 0
@@ -992,42 +1097,39 @@ def findCO2(q, index, *, Model = None, P_bar = None, T_initial_C = None, comp = 
 
 def findLiq(q, index,*, Model = None, P_bar = None, T_initial_C = None, comp = None, fO2_buffer = None, fO2_offset = None, Affinity = False):
     '''
-    Searches for the liquidus of a melt at the pressure specified. Multiple instances of findLiq are typically initiated in parallel.
+    Worker function that executes the liquidus temperature search (`findLiq_MELTS`) for a single 
+    composition at a specified pressure.
+
+    This function is executed in a separate process by `findLiq_multi`.
 
     Parameters:
     ----------
-    q: Multiprocessing Queue instance
-        Queue instance to place the output variables in
-
-    index: int
-        index of the calculation in the master code (e.g., position within a for loop) to aid indexing results after calculations are complete.
-
-    Model: string
-        "MELTS" or "Holland". Dictates whether MELTS or MAGEMin calculations are performed. Default "MELTS".
-        Version of melts can be specified by additing "v1.0.2", "v1.1.0", "v1.2.0", or "p" to "MELTS". Default "v.1.0.2".
-
-    P_bar: float
-        Specifies the pressure of the calculation (bar).
-
-    T_initial_C: float
-        Initial 'guess' temperature for findLiq calculations (degrees C).
-
-    comp: dict
-        Dictionary containing all oxide values required for the calculations.
+    q : multiprocessing.Queue
+        Output queue for placing the results.
+    index : int
+        Index of the calculation (row number) in the master code for result indexing.
+    Model : str, optional
+        Thermodynamic model (e.g., "MELTSv1.0.2").
+    P_bar : float
+        Pressure of the calculation (bar).
+    T_initial_C : float
+        Initial 'guess' temperature in Celsius for the liquidus search.
+    comp : dict
+        Dictionary containing the oxide composition (wt%) for the calculation.
+    fO2_buffer : str, optional
+        Oxygen fugacity buffer.
+    fO2_offset : float, optional
+        Offset from the specified $\text{f}\text{O}_2$ buffer (log units).
+    Affinity : bool, optional, default False
+        If True, calculates and returns the chemical affinity of the liquidus phase.
 
     Returns:
     ----------
-    T_Liq: float
-        Estimated liquidus temperatures.
-
-    H2O_Melt: float
-        Melt water content at the liquidus
-
-    index: int
-        index of the calculation
-
-    T_in: float
-        Initial temperature of the calculation - used to ensure indexing is working correctly.
+    None
+        The function returns results via `q.put()`:
+        - If `Affinity=True`: `q.put([Results, Affin, index])`
+        - If `Affinity=False`: `q.put([Results, index])`
+        where `Results` is a dictionary/series of liquidus properties and `Affin` is the affinity data.
     '''
 
     T_in = T_initial_C
@@ -1065,6 +1167,40 @@ def findLiq(q, index,*, Model = None, P_bar = None, T_initial_C = None, comp = N
         #    return
 
 def equilibrate(q, i,*, Model = None, P_bar = None, T_C = None, comp = None, fO2_buffer = None, fO2_offset = None, Suppress = None):
+    '''
+    Worker function to execute a single-step phase equilibrium calculation (`equilibrate_MELTS`) 
+    at specified P-T conditions.
+
+    This function is executed in a separate process by `equilibrate_multi`.
+
+    Parameters:
+    ----------
+    q : multiprocessing.Queue
+        Output queue for sending back results.
+    i : int
+        Index of the calculation (row number) in the master code for result indexing.
+    Model : str, optional
+        MELTS thermodynamic model version.
+    P_bar : float, optional
+        Pressure in bars.
+    T_C : float, optional
+        Temperature in Celsius.
+    comp : dict, optional
+        Dictionary containing the oxide composition (wt%).
+    fO2_buffer : str, optional
+        Oxygen fugacity buffer.
+    fO2_offset : float, optional
+        Offset from the specified $\text{f}\text{O}_2$ buffer (log units).
+    Suppress : list of str, optional
+        List of phases to suppress (exclude) from the calculation.
+
+    Returns:
+    ----------
+    None
+        The function returns results via `q.put()`:
+        `q.put([Res, i])`
+        where `Res` is the raw output dictionary from the MELTS calculation.
+    '''
     Res = equilibrate_MELTS(Model = Model, P_bar = P_bar, T_C = T_C, comp = comp, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, Suppress = Suppress)
     q.put([Res, i])
     return

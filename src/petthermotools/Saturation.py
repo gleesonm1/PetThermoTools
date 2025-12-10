@@ -13,11 +13,52 @@ from tqdm.notebook import tqdm, trange
 def findSatPressure_multi(cores = multiprocessing.cpu_count(), Model = "MELTSv1.2.0", bulk = None, T_fixed_C = None, 
                           P_bar_init = None, Fe3Fet_Liq = None, H2O_Liq = None, CO2_Liq = None, 
                           fO2_buffer = None, fO2_offset = None, copy_columns = None):
+    '''
+    Performs multiple volatile saturation pressure ($P_{\text{sat}}$) calculations in parallel 
+    for a batch of melt compositions at a fixed temperature.
+
+    The saturation pressure is the minimum pressure at which the melt can hold all its 
+    volatile components ($\text{H}_2\text{O}$ and $\text{CO}_2$) without exsolving a fluid phase.
+
+    Parameters:
+    ----------
+    cores : int, optional
+        Number of processes to run in parallel. Defaults to all available CPU cores.
+    Model : str, optional, default "MELTSv1.2.0"
+        The thermodynamic model to use (e.g., "MELTSv1.2.0" or "pMELTS").
+    bulk : pd.DataFrame
+        A DataFrame containing the oxide compositions (wt%) and volatile contents 
+        ($\text{H}_2\text{O}$ and $\text{CO}_2$) required for the calculations.
+    T_fixed_C : float or np.ndarray
+        The fixed temperature(s) in Celsius at which to perform the $P_{\text{sat}}$ search. **Required.**
+    P_bar_init : float or np.ndarray, optional
+        Initial pressure guess (in bars) for the saturation search. Default is $2000$ bar.
+    Fe3Fet_Liq, H2O_Liq, CO2_Liq : float or np.ndarray, optional
+        Overrides for initial liquid redox state and volatile contents (wt%). These are applied 
+        to the input `bulk` composition.
+    fO2_buffer : str, optional
+        Oxygen fugacity buffer to constrain oxidation states (e.g., "FMQ" or "NNO").
+    fO2_offset : float or np.ndarray, optional
+        Offset from the specified $\text{f}\text{O}_2$ buffer (in log units).
+    copy_columns : list of str, optional
+        Placeholder argument (currently not explicitly used in the exposed code).
+
+    Returns:
+    ----------
+    Results : pd.DataFrame
+        DataFrame containing the calculated saturation pressure ($P_{\text{sat}}$), the 
+        corresponding melt composition, and the initial system parameters.
     
+    Raises:
+    -------
+    Warning
+        - If $\text{H}_2\text{O}$ is zero in a MELTS model (may affect oxide/apatite saturation).
+        - If $\text{Fe}^{3+}/\Sigma\text{Fe}$ is zero without an $\text{f}\text{O}_2$ buffer in a MELTS model (may cause calculation failure).
+    '''
     comp = bulk.copy()
 
-    if T_fixed_C is None:
-        raise Warning("Please specify a temperature.")
+    # if T_fixed_C is None:
+    #     raise Warning("Please specify a temperature.")
 
     # ensure the bulk composition has the correct headers etc.
     comp = comp_fix(Model = Model, comp = comp, Fe3Fet_Liq = Fe3Fet_Liq, H2O_Liq = H2O_Liq, CO2_Liq = CO2_Liq)

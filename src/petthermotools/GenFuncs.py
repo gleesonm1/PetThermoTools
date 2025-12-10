@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import copy
+from pathlib import Path
 # from petthermotools.Barom import *
 # from petthermotools.Liq import *
 # from petthermotools.Crystallise import *
@@ -76,6 +77,26 @@ Names_MM_replace = {'liq1': 'liquid1',
             'liq4': 'liquid4'}
 
 def rename_keys_with_prefix(d, mapping):
+    '''
+    Renames keys in a dictionary based on an exact match or a prefix match defined 
+    in a mapping dictionary.
+
+    This is primarily used to convert short-form phase names (e.g., 'ol1') from 
+    MAGEMinCalc into longer names used by alphaMELTS for Python (e.g., 'olivine1').
+
+    Parameters:
+    ----------
+    d : dict
+        The input dictionary whose keys need renaming.
+    mapping : dict
+        A mapping dictionary where keys are the old names/prefixes (e.g., 'ol1') 
+        and values are the new names/prefixes (e.g., 'olivine1').
+
+    Returns:
+    ---------
+    new_dict : dict
+        A new dictionary with the keys renamed according to the mapping logic.
+    '''
     new_dict = {}
     for k, v in d.items():
         # 1. Exact match
@@ -94,11 +115,37 @@ def rename_keys_with_prefix(d, mapping):
     return new_dict
 
 def activate_petthermotools_env():
+    '''
+    Activates the custom Julia environment (.petthermotools_julia_env) required 
+    for running MAGEMinCalc calculations via the JuliaCall interface.
+
+    Parameters:
+    ----------
+    None
+
+    Returns:
+    ----------
+    None. Activates the environment using `Pkg.activate`.
+    '''
+    from juliacall import Main as jl
     env_dir = Path.home() / ".petthermotools_julia_env"
     jl_env_path = env_dir.as_posix()
     jl.seval(f'import Pkg; Pkg.activate("{jl_env_path}")')
 
 def to_float(x):
+    '''
+    Converts input data (scalar, list, tuple, or numpy array) to float type.
+
+    Parameters:
+    ----------
+    x : scalar (int, float) or array-like (list, tuple, np.ndarray)
+        The input data to be converted. Can also be None.
+
+    Returns:
+    ----------
+    float or list of float or numpy.ndarray of float or None
+        The input data converted to float type. Returns None if input is None.
+    '''
     if x is None:
         return None
     if isinstance(x, (int, float)):
@@ -110,6 +157,27 @@ def to_float(x):
     return x  # leave unchanged if unexpected type
 
 def label_results(Result,label):
+    '''
+    Renames the keys of a results dictionary based on a specified input parameter 
+    (e.g., pressure, H2O content) to create descriptive, sortable labels.
+
+    Example: Renames 'Run 1' to 'P = 1000 bars' if label='P_bar'.
+
+    Parameters:
+    ----------
+    Result : dict
+        A dictionary where keys are generic (e.g., 'Run 0') and values are the 
+        standard simulation output dictionaries (which contain an 'Input' key).
+    label : str
+        The input parameter to use for labeling. Common options include:
+        'pressure', 'P_bar', 'CO2', 'CO2_init', 'fO2', 'fO2_offset', 'H2O', 'H2O_init'.
+
+    Returns:
+    ----------
+    new_out : dict
+        The result dictionary with keys replaced by descriptive, sorted strings.
+        If the label is not found, a copy of the original dictionary is returned.
+    '''
     Results = Result.copy()
     new_out = {}
     if  label == "CO2" or label == "CO2_init":
@@ -141,6 +209,39 @@ def label_results(Result,label):
 def supCalc(Model = "MELTSv1.0.2", bulk = None, phase = None, T_C = None, P_bar = None,
              Fe3Fet_Liq = None, H2O_Liq = None, CO2_Liq = None, fO2_buffer = None, fO2_offset = None, 
              melts = None):
+    '''
+    A wrapper function to run a extrac the thermodynamic properties of a user specified
+    phase in alphaMELTS for Python for a given composition and specified P-T-fO2 conditions.
+
+    The function first standardizes the composition using `comp_fix` and then passes 
+    the parameters to the underlying MELTS calculation function (`supCalc_MELTS`).
+
+    Parameters:
+    ----------
+    Model : str, default "MELTSv1.0.2"
+        Thermodynamic model to use (e.g., "MELTSv1.0.2", "pMELTS").
+    bulk : dict or pd.Series
+        Bulk composition of the starting material (oxides in wt%).
+    phase : str, optional
+        Phase name (e.g., 'olivine1') to monitor or target in the calculation.
+    T_C : float
+        Temperature in Celsius.
+    P_bar : float
+        Pressure in bars.
+    Fe3Fet_Liq, H2O_Liq, CO2_Liq : float, optional
+        Overrides for initial redox state and volatile content in the liquid.
+    fO2_buffer : str, optional
+        Oxygen fugacity buffer (e.g., "FMQ", "NNO").
+    fO2_offset : float, optional
+        Offset in log units from the specified fO2 buffer.
+    melts : MELTSdynamic object, optional
+        An existing MELTSdynamic instance, reduces the overhead associated with initiating new MELTS objects.
+
+    Returns:
+    ----------
+    Results : dict
+        The raw results dictionary from the underlying MELTS simulation.
+    '''
     
     comp = bulk.copy()
 
@@ -156,6 +257,30 @@ def supCalc(Model = "MELTSv1.0.2", bulk = None, phase = None, T_C = None, P_bar 
     return Results
 
 def comp_check(comp_lith, Model, MELTS_filter, Fe3Fet):
+    '''
+    Checks and preprocesses the input bulk composition before full standardization.
+
+    Handles string inputs (e.g., sample names) by looking them up in a global 
+    Compositions dictionary (if not pyMelt), converts Series to dicts, and ensures 
+    minimum required volatile/trace components are present for MELTS.
+
+    Parameters:
+    ----------
+    comp_lith : str, dict, or pd.Series
+        The input composition, oxide concentration in wt% or a string name corresponding to one of the saved compositions (G2, KLB-1, KG1).
+    Model : str
+        Thermodynamic model to be used (e.g., "MELTSv1.0.2", "Green2025").
+    MELTS_filter : bool
+        If True and using a MELTS model, ensures K2O, P2O5, H2O, and CO2 are 
+        initialized to zero if missing.
+    Fe3Fet : float, optional
+        Initial Fe³⁺/Fe_total ratio override.
+
+    Returns:
+    ----------
+    comp : dict or pd.DataFrame
+        The preprocessed composition dictionary or DataFrame.
+    '''
     if type(comp_lith) == str:
         if Model != "pyMelt":
             comp = Compositions[comp_lith]
@@ -185,223 +310,38 @@ def comp_check(comp_lith, Model, MELTS_filter, Fe3Fet):
     
     return comp
 
-
-# def comp_fix(Model=None, comp=None, Fe3Fet_Liq=None, H2O_Liq=None, CO2_Liq=None):
-#     '''
-#     Ensure that the input variables contain the correct column headers for the following variables.
-
-#     Parameters:
-#     ----------
-#     Model: string
-#         "MELTSvx.x.x" or "Holland" determines which function list is followed.
-
-#     comp: dict or DataFrame
-#         inputed composition for calculations
-
-#     Fe3Fet_Liq: float or np.ndarray
-#         Fe 3+/total ratio. If type(comp) == dict, and type(Fe3Fet_Liq) == np.ndarray a new DataFrame will be constructed with bulk compositions varying only in their Fe3Fet_Liq value. If comp is a pd.DataFrame, a single Fe3Fet_Liq value may be passed (float) and will be used as the Fe redox state for all starting compostions, or an array of Fe3Fet_Liq values, equal to the number of compositions specified in comp can specify a different Fe redox state for each sample. If None, the Fe redox state must be specified in the comp variable or an oxygen fugacity buffer must be chosen.
-
-#     H2O_Liq: float or np.ndarray
-#         H2O content of the initial melt phase. If type(comp) == dict, and type(H2O_Liq) = np.ndarray a new DataFrame will be constructed with bulk compositions varying only in their H2O_Liq value. If comp is a pd.DataFrame, a single H2O_Liq value may be passes (float) and will be used as the initial melt H2O content for all starting compositions. Alternatively, if an array of H2O_Liq values is passed, equal to the number of compositions specified in comp, a different initial melt H2O value will be passed for each sample. If None, H2O_Liq must be specified in the comp variable.
-
-#     Returns:
-#     ---------
-#     comp: dict or DataFrame
-#         new composition file with correct headers.
-#     '''
-#     if Model is None:
-#         Model = "MELTSv1.0.2"
-
-#     Comp_start = comp.copy()
-#     if "FeO_Liq" in list(Comp_start.keys()) and "Fe2O3_Liq" in list(Comp_start.keys()):
-#         if "FeOt_Liq" not in list(Comp_start.keys()):
-#             comp['FeOt_Liq'] = comp['FeO_Liq'] + 71.844/(159.69/2)*comp['Fe2O3_Liq']
-#         if "Fe3Fet_Liq" not in list(Comp_start.keys()):
-#             comp['Fe3Fet_Liq'] = (1 - comp['FeO_Liq']/(comp['FeO_Liq'] + 71.844/(159.69/2)*comp['Fe2O3_Liq']))
-#         Comp_start = comp.copy()
-
-#     if "FeO" in list(Comp_start.keys()) and "Fe2O3" in list(Comp_start.keys()):
-#         if "FeOt" not in list(Comp_start.keys()):
-#             comp['FeOt'] = comp['FeO'] + 71.844/(159.69/2)*comp['Fe2O3']
-#         if"Fe3Fet" not in list(Comp_start.keys()):
-#             comp['Fe3Fet'] = 1 - comp['FeO']/(comp['FeO'] + 71.844/(159.69/2)*comp['Fe2O3'])
-#         Comp_start = comp.copy()
-
-#     if "MELTS" in Model:
-#         # check all required columns are present with appropriate suffix
-#         Columns_bad = ['SiO2', 'TiO2', 'Al2O3', 'Cr2O3', 'FeOt', 'MnO', 'MgO', 'CaO', 'Na2O', 'K2O', 'P2O5', 'H2O', 'CO2', 'Fe3Fet']
-#         Columns_ideal = ['SiO2_Liq', 'TiO2_Liq', 'Al2O3_Liq', 'Cr2O3_Liq', 'FeOt_Liq', 'MnO_Liq', 'MgO_Liq', 'CaO_Liq', 'Na2O_Liq', 'K2O_Liq', 'P2O5_Liq', 'H2O_Liq', 'CO2_Liq', 'Fe3Fet_Liq']
-
-#         if type(comp) == pd.core.frame.DataFrame:
-#             for el in Comp_start:
-#                 if el in Columns_bad:
-#                     comp = comp.rename(columns = {el:el + '_Liq'})
-
-#             for el in Columns_ideal:
-#                 if el not in list(comp.keys()):
-#                     comp[el] = np.zeros(len(comp), dtype=float)
-
-#             comp = comp[[col for col in comp.columns if col in Columns_ideal]]
-
-#         elif type(comp) == dict:
-#             for el in Comp_start:
-#                 if el in Columns_bad:
-#                     comp[el + '_Liq'] = comp[el]
-#                     del comp[el]
-
-#             for el in Columns_ideal:
-#                 if el not in list(comp.keys()):
-#                     comp[el] = 0.0
-            
-#             for key in list(comp.keys()):
-#                 if key not in Columns_ideal:
-#                     del comp[key]
-#     else:
-#         # check all required columns are present with appropriate suffix
-#         Columns_bad = ['SiO2', 'TiO2', 'Al2O3', 'FeOt', 'MgO', 'CaO', 'Na2O', 'K2O', 'H2O', 'Cr2O3', 'Fe3Fet']
-#         Columns_ideal = ['SiO2_Liq', 'TiO2_Liq', 'Al2O3_Liq', 'FeOt_Liq', 'MgO_Liq', 'CaO_Liq', 'Na2O_Liq', 'K2O_Liq', 'Cr2O3_Liq', 'H2O_Liq', 'Fe3Fet_Liq']
-#         Comp_start = comp.copy()
-#         if type(comp) == pd.core.frame.DataFrame:
-#             for el in Comp_start:
-#                 if el in Columns_bad:
-#                     comp = comp.rename(columns = {el:el + '_Liq'})
-
-#             for el in Columns_ideal:
-#                 if el not in list(comp.keys()):
-#                     comp[el] = np.zeros(len(comp.iloc[:,0]), dtype = float)
-            
-#             comp = comp[[col for col in comp.columns if col in Columns_ideal]]
-
-#         elif type(comp) == dict:
-#             for el in Comp_start:
-#                 if el in Columns_bad:
-#                     comp[el + '_Liq'] = comp[el]
-#                     del comp[el]
-
-#             for el in Columns_ideal:
-#                 if el not in list(comp.keys()):
-#                     comp[el] = 0.0
-
-#             for key in list(comp.keys()):
-#                 if key not in Columns_ideal:
-#                     del comp[key]
-
-#     # set the liquid Fe redox state if specified separate to the bulk composition
-#     if Fe3Fet_Liq is not None:
-#         if type(comp) == dict:
-#             if type(Fe3Fet_Liq) != np.ndarray:
-#                 comp['Fe3Fet_Liq'] = Fe3Fet_Liq
-#             else:
-#                 Comp = pd.DataFrame.from_dict([comp]*len(Fe3Fet_Liq))
-#                 Comp['Fe3Fet_Liq'] = Fe3Fet_Liq
-#                 comp = Comp.copy()
-#         else:
-#             comp['Fe3Fet_Liq'] = np.zeros(len(comp.iloc[:,0])) + Fe3Fet_Liq
-
-#     if H2O_Liq is None and CO2_Liq is None:
-#         if type(comp) == dict:
-#             total = sum(v for k, v in comp.items() if k != "Fe3Fet_Liq")
-#             for n in list(comp.keys()):
-#                 if n != "Fe3Fet_Liq":
-#                     comp[n] = (comp[n]/total)*(100.0)
-#         else:
-#             total = comp.sum(axis = 1) - comp['Fe3Fet_Liq']
-#             cols = comp.columns.drop('Fe3Fet_Liq')
-#             comp.loc[:,cols] = comp[cols].div(total, axis = 0)*100
-#     else:
-#         if H2O_Liq is None and CO2_Liq is not None:
-#             if type(CO2_Liq) == np.ndarray:
-#                 H2O_Liq = np.zeros(len(CO2_Liq), dtype=float)
-#             else:
-#                 H2O_Liq = 0.0
-#         elif H2O_Liq is not None and CO2_Liq is None:
-#             if type(H2O_Liq) == np.ndarray:
-#                 CO2_Liq = np.zeros(len(H2O_Liq), dtype=float)
-#             else:
-#                 CO2_Liq = 0.0
-        
-#         if type(H2O_Liq) == np.ndarray and type(CO2_Liq) != np.ndarray:
-#             CO2_Liq = np.zeros(len(H2O_Liq)) + CO2_Liq
-#         elif type(CO2_Liq) == np.ndarray and type(H2O_Liq) != np.ndarray:
-#             H2O_Liq = np.zeros(len(CO2_Liq)) + H2O_Liq
-
-#         volatiles = H2O_Liq + CO2_Liq
-
-#         if type(comp) == dict:
-#             total = sum(v for k, v in comp.items() if k not in {"Fe3Fet_Liq", "H2O_Liq", "CO2_Liq"})
-#             # for n in list(comp.keys()):
-#             #     if n not in {"Fe3Fet_Liq", "H2O_Liq", "CO2_Liq"}:
-#             #         comp[n] = (comp[n]/total)*(100.0)
-#         else:
-#             total = comp.sum(axis = 1) - comp['Fe3Fet_Liq'] - comp['H2O_Liq'] - comp['CO2_Liq']
-#             # cols = comp.columns.drop('Fe3Fet_Liq')
-#             # comp.loc[:,cols] = comp[cols].div(total, axis = 0)*(100 - volatiles)
-
-#         if H2O_Liq is not None:
-#             if type(comp) == dict:
-#                 if type(H2O_Liq) != np.ndarray:
-#                     comp['H2O_Liq'] = H2O_Liq
-#                 else:
-#                     Comp = pd.DataFrame.from_dict([comp]*len(H2O_Liq))
-#                     Comp['H2O_Liq'] = H2O_Liq
-#                     comp = Comp.copy()
-#             else:
-#                 comp.loc[:,'H2O_Liq'] = comp['H2O_Liq'].astype(float)
-#                 if type(H2O_Liq) == np.ndarray:
-#                     comp.loc[:,'H2O_Liq'] = H2O_Liq
-#                 else:
-#                     comp.loc[:,'H2O_Liq'] = np.zeros(len(comp.iloc[:,0])) + H2O_Liq
-
-#         if CO2_Liq is not None:
-#             if type(comp) == dict:
-#                 if type(CO2_Liq) != np.ndarray:
-#                     comp['CO2_Liq'] = CO2_Liq
-#                 else:
-#                     Comp = pd.DataFrame.from_dict([comp]*len(CO2_Liq))
-#                     Comp['CO2_Liq'] = CO2_Liq
-#                     comp = Comp.copy()
-#             else:
-#                 comp.loc[:,'CO2_Liq'] = comp['CO2_Liq'].astype(float)
-#                 if type(CO2_Liq) == np.ndarray:
-#                     comp.loc[:,'CO2_Liq'] = CO2_Liq
-#                 else:
-#                     comp.loc[:,'CO2_Liq'] = np.zeros(len(comp.iloc[:,0])) + CO2_Liq
-        
-#         if type(comp) == dict:
-#             for n in list(comp.keys()):
-#                 if n not in {"Fe3Fet_Liq", "H2O_Liq", "CO2_Liq"}:
-#                     comp[n] = (comp[n]/total)*(100.0-volatiles)
-#         else:
-#             if np.isscalar(volatiles):
-#                 scale = 100 - volatiles
-#             else:
-#                 scale = pd.Series(100 - volatiles, index=comp.index)
-#             cols = comp.columns.drop(['Fe3Fet_Liq','H2O_Liq', 'CO2_Liq'])
-#             comp.loc[:,cols] = comp[cols].div(total, axis = 0).mul(scale,axis=0)
-    
-#     return comp
-
 def comp_fix(Model=None, comp=None, Fe3Fet_Liq=None, H2O_Liq=None, CO2_Liq=None, keep_columns=False):
     '''
-    Ensure that the input variables contain the correct column headers and float data types.
+    Standardizes and ensures correct formatting of input compositions for thermodynamic calculations.
+
+    This function performs several critical operations:
+    1. **Fe Speciation:** Calculates FeOt and Fe3Fet columns if FeO/Fe2O3 are present.
+    2. **Header Standardization:** Renames common headers (e.g., 'SiO2') to 
+       standard "ideal" headers (e.g., 'SiO2_Liq') that are used in subsequent functions.
+    3. **Initialization:** Initializes any missing required oxide/volatile columns to 0.0.
+    4. **Redox/Volatile Overrides:** Applies optional external `Fe3Fet_Liq`, `H2O_Liq`, 
+       and `CO2_Liq` overrides, handling scalar and array-like inputs.
+    5. **Normalization:** Normalizes the non-volatile oxides to 100% *minus* the 
+       specified volatile contents (H2O_Liq, CO2_Liq).
+    6. **Type Enforcement:** Ensures all required component values are float type.
 
     Parameters:
     ----------
-    Model: string
-        "MELTSvx.x.x" or "Holland". Defaults to "MELTSv1.0.2".
-    comp: dict or DataFrame
-        Input composition.
-    Fe3Fet_Liq, H2O_Liq, CO2_Liq: float or np.ndarray
-        Optional overrides for redox or volatiles.
-    keep_columns: bool, default False
-        If False, returns only the standardized columns required for calculations (Columns_ideal).
-        If True, returns the standardized columns PLUS any other columns present in the input 
-        (e.g., "Sample_ID", "Comments").
+    Model : str, default "MELTSv1.0.2"
+        Thermodynamic model (e.g., "MELTSvx.x.x" or "Green2025").
+    comp : dict or pd.DataFrame
+        Input composition, oxide values in wt%.
+    Fe3Fet_Liq, H2O_Liq, CO2_Liq : float or np.ndarray, optional
+        Optional overrides for redox or volatiles. If arrays are used, the output
+        will be a DataFrame with the corresponding number of rows.
+    keep_columns : bool, default False
+        If False, returns only the standardized columns required for calculations 
+        (Columns_ideal). If True, preserves all original columns.
 
     Returns:
-    ---------
-    comp: dict or DataFrame
-        New composition with correct headers and types.
+    ----------
+    comp : dict or pd.DataFrame
+        New composition with correct headers, types, and normalization.
     '''
     if Model is None:
         Model = "MELTSv1.0.2"
@@ -609,23 +549,41 @@ def comp_fix(Model=None, comp=None, Fe3Fet_Liq=None, H2O_Liq=None, CO2_Liq=None,
 
 def stich(Res, multi = None, Model = None, Frac_fluid = None, Frac_solid = None):
     '''
-    Takes the outputs from the multiple crystallisation/decompression calculations and stiches them together into a single dataframe. Additionally, it adds the relevant suffix to the composition and properties of each mineral (e.g., SiO2 -> SiO2_Liq for the liquid phase).
+    Processes, cleans, and combines the raw output from single or multiple 
+    alphaMELTS/MAGEMinCalc calculations into a standardized format.
+
+    Key operations performed by this function and its worker (`stich_work`):
+    1. **Unit Conversion/Renaming:** Converts units (e.g., P_kbar to P_bar, rho to kg/m³), 
+       renames property columns (e.g., `h` to `h_J`), and adds density and volume columns.
+    2. **Fe Speciation:** Calculates FeOt and Fe3Fet for all phases in MELTS outputs.
+    3. **Cleanup:** Removes invalid steps (e.g., where mass/h/T is 0.0).
+    4. **Key Standardization:** Renames short-form phase keys (e.g., 'liq1') to 
+       long-form (e.g., 'liquid1').
+    5. **Suffix Application:** Adds standard suffixes (e.g., `_Liq`, `_Ol`) to the 
+       composition and property columns of each phase DataFrame.
+    6. **Aggregation:** Creates three new key DataFrames: 'All' (combined conditions and 
+       all phase properties), 'mass_g', 'volume_cm3', and 'rho_kg/m3' (phase mass/volume/density 
+       arrays, including cumulative values if requested).
 
     Parameters:
     ----------
-    Res: dict
-        Final results from the multiple crystallisation/decompression calculations.
-
-    multi: True/False
-        If True, Results is composed of multiple dictionaries, each representing a single crystallisation/decompression calculation. Default is False.
-
-    Model: string
-        "MELTSvx.x.x" or "Holland" determines which function list is followed.
+    Res : dict
+        Final results from the crystallisation/decompression calculations.
+    multi : bool, optional
+        If True, `Res` is a dictionary of dictionaries (from a multi-process run).
+        If None/False, `Res` is a single calculation output dictionary.
+    Model : str
+        e.g., "MELTSvx.x.x" or "Green2025" (for MAGEMinCalc) to determine the correct processing logic.
+    Frac_fluid : bool, optional
+        If True, calculates cumulative mass for the fluid phase(s).
+    Frac_solid : bool, optional
+        If True, calculates cumulative mass for the solid phase(s).
 
     Returns:
     ----------
-    Results: dict
-        A copy of the input dict with a new DataFrame titled 'All' included.
+    Results : dict
+        A copy of the input dictionary (`Res`) with standardized column names, units, 
+        and the aggregated 'All', 'mass_g', 'volume_cm3', and 'rho_kg/m3' DataFrames.
     '''
     Results = Res.copy()
     if "MELTS" in Model:
@@ -655,7 +613,25 @@ def stich(Res, multi = None, Model = None, Frac_fluid = None, Frac_solid = None)
 
 def stich_work(Results = None, Order = None, Model = "MELTS", Frac_fluid = None, Frac_solid = None):
     '''
-    Does the work required by Stich.
+    Internal worker function for `stich`. Performs the core unit conversions, 
+    data cleaning, Fe speciation, and property standardization on a single 
+    simulation result dictionary.
+
+    Parameters:
+    ----------
+    Results : dict
+        The raw output dictionary from a single MELTS/MAGEMinCalc run.
+    Order : list
+        List of oxide names defining the desired output column order.
+    Model : str, default "MELTS"
+        Thermodynamic model type ("MELTS" or "Green2025").
+    Frac_fluid, Frac_solid : bool, optional
+        Flags for cumulative mass calculation.
+
+    Returns:
+    ----------
+    Results : dict
+        The processed and cleaned result dictionary.
     '''
     Res = Results.copy()
     if "MELTS" in Model:    

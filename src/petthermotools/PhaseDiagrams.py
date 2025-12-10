@@ -18,53 +18,49 @@ def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar
                       Fe3Fet_init = None, H2O_init = None, CO2_init = None,
                       fO2_buffer = None, fO2_offset = None, i_max = 15, grid = True, refine = None):
     """
-    Calculate phase diagrams for igneous systems (rocks and magmas).
+    Calculates a Phase Diagram (P-T grid) for a given bulk composition using MELTS or MAGEMinCalc 
+    via parallel processing.
+
+    The function handles setting up the T-P grid, distributing calculations across multiple 
+    cores, and iteratively re-attempting failed points up to a maximum number of attempts (`i_max`).
 
     Parameters:
     -----------
     cores : int, optional
-        The number of CPU cores to use for parallel processing. Default is None, which
-        sets the number of cores to the number of CPUs available on the machine.
-    Model : str, optional
-        The name of the thermodynamic model to use. Default is None, which sets the model
-        to "MELTSv1.0.2".
+        The number of CPU cores for parallel processing. Defaults to all available cores.
+    Model : str, optional, default "MELTSv1.0.2"
+        The name of the thermodynamic model to use (e.g., "MELTSv1.0.2", "pMELTS", "Green2025").
     bulk : dict or pandas.Series
-        The bulk composition of the system. If passed as a pandas.Series, it will first
-        be converted to a dict. Default is None.
-    T_C : array-like, optional
-        The array of temperature values to use for the phase diagram, in degrees Celsius.
-        Default is None.
-    P_bar : array-like, optional
-        The array of pressure values to use for the phase diagram, in bars. Default is None.
-    T_min_C : float, optional
-        The minimum temperature value to use for the phase diagram, in degrees Celsius.
-        Default is None.
-    T_max_C : float, optional
-        The maximum temperature value to use for the phase diagram, in degrees Celsius.
-        Default is None.
-    T_num : int, optional
-        The number of temperature values to use for the phase diagram. Default is None.
-    P_min_bar : float, optional
-        The minimum pressure value to use for the phase diagram, in bars. Default is None.
-    P_max_bar : float, optional
-        The maximum pressure value to use for the phase diagram, in bars. Default is None.
-    P_num : int, optional
-        The number of pressure values to use for the phase diagram. Default is None.
-    Fe3Fet_Liq : float, optional
-        The Fe3+/Fetot ratio for the liquid phase. Default is None.
-    H2O_Liq : float, optional
-        The water content of the liquid phase, in wt%. Default is None.
+        The bulk composition of the system (wt% oxides).
+    T_C, P_bar : array-like, optional
+        Explicit arrays of temperature (°C) and pressure (bar) values. If provided, they 
+        override the min/max/num parameters.
+    T_min_C, T_max_C, T_num : float, float, int, optional
+        Minimum, maximum, and number of temperature points for the grid creation.
+    P_min_bar, P_max_bar, P_num : float, float, int, optional
+        Minimum, maximum, and number of pressure points for the grid creation.
+    Fe3Fet_init, H2O_init, CO2_init : float, optional
+        Initial $\text{Fe}^{3+}/\Sigma\text{Fe}$ ratio, $\text{H}_2\text{O}$ (wt%), and $\text{CO}_2$ (wt%) 
+        content used to initialize the bulk system. These replace the deprecated `_Liq` arguments.
+    Fe3Fet_Liq, H2O_Liq, CO2_Liq : float, optional
+        **DEPRECATED**. Use `Fe3Fet_init`, `H2O_init`, `CO2_init` instead.
     fO2_buffer : str, optional
-        The name of the oxygen buffer to use for the phase diagram. Default is None.
+        Oxygen buffer to constrain redox state (e.g., "FMQ", "NNO").
     fO2_offset : float, optional
-        The offset to apply to the fO2 buffer value. Default is None.
-    i_max : int, optional
-        The maximum number of attempts to make at calculating the phase diagram. Default is 25.
+        Offset to apply to the $\text{f}\text{O}_2$ buffer value (log units).
+    i_max : int, optional, default 15
+        The maximum number of times the parallel loop will re-attempt to calculate missing P-T points.
+    grid : bool, optional, default True
+        If True, a full 2D T-P meshgrid is created. If False, T\_C and P\_bar must be 1D arrays of the same length.
+    refine : int, optional
+        The number of times to run `phaseDiagram_refine` after the initial calculation to improve 
+        phase boundary resolution.
 
     Returns:
     --------
     pandas.DataFrame
-        A dataframe containing the phase diagram results.
+        A DataFrame containing the results for all successfully calculated P-T points, 
+        including phase fractions, compositions, and thermodynamic properties.
     """
 
     ## make sure everything is a float
@@ -326,6 +322,39 @@ def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar
 
 def phaseDiagram_refine(Data = None, Model = None, bulk = None, Fe3Fet_Liq = None, H2O_Liq = None, CO2_Liq = None, 
                         fO2_buffer = None, fO2_offset = None, i_max = 15):
+    """
+    Refines an existing Phase Diagram calculation by identifying and calculating new P-T points 
+    near inferred phase boundaries.
+
+    The function first generates a finer grid of P and T points. It then uses the phase assemblage 
+    information from the existing `Data` to interpolate values where phase assemblages are 
+    homogeneous, and flags points where the phase assemblage changes (i.e., near phase boundaries) 
+    for re-calculation using `phaseDiagram_calc`.
+
+    Parameters:
+    -----------
+    Data : pandas.DataFrame
+        The existing phase diagram calculation results (output from `phaseDiagram_calc`).
+    Model : str, optional
+        The thermodynamic model used for the initial calculation.
+    bulk : dict or pandas.Series, optional
+        The bulk composition of the system.
+    Fe3Fet_Liq, H2O_Liq, CO2_Liq : float, optional
+        Initial system volatile contents and redox state used for the calculation.
+    fO2_buffer : str, optional
+        Oxygen buffer used for the calculation.
+    fO2_offset : float, optional
+        Offset to the $\text{f}\text{O}_2$ buffer value (log units).
+    i_max : int, optional, default 15
+        The maximum number of attempts for the sub-call to `phaseDiagram_calc` to resolve new points.
+
+    Returns:
+    --------
+    pandas.DataFrame
+        A consolidated DataFrame containing the original data, the newly interpolated data (for 
+        homogeneous regions), and the newly calculated data (for phase boundary regions), 
+        providing a refined P-T phase diagram.
+    """
     
     Combined = Data.copy()
 
@@ -507,237 +536,237 @@ def tidy_phaseDiagram(Data = None, Model = None, bulk = None, Fe3Fet_Liq = None,
     return out
 
 
-def phaseDiagram_eq(cores = None, Model = None, bulk = None, T_C = None, P_bar = None, T_min_C = None, T_max_C = None, T_num = None, P_min_bar = None, P_max_bar = None, P_num = None, Fe3Fet_Liq = None, H2O_Liq = None, fO2_buffer = None, fO2_offset = None, number_max = 50):
-    """
-    Calculates the phase diagram for a given bulk composition over a
-    range of temperatures and pressures.
+# def phaseDiagram_eq(cores = None, Model = None, bulk = None, T_C = None, P_bar = None, T_min_C = None, T_max_C = None, T_num = None, P_min_bar = None, P_max_bar = None, P_num = None, Fe3Fet_Liq = None, H2O_Liq = None, fO2_buffer = None, fO2_offset = None, number_max = 50):
+#     """
+#     Calculates the phase diagram for a given bulk composition over a
+#     range of temperatures and pressures.
 
-    Parameters:
-    -----------
-    cores : int or None, optional
-        The number of cores to use for multiprocessing, default is set to the number of logical processors available.
-    Model : str or None, optional
-        The thermodynamic model to use, either 'MELTSv1.0.2' or 'Holland'. Default is None.
-    bulk : dict, pandas.core.series.Series
-        The bulk composition to use. Can be a dictionary with the element names and mole
-        fractions, a pandas series.
-    T_C : array-like or None, optional
-        The temperature range (in degrees Celsius) to calculate the phase diagram over. If
-        T_min_C is given and T_C is None, this array is generated automatically. Default is None.
-    P_bar : array-like or None, optional
-        The pressure range (in bars) to calculate the phase diagram over. If P_min_bar is given
-        and P_bar is None, this array is generated automatically. Default is None.
-    T_min_C : float or None, optional
-        The minimum temperature (in degrees Celsius) to calculate the phase diagram over. Default is None.
-    T_max_C : float or None, optional
-        The maximum temperature (in degrees Celsius) to calculate the phase diagram over. Default is None.
-    T_num : int or None, optional
-        The number of temperature steps to calculate the phase diagram over. Default is None.
-    P_min_bar : float or None, optional
-        The minimum pressure (in bars) to calculate the phase diagram over. Default is None.
-    P_max_bar : float or None, optional
-        The maximum pressure (in bars) to calculate the phase diagram over. Default is None.
-    P_num : int or None, optional
-        The number of pressure steps to calculate the phase diagram over. Default is None.
-    Fe3Fet_Liq : float or None, optional
-        The Fe3+/Fet ratio of the liquid for the bulk composition. Default is None.
-    H2O_Liq : float or None, optional
-        The H2O content of the liquid for the bulk composition. Default is None.
-    fO2_buffer : str or None, optional
-        The oxygen buffer to use for MELTS. Default is None.
-    fO2_offset : float or None, optional
-        The oxygen buffer offset to use for MELTS. Default is None.
-    number_max : int, optional
-        The maximum number of calculations to perform in a single Holland model calculation.
-        If there are more than this number of calculations to perform, multiprocessing is used.
-        Default is 50.
+#     Parameters:
+#     -----------
+#     cores : int or None, optional
+#         The number of cores to use for multiprocessing, default is set to the number of logical processors available.
+#     Model : str or None, optional
+#         The thermodynamic model to use, either 'MELTSv1.0.2' or 'Holland'. Default is None.
+#     bulk : dict, pandas.core.series.Series
+#         The bulk composition to use. Can be a dictionary with the element names and mole
+#         fractions, a pandas series.
+#     T_C : array-like or None, optional
+#         The temperature range (in degrees Celsius) to calculate the phase diagram over. If
+#         T_min_C is given and T_C is None, this array is generated automatically. Default is None.
+#     P_bar : array-like or None, optional
+#         The pressure range (in bars) to calculate the phase diagram over. If P_min_bar is given
+#         and P_bar is None, this array is generated automatically. Default is None.
+#     T_min_C : float or None, optional
+#         The minimum temperature (in degrees Celsius) to calculate the phase diagram over. Default is None.
+#     T_max_C : float or None, optional
+#         The maximum temperature (in degrees Celsius) to calculate the phase diagram over. Default is None.
+#     T_num : int or None, optional
+#         The number of temperature steps to calculate the phase diagram over. Default is None.
+#     P_min_bar : float or None, optional
+#         The minimum pressure (in bars) to calculate the phase diagram over. Default is None.
+#     P_max_bar : float or None, optional
+#         The maximum pressure (in bars) to calculate the phase diagram over. Default is None.
+#     P_num : int or None, optional
+#         The number of pressure steps to calculate the phase diagram over. Default is None.
+#     Fe3Fet_Liq : float or None, optional
+#         The Fe3+/Fet ratio of the liquid for the bulk composition. Default is None.
+#     H2O_Liq : float or None, optional
+#         The H2O content of the liquid for the bulk composition. Default is None.
+#     fO2_buffer : str or None, optional
+#         The oxygen buffer to use for MELTS. Default is None.
+#     fO2_offset : float or None, optional
+#         The oxygen buffer offset to use for MELTS. Default is None.
+#     number_max : int, optional
+#         The maximum number of calculations to perform in a single Holland model calculation.
+#         If there are more than this number of calculations to perform, multiprocessing is used.
+#         Default is 50.
 
-    Returns:
-    --------
-    pandas.core.frame.DataFrame
-        A dataframe containing the equilibrium phase assemblage(s) for the given bulk
-        composition over the range of temperatures and pressures specified.
-    """
-    comp = bulk.copy()
+#     Returns:
+#     --------
+#     pandas.core.frame.DataFrame
+#         A dataframe containing the equilibrium phase assemblage(s) for the given bulk
+#         composition over the range of temperatures and pressures specified.
+#     """
+#     comp = bulk.copy()
 
-    if cores is None:
-        cores = multiprocessing.cpu_count()
+#     if cores is None:
+#         cores = multiprocessing.cpu_count()
 
-    if Model is None:
-        Model = "MELTSv1.0.2"
+#     if Model is None:
+#         Model = "MELTSv1.0.2"
 
-    if Model == "Holland":
-        import pyMAGEMINcalc as MM
+#     if Model == "Holland":
+#         import pyMAGEMINcalc as MM
 
-    # if comp is entered as a pandas series, it must first be converted to a dict
-    if type(comp) == pd.core.series.Series:
-        comp = comp.to_dict()
+#     # if comp is entered as a pandas series, it must first be converted to a dict
+#     if type(comp) == pd.core.series.Series:
+#         comp = comp.to_dict()
 
-    # ensure the bulk composition has the correct headers etc.
-    comp = comp_fix(Model = Model, comp = comp, Fe3Fet_Liq = Fe3Fet_Liq, H2O_Liq = H2O_Liq)
+#     # ensure the bulk composition has the correct headers etc.
+#     comp = comp_fix(Model = Model, comp = comp, Fe3Fet_Liq = Fe3Fet_Liq, H2O_Liq = H2O_Liq)
 
-    if T_min_C is not None:
-        T_C = np.linspace(T_min_C, T_max_C, T_num)
+#     if T_min_C is not None:
+#         T_C = np.linspace(T_min_C, T_max_C, T_num)
 
-    if P_min_bar is not None:
-        P_bar = np.linspace(P_min_bar, P_max_bar, P_num)
+#     if P_min_bar is not None:
+#         P_bar = np.linspace(P_min_bar, P_max_bar, P_num)
 
-    T, P = np.meshgrid(T_C, P_bar)
+#     T, P = np.meshgrid(T_C, P_bar)
 
-    T_flat = np.round(T.flatten(),2)
-    P_flat = np.round(P.flatten(),2)
+#     T_flat = np.round(T.flatten(),2)
+#     P_flat = np.round(P.flatten(),2)
 
-    if "MELTS" in Model:
-        A = len(P_flat)//cores
-        B = len(P_flat) % cores
-        if A > 0:
-            Group = np.zeros(A) + cores
-            if B > 0:
-                Group = np.append(Group, B)
-        else:
-            Group = np.array([B])
+#     if "MELTS" in Model:
+#         A = len(P_flat)//cores
+#         B = len(P_flat) % cores
+#         if A > 0:
+#             Group = np.zeros(A) + cores
+#             if B > 0:
+#                 Group = np.append(Group, B)
+#         else:
+#             Group = np.array([B])
 
-        qs = []
-        q = Queue()
-        c = 0
-        #Combined = pd.DataFrame(columns = ['T_C', 'P_bar'], data = np.zeros((1,2)))
-        for j in tqdm(range(len(Group))):
-            ps = []
-            for i in range(int(cores*j), int(cores*j + Group[j])):
-                p = Process(target = equilibrate, args = (q,i), kwargs = {'Model': Model, 'comp': comp, 'T_C': T_flat[i], 'P_bar': P_flat[i], 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset})
+#         qs = []
+#         q = Queue()
+#         c = 0
+#         #Combined = pd.DataFrame(columns = ['T_C', 'P_bar'], data = np.zeros((1,2)))
+#         for j in tqdm(range(len(Group))):
+#             ps = []
+#             for i in range(int(cores*j), int(cores*j + Group[j])):
+#                 p = Process(target = equilibrate, args = (q,i), kwargs = {'Model': Model, 'comp': comp, 'T_C': T_flat[i], 'P_bar': P_flat[i], 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset})
 
-                ps.append(p)
-                p.start()
+#                 ps.append(p)
+#                 p.start()
 
-            TIMEOUT = 60 #+ #0.5*len(T_flat)
-            start = time.time()
-            for p in ps:
-                if TIMEOUT  - (time.time() - start) > 10:
-                    try:
-                        ret = q.get(timeout = TIMEOUT - (time.time() - start))
-                    except:
-                        ret = []
+#             TIMEOUT = 60 #+ #0.5*len(T_flat)
+#             start = time.time()
+#             for p in ps:
+#                 if TIMEOUT  - (time.time() - start) > 10:
+#                     try:
+#                         ret = q.get(timeout = TIMEOUT - (time.time() - start))
+#                     except:
+#                         ret = []
 
-                else:
-                    try:
-                        ret = q.get(timeout = 10)
-                    except:
-                        ret = []
+#                 else:
+#                     try:
+#                         ret = q.get(timeout = 10)
+#                     except:
+#                         ret = []
 
-                qs.append(ret)
+#                 qs.append(ret)
 
-            for p in ps:
-                p.kill()
+#             for p in ps:
+#                 p.kill()
 
-        Results = {}
-        for i in range(len(qs)):
-            if len(qs[i]) > 0:
-                Res, index = qs[i]
-                Results['index = ' + str(index)] = Res
+#         Results = {}
+#         for i in range(len(qs)):
+#             if len(qs[i]) > 0:
+#                 Res, index = qs[i]
+#                 Results['index = ' + str(index)] = Res
 
-        if "MELTS" in Model:
-            Results = stich(Results, multi = True, Model = Model)
+#         if "MELTS" in Model:
+#             Results = stich(Results, multi = True, Model = Model)
 
-        for i in Results.keys():
-            if c == 0:
-                if "MELTS" in Model:
-                    Combined = Results[i]['All'].copy()
-                else:
-                    Combined = Results[i].copy()
-                c = 1
-            else:
-                if "MELTS" in Model:
-                    Combined = pd.concat([Combined, Results[i]['All']], axis = 0, ignore_index = True)
-                else:
-                    try:
-                        Combined = pd.concat([Combined, Results[i]], axis = 0, ignore_index = True)
-                    except:
-                        continue
+#         for i in Results.keys():
+#             if c == 0:
+#                 if "MELTS" in Model:
+#                     Combined = Results[i]['All'].copy()
+#                 else:
+#                     Combined = Results[i].copy()
+#                 c = 1
+#             else:
+#                 if "MELTS" in Model:
+#                     Combined = pd.concat([Combined, Results[i]['All']], axis = 0, ignore_index = True)
+#                 else:
+#                     try:
+#                         Combined = pd.concat([Combined, Results[i]], axis = 0, ignore_index = True)
+#                     except:
+#                         continue
 
-    if Model == "Holland":
-        Combined = pd.DataFrame()
-        if len(T_flat) < number_max:
-            c = 0
-            for i in tqdm(range(len(T_flat))):
-                try:
-                    Results = MM.equilibrate(Model = Model, P_bar = P_flat[i], T_C = T_flat[i], comp = comp, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset)
-                    Combined = pd.concat([Combined, Results], axis = 0, ignore_index = True)
-                except:
-                    pass
-        else:
-            s = len(T_flat)//number_max
-            A = s//cores
-            B = s % cores
+#     if Model == "Holland":
+#         Combined = pd.DataFrame()
+#         if len(T_flat) < number_max:
+#             c = 0
+#             for i in tqdm(range(len(T_flat))):
+#                 try:
+#                     Results = MM.equilibrate(Model = Model, P_bar = P_flat[i], T_C = T_flat[i], comp = comp, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset)
+#                     Combined = pd.concat([Combined, Results], axis = 0, ignore_index = True)
+#                 except:
+#                     pass
+#         else:
+#             s = len(T_flat)//number_max
+#             A = s//cores
+#             B = s % cores
 
-            if A > 0:
-                Group = np.zeros(A) + cores
-            if B > 0:
-                if A > 0:
-                    Group = np.append(Group, B)
-                else:
-                    Group = np.array([B])
+#             if A > 0:
+#                 Group = np.zeros(A) + cores
+#             if B > 0:
+#                 if A > 0:
+#                     Group = np.append(Group, B)
+#                 else:
+#                     Group = np.array([B])
 
-            qs = []
-            q = Queue()
-            for j in tqdm(range(len(Group))):
-                ps = []
-                for i in range(int(cores*j), int(cores*j + Group[j])):
-                    T2 = T_flat[i*number_max:i*number_max+number_max]
-                    P2 = P_flat[i*number_max:i*number_max+number_max]
-                    p = Process(target = equilibrate, args = (q,i), kwargs = {'Model': Model, 'comp': comp, 'T_C': T2, 'P_bar': P2, 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset})
+#             qs = []
+#             q = Queue()
+#             for j in tqdm(range(len(Group))):
+#                 ps = []
+#                 for i in range(int(cores*j), int(cores*j + Group[j])):
+#                     T2 = T_flat[i*number_max:i*number_max+number_max]
+#                     P2 = P_flat[i*number_max:i*number_max+number_max]
+#                     p = Process(target = equilibrate, args = (q,i), kwargs = {'Model': Model, 'comp': comp, 'T_C': T2, 'P_bar': P2, 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset})
 
-                    ps.append(p)
-                    p.start()
+#                     ps.append(p)
+#                     p.start()
 
-                for p in ps:
-                    try:
-                        ret = q.get()
-                    except:
-                        ret = []
+#                 for p in ps:
+#                     try:
+#                         ret = q.get()
+#                     except:
+#                         ret = []
 
-                    qs.append(ret)
+#                     qs.append(ret)
 
-                for p in ps:
-                    p.kill()
+#                 for p in ps:
+#                     p.kill()
 
-            for i in range(len(qs)):
-                if len(qs[i]) > 0:
-                    Res, index = qs[i]
-                    Combined = pd.concat([Combined, Res], axis = 0, ignore_index = True)
+#             for i in range(len(qs)):
+#                 if len(qs[i]) > 0:
+#                     Res, index = qs[i]
+#                     Combined = pd.concat([Combined, Res], axis = 0, ignore_index = True)
 
-    if len(Combined['T_C']) < len(T_flat):
-        flat = np.round(np.array([T.flatten(), P.flatten()]).T,2)
-        Res_flat = np.round(np.array([Combined['T_C'].values, Combined['P_bar'].values]).T,2)
-        new_flat = flat[np.where((flat[:, None] == Res_flat).all(-1).any(-1) == False)]
+#     if len(Combined['T_C']) < len(T_flat):
+#         flat = np.round(np.array([T.flatten(), P.flatten()]).T,2)
+#         Res_flat = np.round(np.array([Combined['T_C'].values, Combined['P_bar'].values]).T,2)
+#         new_flat = flat[np.where((flat[:, None] == Res_flat).all(-1).any(-1) == False)]
 
-        # Combined['T_C'] = np.round(Combined['T_C'].values, 2)
-        # Combined['P_bar'] = np.round(Combined['P_bar'].values, 2)
+#         # Combined['T_C'] = np.round(Combined['T_C'].values, 2)
+#         # Combined['P_bar'] = np.round(Combined['P_bar'].values, 2)
 
-        for i in range(len(new_flat)):
-            df = pd.DataFrame(columns = ['T_C', 'P_bar'])
-            df.loc[0] = new_flat[i]
+#         for i in range(len(new_flat)):
+#             df = pd.DataFrame(columns = ['T_C', 'P_bar'])
+#             df.loc[0] = new_flat[i]
 
-            Combined = pd.concat([Combined, df], axis = 0, ignore_index = True)
+#             Combined = pd.concat([Combined, df], axis = 0, ignore_index = True)
 
-    return Combined
+#     return Combined
 
-def equilibrate(q, index,*, Model = None, P_bar = None, T_C = None, comp = None, fO2_buffer = None, fO2_offset = None):
+# def equilibrate(q, index,*, Model = None, P_bar = None, T_C = None, comp = None, fO2_buffer = None, fO2_offset = None):
 
-    if "MELTS" in Model:
-        Results = equilibrate_MELTS(Model = Model, P_bar = P_bar, T_C = T_C, comp = comp, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset)
-        q.put([Results, index])
-        return
+#     if "MELTS" in Model:
+#         Results = equilibrate_MELTS(Model = Model, P_bar = P_bar, T_C = T_C, comp = comp, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset)
+#         q.put([Results, index])
+#         return
 
-    if "Holland" in Model:
-        import pyMAGEMINcalc as MM
-        #from tqdm.notebook import tqdm, trange
-        Combined = pd.DataFrame()
-        for i in range(len(T_C)):
-            try:
-                Results = MM.equilibrate(Model = Model, P_bar = P_bar[i], T_C = T_C[i], comp = comp, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset)
-                Combined = pd.concat([Combined, Results], axis = 0, ignore_index = True)
-            except:
-                pass
+#     if "Holland" in Model:
+#         import pyMAGEMINcalc as MM
+#         #from tqdm.notebook import tqdm, trange
+#         Combined = pd.DataFrame()
+#         for i in range(len(T_C)):
+#             try:
+#                 Results = MM.equilibrate(Model = Model, P_bar = P_bar[i], T_C = T_C[i], comp = comp, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset)
+#                 Combined = pd.concat([Combined, Results], axis = 0, ignore_index = True)
+#             except:
+#                 pass
 
-        q.put([Combined, index])
-        return
+#         q.put([Combined, index])
+#         return

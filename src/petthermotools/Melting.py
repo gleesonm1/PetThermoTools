@@ -19,45 +19,51 @@ def AdiabaticDecompressionMelting(cores = multiprocessing.cpu_count(),
                                   P_path_bar = None, Frac = False, prop = None, 
                                   fO2_buffer = None, fO2_offset = None, Fe3Fet = None, MELTS_filter = True):
     """
-    Perform adiabatic decompression melting calculations using MELTS, MAGEMin, or pyMelt.
+    Performs adiabatic decompression melting calculations simulating mantle upwelling 
+    (e.g., beneath mid-ocean ridges or plumes) using MELTS, MAGEMin, or pyMelt.
 
-    Simulates mantle melting along an adiabatic upwelling path (e.g., ridge or plume) with user-defined 
-    starting potential temperature, pressure range, and step size. Supports single-lithology mantle sources 
-    (e.g., KLB-1) at present, with expansion to multi-lithology systems in development.
+    The function determines the phase equilibria and melt fraction along a user-defined 
+    pressure path starting from a specified mantle potential temperature ($T_{\text{p}}$).
 
     Parameters
     ----------
     cores : int, optional
-        Number of CPU cores to use for multiprocessing. Defaults to total available.
-    Model : str, optional
-        Thermodynamic model. MELTS variants: "MELTSv1.0.2", "MELTSv1.1.0", "MELTSv1.2.0", "pMELTS";
-        or MAGEMin: "Green2025", "Weller2024". Alternatively calculations can be performed using 
-        pyMelt (Matthews et al. 2020): "pyMelt"
-    bulk : dict ot str, optional
-        Bulk composition name or composition dictionary.
-        Default is "KLB-1".
-    Tp_C : float or np.ndarray, optional
-        Mantle potential temperature(s) in °C. Default is 1350.
-    Tp_Method : str, optional
-        Method to calculate the starting pressure for adiabatic melting. Default is "pyMelt".
+        Number of CPU cores to use for multiprocessing (currently mainly used as a placeholder 
+        for future multi-simulation batch runs). Defaults to total available.
+    Model : str, optional, default "pMELTS"
+        Thermodynamic model. Options include MELTS variants ("MELTSv1.0.2", "pMELTS", etc.), 
+        MAGEMin variants ("Green2025", "Weller2024"), or an empirical model "pyMelt".
+    bulk : dict or str, optional, default "KLB-1"
+        Bulk composition name (e.g., "KLB-1") or composition dictionary. 
+    Tp_C : float or np.ndarray, optional, default 1350
+        Mantle **potential temperature** ($T_{\text{p}}$) in °C.
+    Tp_Method : str, optional, default "pyMelt"
+        Method to calculate the **starting temperature** ($T_{\text{start}}$) on the adiabat 
+        at $P_{\text{start\_bar}}$. If "pyMelt", it uses the `pyMelt` adiabat calculation.
     P_start_bar, P_end_bar, dp_bar : float or array, optional
-        Starting, ending, and step size pressures (in bar) for adiabatic decompression. 
+        Starting, ending, and step size pressures (in bar) for the adiabatic decompression path. 
         Defaults: 30000, 2000, and 200, respectively.
     P_path_bar : np.ndarray, optional
-        User-specified pressure path (in bar). If given, overrides `P_start_bar`, `P_end_bar`, and `dp_bar`.
+        User-specified pressure path (in bar). If provided, this overrides `P_start_bar`, 
+        `P_end_bar`, and `dp_bar`.
+    Frac : bool, optional, default False
+        Placeholder for fractional melting implementation (currently not available).
+    prop : list, optional
+        Lithology proportions (fractions) for multi-lithology models (used by "pyMelt").
     fO2_buffer : {"FMQ", "NNO"}, optional
-        Redox buffer for constraining oxygen fugacity.
+        Redox buffer for oxygen fugacity control.
     fO2_offset : float, optional
-        Offset (log units) from the chosen fO2 buffer.
+        Offset (log units) from the chosen $\text{f}\text{O}_2$ buffer.
     Fe3Fet : float, optional
-        Initial Fe³⁺/ΣFe ratio for the bulk composition. If None, values is taken from the "bulk" variable or set according to fO2 buffer positions.
-    MELTS_filter : bool, default=True
-        If True, filters oxide components to avoid issues in MELTS calculations (e.g., K2O content set to 0.0).
+        Initial $\text{Fe}^{3+}/\Sigma\text{Fe}$ ratio for the bulk composition.
+    MELTS_filter : bool, default True
+        If True, applies a filter to oxide components to manage common MELTS calculation instability issues.
 
     Returns
     -------
     Results : dict
-        Dictionary containing DataFrames for the system and phase compositions and properties.
+        A dictionary containing DataFrames for the system and phase compositions and properties along 
+        the decompression path.
 
     Notes
     -----
@@ -261,8 +267,45 @@ def AdiabaticMelt(q, index, *, Model = None, comp_1 = None, comp_2 = None, comp_
                   Tp_C = None, P_start_bar = None, P_end_bar = None, dp_bar = None, P_path_bar = None, 
                   Frac = None, fO2_buffer = None, fO2_offset = None, prop = None):
     '''
-    Melting calculations to be performed in parallel.
+    Worker function to perform a single Adiabatic Decompression Melting (ADM) simulation.
 
+    This function is intended to be run in a separate process by `AdiabaticDecompressionMelting`. 
+    It interfaces with the specific model (MELTS, pyMelt, or MAGEMin) to calculate 
+    the P-T-melt path.
+
+    Parameters:
+    ----------
+    q : multiprocessing.Queue
+        Output queue for sending back results.
+    index : int
+        Index of the calculation run (for batch runs) to aid in result indexing.
+    Model : str, optional
+        Thermodynamic model to use (e.g., "pMELTS", "pyMelt", "Green2025").
+    comp_1, comp_2, comp_3 : dict or str, optional
+        Bulk composition(s) for the lithologies.
+    Tp_Method : str, default "pyMelt"
+        Method for calculating the starting temperature on the adiabat.
+    Tp_C : float, optional
+        Mantle potential temperature ($T_{\text{p}}$) in °C.
+    P_start_bar, P_end_bar, dp_bar : float, optional
+        Starting, ending, and step size pressures (in bar).
+    P_path_bar : np.ndarray, optional
+        User-specified pressure path (in bar).
+    Frac : bool, optional
+        Placeholder for fractional melting implementation.
+    fO2_buffer : str, optional
+        Oxygen fugacity buffer.
+    fO2_offset : float, optional
+        Offset from the $\text{f}\text{O}_2$ buffer (log units).
+    prop : list, optional
+        Lithology proportions (used by "pyMelt" multi-lithology models).
+
+    Returns:
+    ----------
+    None
+        The function returns results via `q.put()`:
+        `q.put([Results, index])`
+        where `Results` is a dictionary of DataFrames containing the melt path data.
     '''
     Results = {}
     if "MELTS" in Model:
@@ -365,17 +408,6 @@ def AdiabaticMelt(q, index, *, Model = None, comp_1 = None, comp_2 = None, comp_
             import Pkg
             Pkg.activate("{jl_env_path}")
             """)
-
-        # import os, pathlib
-
-        # # 1. Where to install Julia + MAGEMin environment (user home dir, persistent)
-        # home = str(pathlib.Path.home())
-        # env_path = os.path.join(home, ".MAGEMinEnv")
-
-        # jl.seval(f"""
-        # import Pkg
-        # Pkg.activate("{env_path}")
-        # """)
 
         jl.seval("using MAGEMinCalc")
 

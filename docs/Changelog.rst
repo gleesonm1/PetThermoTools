@@ -106,3 +106,9 @@ Version 0.2.55 (November 2025)
 ====================================
 Outputs between MELTS and MAGEMin calculations are now consistent and indicated with correct units.
 Update MAGEMinCalc to v0.5.1 - use `ptt.update_MAGEMinCalc()` function
+
+Version 0.3.0 (December 2025)
+====================================
+Update to the documentation of all functions. 
+Units now included for all outputs and consistency in outputs between alphaMELTS and MAGEMin calculations.
+Update MAGEMinCalc to v0.5.2 - use  `ptt.update_MAGEMinCalc()` function.

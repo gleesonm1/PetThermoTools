@@ -27,39 +27,41 @@ from pathlib import Path
 def path_4_saturation_multi(q, index, *, Model = None, P_bar = None, comp = None, T_maxdrop_C = None, dt_C = None, T_initial_C = None, fO2_buffer = None,
                       fO2_offset = 0.0, H2O_Sat = None, phases = None):
     """
-    Run crystallization simulations at multiple pressures to determine pressure of mineral co-saturations using MELTS or MAGEMinCalc in parallel.
+    Worker function to run crystallization simulations at a subset of pressures in parallel
+    using alphaMELTS for Python or MAGEMinCalc to determine mineral co-saturations.
 
     Parameters
     ----------
     q : multiprocessing.Queue
         Queue object for inter-process communication (used to return results).
-    index : array-like
-        Index values to iterate over P_bar.
+    index : list of int or numpy.ndarray
+        Chunk of indices from the full pressure array (`P_bar`) assigned to this worker process.
     Model : str
-        Thermodynamic model to use.
-    P_bar : array-like
-        Pressures in bar at which to simulate crystallization paths.
+        Thermodynamic model to use: e.g., 'MELTSv1.0.2', 'pMELTS', or 'MAGEMinCalc'.
+    P_bar : numpy.ndarray
+        The full array of pressures (in bar) that is being iterated over by all workers.
     comp : dict
-        Bulk composition of the starting material.
+        Bulk composition (oxides in wt%) of the starting material.
     T_maxdrop_C : float
-        Maximum temperature drop below the liquidus and/or starting temperature in Celsius.
+        The minimum temperature (°C) below the liquidus to continue the simulation path down to.
     dt_C : float
         Step size for temperature change (in °C).
     T_initial_C : float
-        Starting temperature (°C) for simulations.
+        Starting temperature (°C) for liquidus calculations.
     fO2_buffer : str, optional
-        Oxygen fugacity buffer ("FMQ" or "NNO").
+        Oxygen fugacity buffer ('FMQ' or 'NNO' for MELTS, 'qfm' or 'nno' for MAGEMinCalc).
     fO2_offset : float, default 0.0
         Offset in log units from the specified fO2 buffer.
     H2O_Sat : bool
-        Whether the system is fluid-saturated.
+        If True, the system is simulated under water-saturated conditions.
     phases : list of str
-        List of phases to monitor for saturation.
+        List of phases (e.g., ['quartz1', 'alkali-feldspar1']) to monitor for saturation.
 
     Returns
     -------
     None
-        Results are put in the multiprocessing queue `q` as a list: [idx, results].
+        The results are placed into the multiprocessing queue `q` as a two-element list:
+        `[list of indices processed (int), dict of raw simulation results]`.
     """
 
     results = {}
@@ -146,6 +148,10 @@ def mineral_cosaturation(Model="MELTSv1.0.2", cores=int(np.floor(multiprocessing
     """
     Determines the pressure at which two or more minerals co-saturate (following the method of Gualda et al. 2014).
 
+    The analysis involves running multiple isobaric crystallization paths over a range of
+    pressures, calculating the saturation temperature for the specified phases at each pressure,
+    and finding the pressure that minimizes the temperature difference between them.
+
     Parameters
     ----------
     Model : str
@@ -153,11 +159,11 @@ def mineral_cosaturation(Model="MELTSv1.0.2", cores=int(np.floor(multiprocessing
     cores : int
         Number of parallel processes to use.
     bulk : dict
-        Bulk composition of the starting material.
-    phases : list of str
-        Mineral phases to track for saturation.
+        Bulk composition of the starting material, reported as oxide concentrations in wt%.
+    phases : list
+        Mineral phases to track for saturation. Must be a 2 or 3 item list ['quartz1', 'plagioclase1']
     P_bar : array-like
-        Pressures to test in bars.
+        Array of pressures used for the crystallization calculations.
     Fe3Fet_init : float, optional
         Initial Fe³⁺/Fe_total ratio.
     H2O_init : float, optional
@@ -165,23 +171,23 @@ def mineral_cosaturation(Model="MELTSv1.0.2", cores=int(np.floor(multiprocessing
     CO2_init : float, optional
         Initial CO₂ content in the system (wt%).
     H2O_Sat : bool
-        If True, run at H₂O saturation.
+        If True, run at H₂O saturation. System must have enough H2O to be saturated.
     T_initial_C : float, optional
-        Starting temperature in °C.
+        Starting temperature in °C for liquidus calculations.
     dt_C : float
         Temperature step size (°C).
     T_maxdrop_C : float
         Maximum temperature drop below the liquidus to search for satuartion (°C).
     T_cut_C : float
-        Maximum acceptable difference in phase saturation temperatures for "co-saturation" (°C).
+        Maximum acceptable difference in phase saturation temperatures for "co-saturation" (°C). Used when trying to fit a polynomial to the results to find the true minimum point.
     find_range : bool
-        If True, analyze phase co-saturation ranges.
+        If True, analyze phase co-saturation ranges. Currently disabled.
     find_min : bool
         If True, determine pressure where phase saturation temperature difference is minimized.
     fO2_buffer : str, optional
         Oxygen fugacity buffer (e.g., "FMQ", "NNO").
     fO2_offset : float, default 0.0
-        Offset from the fO2 buffer.
+        Offset from the fO2 buffer in log units.
     timeout : int
         Timeout (in seconds) for each process.
     multi_processing : bool
@@ -190,7 +196,7 @@ def mineral_cosaturation(Model="MELTSv1.0.2", cores=int(np.floor(multiprocessing
     Returns
     -------
     out : dict
-        Contains either 'Output' (DataFrame of phase saturation conditions) or both 'Output' and 'CurveMin'.
+        Contains either 'Output' (DataFrame of phase saturation conditions) or both 'Output' and 'CurveMin' (results from the minimization calculations).
     Results : dict
         Raw simulation outputs for each pressure step.
     """
@@ -500,606 +506,3 @@ def find_mineral_cosaturation(cores = None, Model = None, bulk = None, phases = 
     print("This function has been removed following update to v0.2.40. Please switch to using the mineral_cosaturation() function")
 
     return "This function has been removed following update to v0.2.40. Please switch to using the mineral_cosaturation() function"
-
-# def find_mineral_cosaturation(cores = None, Model = None, bulk = None, phases = None, P_bar = None, Fe3Fet_Liq = None, 
-#                               H2O_Liq = None, H2O_Sat = False, T_initial_C = None, dt_C = None, T_maxdrop_C = None, 
-#                               T_cut_C = None, find_range = None, find_min = None, fO2_buffer = None, fO2_offset = None):
-#     '''
-#     Carry out multiple calculations in parallel. Allows isobaric, polybaric and isochoric crystallisation to be performed as well as isothermal, isenthalpic or isentropic decompression. All temperature inputs/outputs are reported in degrees celcius and pressure is reported in bars.
-
-#     Parameters:
-#     ----------
-#     cores: int
-#         number of processes to run in parallel. Default will be determined using Multiprocessing.cpu_count().
-
-#     Model: string
-#         "MELTS" or "Holland". Dictates whether MELTS or MAGEMin calculations are performed. Default "MELTS".
-#         Version of melts can be specified "MELTSv1.0.2", "MELTSv1.1.0", "MELTSv1.2.0", or "pMELTS". Default "v.1.0.2".
-
-#     bulk: Dict or pd.DataFrame
-#         Initial compositon for calculations. If type == Dict, the same initial composition will be used in all calculations.
-
-#     phases: list
-#         length 2 or 3, contains the phases of the co-saturated magma. Default = ['quartz1', 'plagioclase1', 'k-feldspar1'].
-
-#     P_bar: np.ndarray
-#         Calculation pressure. Length determines the number of calculations to be performed.
-
-#     Fe3Fet_Liq: float or np.ndarray
-#         Initial Fe 3+/total ratio.
-
-#     H2O_Liq: float
-#         H2O content of the initial melt phase.
-
-#     T_initial_C: float
-#         Starting temperature for the liquidus calculations. Default = 1200
-
-#     T_maxdrop_C: float
-#         Max temperature drop of the calculations. Default = 25
-
-#     dt_C: float
-#         Temperature change at each model step. Default = 1
-
-#     T_cut_C: float
-#         Temperature offset used to indicate whether the model has succeeded or failed in finding a match. Default = 10.
-
-#     find_range: True/False
-#         If True a new DataFrame will be included in Results, indicating all cases where the minimum offset is less than T_cut_C.
-
-#     find_min: True/False
-#         If True, a spline fit will be applied to the data to find the minimum point.
-
-#     fO2_buffer: string
-#         If the oxygen fugacity of the system is to be buffered during crystallisation/decompression, then an offset to a known buffer must be specified. Here the user can define the known buffer as either "FMQ" or "NNO".
-
-#     fO2_offset: float
-#         Offset from the buffer spcified in fO2_buffer (log units).
-
-#     Returns:
-#     ----------
-#     Results: Dict
-#         Dictionary containing information regarding the saturation temperature of each phase and the residuals between the different phases
-#     '''
-#     print('This function will be removed following the update to v0.3.0. Please switch to using the mineral_cosaturation() function')
-
-#     try:
-#         from meltsdynamic import MELTSdynamic
-#     except:
-#         Warning('alphaMELTS for Python files are not on the python path. \n Please add these files to the path running \n import sys \n sys.path.append(r"insert_your_path_to_melts_here") \n You are looking for the location of the meltsdynamic.py file')
-
-#     T_step_C = dt_C
-#     dt_C = T_maxdrop_C 
-
-#     comp = bulk.copy()
-#     if H2O_Sat is True:
-#         comp['H2O_Liq'] = 20
-
-#     # set default values if required
-#     if Model is None:
-#         Model == "MELTSv1.0.2"
-
-#     if cores is None:
-#         cores = multiprocessing.cpu_count()
-
-#     # if comp is entered as a pandas series, it must first be converted to a dict
-#     if type(comp) == pd.core.series.Series:
-#         comp = comp.to_dict()
-
-#     # ensure the bulk composition has the correct headers etc.
-#     comp = comp_fix(Model = Model, comp = comp)
-
-#     # create base array to be filled
-#     if P_bar is None:
-#         P_bar = np.array([-1])
-#     elif type(P_bar) != np.ndarray:
-#         P_bar = np.array([P_bar])
-
-#     if Fe3Fet_Liq is None:
-#         Fe3Fet_Liq = np.array([-1])
-#     elif type(Fe3Fet_Liq) != np.ndarray:
-#         Fe3Fet_Liq = np.array([Fe3Fet_Liq])
-
-#     if H2O_Liq is None:
-#         H2O_Liq = np.array([-1])
-#     elif type(H2O_Liq) != np.ndarray:
-#         H2O_Liq = np.array([H2O_Liq])
-
-#     base_array = np.zeros((len(H2O_Liq),len(Fe3Fet_Liq),len(P_bar)))
-
-#     if P_bar[0] == -1:
-#         P_bar = 1000
-#     if Fe3Fet_Liq[0] == -1:
-#         Fe3Fet_Liq = None
-#     if H2O_Liq[0] == -1:
-#         H2O_Liq = None
-
-#     # set default values for remaining parameters
-#     if T_initial_C is None:
-#         T_initial_C = 1200
-
-#     if dt_C is None:
-#         dt_C = 25
-
-#     if T_step_C is None:
-#         T_step_C = 1
-
-#     if T_cut_C is None:
-#         T_cut_C = 10
-
-#     if phases is None:
-#         phases = ['quartz1', 'alkali-feldspar1', 'plagioclase1']
-
-#     # create main output dictionary
-#     Results = {}
-#     if len(phases) == 3:
-#         List = [phases[0], phases[1], phases[2], 'T_Liq', 'H2O_melt', '3 Phase Saturation', phases[0] + ' - ' + phases[1], phases[0] + ' - ' + phases[2], phases[1] + ' - ' + phases[2]]
-#         for l in List:
-#             Results[l] = base_array.copy()
-#     else:
-#         List = [phases[0], phases[1], 'T_Liq', 'H2O_melt', phases[0] + ' - ' + phases[1]]
-#         for l in List:
-#             Results[l] = base_array.copy()
-
-#     # run calculations if only one initial composition provided
-#     if type(comp) == dict:
-#         for i in range(np.shape(base_array)[0]):
-#             # if H2O specified set H2O on each iteration
-#             if H2O_Liq is not None:
-#                 comp['H2O_Liq'] = H2O_Liq[i]
-
-#             for j in range(np.shape(base_array)[1]):
-#                 #if Fe3Fet specified set Fe3Fet on each iteration
-#                 if Fe3Fet_Liq is not None:
-#                     comp['Fe3Fet_Liq'] = Fe3Fet_Liq[j]
-
-#                 # determine how many processes to run in parallel
-#                 if len(P_bar) > 1:
-#                     A = len(P_bar)//cores
-#                     B = len(P_bar) % cores
-
-#                 if A > 0:
-#                     Group = np.zeros(A) + cores
-#                     if B > 0:
-#                         Group = np.append(Group, B)
-#                 else:
-#                     Group = np.array([B])
-
-#                 # initialise queue
-#                 qs = []
-#                 q = Queue()
-
-
-#                 # run calculations
-#                 for k in range(len(Group)):
-#                     ps = []
-
-#                     for kk in range(int(cores*k), int(cores*k + Group[k])):
-#                         p = Process(target = satTemperature, args = (q, kk),
-#                                     kwargs = {'Model': Model, 'comp': comp,
-#                                     'T_initial_C': T_initial_C, 'T_step_C': T_step_C,
-#                                     'dt_C': dt_C, 'P_bar': P_bar[kk], 'phases': phases,
-#                                     'H2O_Liq': H2O_Liq, 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset})
-
-#                         ps.append(p)
-#                         p.start()
-
-#                     TIMEOUT = 300
-
-#                     start = time.time()
-#                     for p in ps:
-#                         if time.time() - start < TIMEOUT - 10:
-#                             try:
-#                                 ret = q.get(timeout = TIMEOUT - (time.time()-start) + 10)
-#                             except:
-#                                 ret = []
-#                         else:
-#                             try:
-#                                 ret = q.get(timeout = 10)
-#                             except:
-#                                 ret = []
-
-#                         qs.append(ret)
-
-#                     TIMEOUT = 5
-#                     start = time.time()
-#                     for p in ps:
-#                         if p.is_alive():
-#                             while time.time() - start <= TIMEOUT:
-#                                 if not p.is_alive():
-#                                     p.join()
-#                                     p.terminate()
-#                                     break
-#                                 time.sleep(.1)
-#                             else:
-#                                 p.terminate()
-#                                 p.join(5)
-#                         else:
-#                             p.join()
-#                             p.terminate()
-
-
-#                     # for p in ps:
-#                     #     try:
-#                     #         ret = q.get(timeout = 180)
-#                     #     except:
-#                     #         ret = []
-#                     #
-#                     #     qs.append(ret)
-#                     #
-#                     # TIMEOUT = 20
-#                     # start = time.time()
-#                     # for p in ps:
-#                     #     if p.is_alive():
-#                     #         time.sleep(.1)
-#                     #         while time.time() - start <= TIMEOUT:
-#                     #             if not p.is_alive():
-#                     #                 p.join()
-#                     #                 p.terminate()
-#                     #                 break
-#                     #             time.sleep(.1)
-#                     #         else:
-#                     #             p.terminate()
-#                     #             p.join(5)
-#                     #     else:
-#                     #         p.join()
-#                     #         p.terminate()
-
-#                 # # extract results
-#                 for kk in range(len(qs)):
-#                     if len(qs[kk]) > 0:
-#                         Res, index = qs[kk]
-#                         for l in Results:
-#                             if l != 'sat_surface':
-#                                 Results[l][i,j,index] = Res[l]
-
-#         # covert any empty values to nan
-#         for l in Results:
-#             if l != 'sat_surface':
-#                 Results[l][np.where(Results[l] == 0.0)] = np.nan
-
-#         if find_min is not None:
-#             if H2O_Liq is not None:
-#                 Results = findMinimum(Results = Results, P_bar = P_bar, T_cut_C = T_cut_C, H2O_Liq = H2O_Liq, Fe3Fet_Liq = Fe3Fet_Liq, phases = phases)
-#             else:
-#                 Results = findMinimum(Results = Results, P_bar = P_bar, T_cut_C = T_cut_C, H2O_Liq = H2O_Liq, Fe3Fet_Liq = Fe3Fet_Liq, phases = phases)
-
-#         if find_range is not None:
-#             Results['range'] = np.zeros(np.shape(Results[l]))
-#             if len(phases) == 3:
-#                 Results['range'][np.where(Results['3 Phase Saturation'] <= T_cut_C)] = True
-#                 Results['range'][np.where(Results['3 Phase Saturation'] > T_cut_C)] = False
-#             else:
-#                 Results['range'][np.where(Results[phases[0] + ' - ' + phases[1]] <= T_cut_C)] = True
-#                 Results['range'][np.where(Results[phases[0] + ' - ' + phases[1]] > T_cut_C)] = False
-
-    
-
-#     return Results
-
-# def findMinimum(Results = None, P_bar = None, T_cut_C = None, H2O_Liq = None, Fe3Fet_Liq = None, phases = None):
-#     '''
-#     Take the results of SatPress and search for the minimum point using a spline fit.
-#     '''
-#     if T_cut_C is None:
-#         T_cut_C = 10
-
-#     if H2O_Liq is None and Fe3Fet_Liq is None:
-#         if '3 Phase Saturation' in list(Results.keys()):
-#             Minimum = {'3 Phase Saturation', phases[0] + ' - ' + phases[1], phases[0] + ' - ' + phases[2], phases[1] + ' - ' + phases[2]}
-#             CurveMin = {}
-#             for m in Minimum:
-#                 if len(Results[m][0,0,:][~np.isnan(Results[m][0,0,:])]) > 2:
-#                     y = Results[m][0,0,:][(np.where(~np.isnan(Results[m][0,0,:]))) and (np.where(Results[m][0,0,:] < T_cut_C))]
-#                     x = P_bar[(np.where(~np.isnan(Results[m][0,0,:]))) and (np.where(Results[m][0,0,:] < T_cut_C))]
-
-#                     try:
-#                         y_new = interpolate.UnivariateSpline(x, y, k = 5)
-#                     except:
-#                         y_new = interpolate.UnivariateSpline(x, y, k = 2)
-
-#                     P_new = np.linspace(P_bar[np.where(P_bar == np.nanmin(P_bar[(np.where(~np.isnan(Results[m][0,0,:]))) and (np.where(Results[m][0,0,:] < T_cut_C))]))], P_bar[np.where(P_bar == np.nanmax(P_bar[(np.where(~np.isnan(Results[m][0,0,:]))) and (np.where(Results[m][0,0,:] < T_cut_C))]))], 200)
-
-#                     NewMin = np.nanmin(y_new(P_new))
-#                     P_min = P_new[np.where(y_new(P_new) == NewMin)][0]
-#                     if NewMin < T_cut_C:
-#                         Test = 'Pass'
-#                     else:
-#                         Test = 'Fail'
-
-#                     CurveMin[m] = {'P_min': P_min, 'Res_min': NewMin, 'y_new': y_new(P_new), 'P_new': P_new, 'test': Test}
-#                 else:
-#                     y_new = np.nan
-#                     P_new = np.nan
-#                     NewMin = np.nan
-#                     P_min = np.nan
-#                     Test = 'Fail'
-#                     CurveMin[m] = {'P_min': P_min, 'Res_min': NewMin, 'y_new': y_new, 'P_new': P_new, 'test': Test}
-
-#             Results['CurveMin'] = CurveMin
-#         else:
-#             m = phases[0] + ' - ' + phases[1]
-#             if len(Results[m][0,0,:][~np.isnan(Results[m][0,0,:])]) > 2:
-#                 y = Results[m][0,0,:][np.where(~np.isnan(Results[m][0,0,:]))]
-#                 x = P_bar[np.where(~np.isnan(Results[m][0,0,:]))]
-
-#                 try:
-#                     y_new = interpolate.UnivariateSpline(x, y, k=5)
-#                 except:
-#                     y_new = interpolate.UnivariateSpline(x, y, k = 2)
-
-#                 P_new = np.linspace(P_bar[np.where(P_bar == np.nanmin(P_bar[np.where(~np.isnan(Results[m][0,0,:]))]))], P_bar[np.where(P_bar == np.nanmax(P_bar[np.where(~np.isnan(Results[m][0,0,:]))]))], 200)
-
-#                 NewMin = np.nanmin(y_new(P_new))
-#                 P_min = P_new[np.where(y_new(P_new) == NewMin)][0]
-#                 if NewMin < T_cut_C:
-#                     Test = 'Pass'
-#                 else:
-#                     Test = 'Fail'
-#             else:
-#                 y_new = np.nan
-#                 P_new = np.nan
-#                 NewMin = np.nan
-#                 P_min = np.nan
-#                 Test = 'Fail'
-
-#             Results['CurveMin'] = {phases[0] + ' - ' + phases[1]: {'P_min': P_min, 'Res_min': NewMin, 'y_new': y_new, 'P_new': P_new, 'test': Test}}
-
-#     if H2O_Liq is not None and Fe3Fet_Liq is None:
-#         if '3 Phase Saturation' in list(Results.keys()):
-#             X, Y = np.meshgrid(P_bar, H2O_Liq)
-#             Y = Results['H2O_melt'][:,0,:].copy()
-
-#             Minimum = {'3 Phase Saturation', phases[0] + ' - ' + phases[1], phases[0] + ' - ' + phases[2], phases[1] + ' - ' + phases[2]}
-#             CurveMin = {}
-#             for m in Minimum:
-#                 if len(Results[m][:,0,:][~np.isnan(Results[m][:,0,:])]) > 4:
-#                     Res = Results[m][:,0,:].copy()
-#                     Res[np.where(Res > T_cut_C*2)] = np.nan
-#                     for i in range(len(H2O_Liq)):
-#                         Res[i, :][np.where(Results['H2O_melt'][i,0,:] < 0.99*np.nanmax(Results['H2O_melt'][i,0,:]))] = np.nan
-
-#                     A = Res.copy()
-#                     Res[np.where(Res > T_cut_C)] = np.nan
-#                     X, Y = np.meshgrid(P_bar, H2O_Liq)
-#                     Y = Results['H2O_melt'][:,0,:]
-
-#                     try:
-#                         z_new = interpolate.SmoothBivariateSpline(X[np.where(~np.isnan(A) & ~np.isnan(Y))], Y[np.where(~np.isnan(A) & ~np.isnan(Y))], A[np.where(~np.isnan(A) & ~np.isnan(Y))], kx = 3, ky = 3)
-#                     except:
-#                         z_new = interpolate.SmoothBivariateSpline(X[np.where(~np.isnan(A) & ~np.isnan(Y))], Y[np.where(~np.isnan(A) & ~np.isnan(Y))], A[np.where(~np.isnan(A) & ~np.isnan(Y))], kx = 2, ky = 2)
-
-#                     H2O_new = np.linspace(Y[np.where(Res == np.nanmin(Res))] - (H2O_Liq[1]-H2O_Liq[0]),
-#                                         Y[np.where(Res == np.nanmin(Res))] + (H2O_Liq[1]-H2O_Liq[0]), 20)
-#                     P_new = np.linspace(X[np.where(Res == np.nanmin(Res))] - (P_bar[1]-P_bar[0]),
-#                                         X[np.where(Res == np.nanmin(Res))] + (P_bar[1]-P_bar[0]), 20)
-
-#                     X_new, Y_new = np.meshgrid(P_new, H2O_new)
-#                     x = X[~np.isnan(A)].flatten()
-#                     y = Y[~np.isnan(A)].flatten()
-
-#                     MyPoly = MultiPoint(list(zip(x, y))).convex_hull
-
-#                     points = list(zip(X_new.flatten(), Y_new.flatten()))
-#                     Include = np.zeros(len(X_new.flatten()))
-#                     for i in range(len(points)):
-#                         p = Point(points[i])
-#                         Include[i] = p.within(MyPoly)
-
-#                     YayNay = Include.reshape(X_new.shape)
-#                     x_new = X_new[np.where(YayNay == True)].flatten()
-#                     y_new = Y_new[np.where(YayNay == True)].flatten()
-#                     Res_min = np.nanmin(z_new(x_new, y_new, grid = False))
-#                     P_min = x_new[np.where(z_new(x_new, y_new, grid = False) == Res_min)]
-#                     H2O_min = y_new[np.where(z_new(x_new, y_new, grid = False) == Res_min)]
-#                     if Res_min < T_cut_C:
-#                         Test = 'Pass'
-#                     else:
-#                         Test = 'Fail'
-
-#                     CurveMin[m] = {'Res_min': Res_min, 'P_min': P_min[0], 'H2O_min': H2O_min[0], 'z_new': z_new, 'test': Test}
-#                 else:
-#                     CurveMin[m] = {'Res_min': np.nan, 'P_min': np.nan, 'H2O_min': np.nan, 'z_new': np.nan, 'test': 'Fail'}
-
-#             Results['CurveMin'] = CurveMin
-
-#     if H2O_Liq is not None and Fe3Fet_Liq is not None:
-#         if '3 Phase Saturation' in list(Results.keys()):
-#             X, Y = np.meshgrid(P_bar, H2O_Liq)
-#             Y = Results['H2O_melt'][:,0,:].copy()
-
-#             Minimum = {'3 Phase Saturation', phases[0] + ' - ' + phases[1], phases[0] + ' - ' + phases[2], phases[1] + ' - ' + phases[2]}
-#             CurveMin = {}
-#             for m in Minimum:
-#                 Res_min_save = 50
-#                 for w in range(len(Fe3Fet_Liq)):
-#                     if len(Results[m][:,w,:][~np.isnan(Results[m][:,w,:])]) > 4:
-#                         Res = Results[m][:,w,:].copy()
-#                         Res[np.where(Res > T_cut_C*2)] = np.nan
-#                         for i in range(len(H2O_Liq)):
-#                             Res[i, :][np.where(Results['H2O_melt'][i,w,:] < 0.99*np.nanmax(Results['H2O_melt'][i,w,:]))] = np.nan
-
-#                         A = Res.copy()
-#                         X, Y = np.meshgrid(P_bar, H2O_Liq)
-#                         Y = Results['H2O_melt'][:,w,:].copy()
-
-#                         try:
-#                             z_new = interpolate.SmoothBivariateSpline(X[np.where(~np.isnan(A) & ~np.isnan(Y))], Y[np.where(~np.isnan(A) & ~np.isnan(Y))], A[np.where(~np.isnan(A) & ~np.isnan(Y))], kx = 3, ky = 3)
-#                         except:
-#                             z_new = interpolate.SmoothBivariateSpline(X[np.where(~np.isnan(A) & ~np.isnan(Y))], Y[np.where(~np.isnan(A) & ~np.isnan(Y))], A[np.where(~np.isnan(A) & ~np.isnan(Y))], kx = 2, ky = 2)
-
-#                         H2O_new = np.linspace(Y[np.where(Res == np.nanmin(Res))] - (H2O_Liq[1]-H2O_Liq[0]),
-#                                             Y[np.where(Res == np.nanmin(Res))] + (H2O_Liq[1]-H2O_Liq[0]), 20)
-#                         P_new = np.linspace(X[np.where(Res == np.nanmin(Res))] - (P_bar[1]-P_bar[0]),
-#                                             X[np.where(Res == np.nanmin(Res))] + (P_bar[1]-P_bar[0]), 20)
-
-#                         X_new, Y_new = np.meshgrid(P_new, H2O_new)
-#                         x = X[~np.isnan(A)].flatten()
-#                         y = Y[~np.isnan(A)].flatten()
-
-#                         MyPoly = MultiPoint(list(zip(x, y))).convex_hull
-
-#                         points = list(zip(X_new.flatten(), Y_new.flatten()))
-#                         Include = np.zeros(len(X_new.flatten()))
-#                         for i in range(len(points)):
-#                             p = Point(points[i])
-#                             Include[i] = p.within(MyPoly)
-
-#                         YayNay = Include.reshape(X_new.shape)
-#                         x_new = X_new[np.where(YayNay == True)].flatten()
-#                         y_new = Y_new[np.where(YayNay == True)].flatten()
-#                         Res_min = np.nanmin(z_new(x_new, y_new, grid = False))
-#                         P_min = x_new[np.where(z_new(x_new, y_new, grid = False) == Res_min)]
-#                         H2O_min = y_new[np.where(z_new(x_new, y_new, grid = False) == Res_min)]
-#                         if Res_min < T_cut_C:
-#                             Test = 'Pass'
-#                         else:
-#                             Test = 'Fail'
-
-#                         if Res_min < Res_min_save:
-#                             Res_min_save = Res_min
-#                             CurveMin[m] = {'Res_min': Res_min, 'P_min': P_min[0], 'H2O_min': H2O_min[0], 'z_new': z_new, 'Fe3Fet_Liq': Fe3Fet_Liq[w], 'test': Test}
-
-#             Results['CurveMin'] = CurveMin
-
-
-#     return Results
-
-# def polymin(P_bar = None, Res = None):
-#     '''
-#     Finds the minimum residual temperature using a 2nd degree polynomial.
-#     '''
-#     arr = np.sort(Res)
-#     Ind = np.where(Res == arr[0])[0][0]
-
-#     if P_bar[Ind] == np.nanmax(P_bar):
-#         p = np.array([0,1,0])
-#         p_min = np.array([P_bar[Ind]])
-#     elif P_bar[Ind] == np.nanmin(P_bar):
-#         p = np.array([0,1,0])
-#         p_min = np.array([P_bar[Ind]])
-#     else:
-#         p = np.polyfit(P_bar[np.array([Ind-1, Ind, Ind+1])],Res[np.array([Ind-1, Ind, Ind+1])],2)
-
-#         x = np.linspace(np.nanmin(P_bar),np.nanmax(P_bar),501)
-#         y = p[0]*x**2 + p[1]*x + p[2]
-
-#         p_min = x[np.where(y == np.nanmin(y))]
-
-#     return p, p_min
-
-# def satTemperature(q, index, *, Model = None, comp = None, phases = None, T_initial_C = None, T_step_C = None, dt_C = None, P_bar = None, H2O_Liq = None, fO2_buffer = None, fO2_offset = None):
-#     '''
-#     Crystallisation calculations to be performed in parallel. Calculations may be either isobaric or isochoric.
-
-#     Parameters:
-#     ----------
-#     q: Multiprocessing Queue instance
-#         Queue instance to record the output variables
-
-#     index: int
-#         index of the calculation in the master code (e.g., position within a for loop) to aid indexing results after calculations are complete.
-
-#     Model: string
-#         "MELTS" or "Holland". Dictates whether MELTS or MAGEMin calculations are performed. Default "MELTS".
-#         Version of melts can be specified "MELTSv1.0.2", "MELTSv1.1.0", "MELTSv1.2.0", or "pMELTS". Default "v.1.0.2".
-
-#     comp: Dict
-#         Initial compositon for calculations.
-
-#     T_initial_C: float
-#         Initial guess for the liquidus temperature.
-
-#     T_step_C: float
-#         The temperature drop at each step of the calculation.
-
-#     dt_C: float
-#         Total temperature drop allowed duringmodel runs.
-
-#     P_bar: float
-#          Specifies the pressure of calculation (bar).
-
-#     Returns:
-#     ----------
-#     Results: Dict
-#         Dict containing a series of floats that represent the saturation temperature and residual temperature for each calculation.
-
-#     index: int
-#         index of the calculation
-
-#     '''
-
-#     Results = {}
-#     if "MELTS" in Model:
-
-#         try:
-#             Results = phaseSat_MELTS(Model = Model, comp = comp, phases = phases, T_initial_C = T_initial_C, T_step_C = T_step_C, dt_C = dt_C, P_bar = P_bar, H2O_Liq = H2O_Liq, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset)
-#         except:
-#             Results = {phases[0]: np.nan, phases[1]: np.nan, phases[2]: np.nan, 'T_Liq': np.nan, 'H2O_melt': np.nan}
-#             if len(phases) == 2:
-#                 del Results[phases[2]]
-
-#         if len(phases) == 3:
-#             Res = ['3 Phase Saturation', phases[0] + ' - ' + phases[1], phases[0] + ' - ' + phases[2], phases[1] + ' - ' + phases[2]]
-#             for R in Res:
-#                 Results[R] = np.nan
-
-#             if ~np.isnan(Results[phases[0]]) and ~np.isnan(Results[phases[1]]) and ~np.isnan(Results[phases[2]]):
-#                 Results['3 Phase Saturation'] = np.nanmax(np.array([abs(Results[phases[0]] - Results[phases[1]]), abs(Results[phases[0]] - Results[phases[2]]), abs(Results[phases[1]] - Results[phases[2]])]))
-#             if ~np.isnan(Results[phases[0]]) and ~np.isnan(Results[phases[1]]):
-#                 Results[phases[0] + ' - ' + phases[1]] = abs(Results[phases[0]] - Results[phases[1]])
-#             if ~np.isnan(Results[phases[0]]) and ~np.isnan(Results[phases[2]]):
-#                 Results[phases[0] + ' - ' + phases[2]] = abs(Results[phases[0]] - Results[phases[2]])
-#             if ~np.isnan(Results[phases[1]]) and ~np.isnan(Results[phases[2]]):
-#                 Results[phases[1] + ' - ' + phases[2]] = abs(Results[phases[1]] - Results[phases[2]])
-#         else:
-#             Results[phases[0] + ' - ' + phases[1]] = np.nan
-#             if ~np.isnan(Results[phases[0]]) and ~np.isnan(Results[phases[1]]):
-#                 Results[phases[0] + ' - ' + phases[1]] = abs(Results[phases[0]] - Results[phases[1]])
-
-#         q.put([Results, index])
-#         return
-
-#     if Model == "Holland":
-#         import pyMAGEMINcalc as MM
-#         Results = {phases[0]: np.nan, phases[1]: np.nan, phases[2]: np.nan, 'T_Liq': np.nan, 'H2O_melt': np.nan}
-#         if len(phases) == 2:
-#             del Results[phases[2]]
-
-#         #try:
-#         Result = MM.path(comp = comp, phases = phases, T_min_C = dt_C, dt_C = T_step_C, P_bar = P_bar, find_liquidus = True)
-#         #Result = stich(Result, Model = Model)
-
-#         for i in range(len(phases)):
-#             try:
-#                 Results[phases[i]] = Result['Conditions']['T_C'][Result[phases[i]+'_prop']['mass'] > 0.0].values[0]
-#                 print(Results[phases[i]])
-#             except:
-#                 Results[phases[i]] = np.nan
-
-#         Results['T_Liq'] = Result['Conditions']['T_C'].values[0]
-#         Results['H2O_melt'] = Result['liq']['H2O'].values[0]
-
-#         if len(phases) == 3:
-#             Res = ['3 Phase Saturation', phases[0] + ' - ' + phases[1], phases[0] + ' - ' + phases[2], phases[1] + ' - ' + phases[2]]
-#             for R in Res:
-#                 Results[R] = np.nan
-
-#             if ~np.isnan(Results[phases[0]]) and ~np.isnan(Results[phases[1]]) and ~np.isnan(Results[phases[2]]):
-#                 Results['3 Phase Saturation'] = np.nanmax(np.array([abs(Results[phases[0]] - Results[phases[1]]), abs(Results[phases[0]] - Results[phases[2]]), abs(Results[phases[1]] - Results[phases[2]])]))
-#             if ~np.isnan(Results[phases[0]]) and ~np.isnan(Results[phases[1]]):
-#                 Results[phases[0] + ' - ' + phases[1]] = abs(Results[phases[0]] - Results[phases[1]])
-#             if ~np.isnan(Results[phases[0]]) and ~np.isnan(Results[phases[2]]):
-#                 Results[phases[0] + ' - ' + phases[2]] = abs(Results[phases[0]] - Results[phases[2]])
-#             if ~np.isnan(Results[phases[1]]) and ~np.isnan(Results[phases[2]]):
-#                 Results[phases[1] + ' - ' + phases[2]] = abs(Results[phases[1]] - Results[phases[2]])
-#         else:
-#             Results[phases[0] + ' - ' + phases[1]] = np.nan
-#             if ~np.isnan(Results[phases[0]]) and ~np.isnan(Results[phases[1]]):
-#                 Results[phases[0] + ' - ' + phases[1]] = abs(Results[phases[0]] - Results[phases[1]])
-        
-#         q.put([Results, index])
-#         #except:
-#         #    q.put([Results, index])
-#         return
-
-

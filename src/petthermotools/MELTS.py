@@ -1205,16 +1205,16 @@ def path_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid = None, 
 
         for R in Results['Conditions']:
             if R == 'temperature':
-                Results['Conditions'][R].loc[i] = melts.engine.temperature
+                Results['Conditions'].loc[i,R] = melts.engine.temperature
             elif R == 'pressure':
-                Results['Conditions'][R].loc[i] = melts.engine.pressure
+                Results['Conditions'].loc[i,R] = melts.engine.pressure
             elif R == 'logfO2':
                 try:
-                    Results['Conditions'][R].loc[i] = melts.engine.getProperty(R)
+                    Results['Conditions'].loc[i,R] = melts.engine.getProperty(R)
                 except:
-                    Results['Conditions'][R].loc[i] = np.nan
+                    Results['Conditions'].loc[i,R] = np.nan
             else:
-                Results['Conditions'][R].loc[i] = melts.engine.getProperty(R, 'bulk')
+                Results['Conditions'].loc[i,R] = melts.engine.getProperty(R, 'bulk')
 
         try:
             if melts.engine.getProperty('mass', 'liquid1') > 0.0:
@@ -1245,13 +1245,13 @@ def path_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid = None, 
 
             if phase in list(Results.keys()):
                 for el in Results[phase]:
-                    Results[phase][el].loc[i] = melts.engine.getProperty('dispComposition', phase, el)
+                    Results[phase].loc[i,el] = melts.engine.getProperty('dispComposition', phase, el)
 
                 if thermo_prop:
                     melts.engine.calcEndMemberProperties(phase, melts.engine.getProperty('dispComposition', phase))
                 for pr in Results[phase + '_prop']:
                     if pr in properties:
-                        Results[phase + '_prop'][pr].loc[i] = melts.engine.getProperty(pr, phase)
+                        Results[phase + '_prop'].loc[i,pr] = melts.engine.getProperty(pr, phase)
                     else:
                         # melts.engine.calcPhaseProperties(phase[:-1], melts.engine.getProperty('dispComposition', phase))
                         if thermo_prop:
@@ -1782,16 +1782,16 @@ def AdiabaticDecompressionMelting_MELTS(Model = None, comp = None, Tp_C = None, 
             
         for R in Results['Conditions']:
             if R == 'temperature':
-                Results['Conditions'][R].loc[k] = melts.engine.temperature
+                Results['Conditions'].loc[k,R] = melts.engine.temperature
             elif R == 'pressure':
-                Results['Conditions'][R].loc[k] = melts.engine.pressure
+                Results['Conditions'].loc[k,R] = melts.engine.pressure
             elif R == 'logfO2':
                 try:
-                    Results['Conditions'][R].loc[k] = melts.engine.getProperty(R)
+                    Results['Conditions'].loc[k,R] = melts.engine.getProperty(R)
                 except:
-                    Results['Conditions'][R].loc[k] = np.nan
+                    Results['Conditions'].loc[k,R] = np.nan
             else:
-                Results['Conditions'][R].loc[k] = melts.engine.getProperty(R, 'bulk')
+                Results['Conditions'].loc[k,R] = melts.engine.getProperty(R, 'bulk')
 
         try:
             if ~np.isnan(melts.engine.getProperty('mass', 'liquid1')):
@@ -1809,10 +1809,10 @@ def AdiabaticDecompressionMelting_MELTS(Model = None, comp = None, Tp_C = None, 
                                                         
             if phase in list(Results.keys()):
                 for el in Results[phase]:
-                    Results[phase][el].loc[k] = melts.engine.getProperty('dispComposition', phase, el)
+                    Results[phase].loc[k,el] = melts.engine.getProperty('dispComposition', phase, el)
 
                 for pr in Results[phase + '_prop']:
-                    Results[phase + '_prop'][pr].loc[k] = melts.engine.getProperty(pr, phase)
+                    Results[phase + '_prop'].loc[k,pr] = melts.engine.getProperty(pr, phase)
         
         # if k == 0:
         #     s = melts.engine.getProperty('s','bulk')

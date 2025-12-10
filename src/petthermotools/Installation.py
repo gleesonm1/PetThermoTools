@@ -13,8 +13,11 @@ from petthermotools.Compositions import *
 def install_MAGEMinCalc():
     '''
     Establish a new julia environment that will be used for any MAGEMin calculations performed through PetThermoTools.
-    MAGEMinCalc and MAGEMin_C are added to this new environment.
+    MAGEMinCalc and MAGEMin_C are added to this new environment. No other installation steps are required.
     '''
+
+    print("If you encounter issues with the installation process please contact me at gleesonm@berkeley.edu")
+
     from juliacall import Main as jl
     env_dir = Path.home() / ".petthermotools_julia_env"
     env_dir.mkdir(exist_ok=True)
@@ -119,10 +122,22 @@ def test_MAGEMinCalc():
 
     """)
 
-def install_alphaMELTS(file_location = None, admin = False):
+def install_alphaMELTS(file_location = None, admin = True, version = "2.3.1"):
     '''
-    Download, extract, and add the alphaMELTS for Python files to the Python path.
-    Either store the files in the current working directory or (using the file_location kwarg) add them to a location of your choice.
+    Downloads, extracts, and optionally adds the platform-specific alphaMELTS for Python files
+    (meltsdynamic.py) to the Python path.
+
+    Args:
+        file_location (str, optional): Directory to download and extract the files.
+            If None (default), uses the current working directory.
+        admin (bool, optional): If True (default), attempts to permanently add the files to the 
+            Python path using a .pth file (requires admin/root privileges).
+            If False, you must manually append the path in your code (at the start of each notebook using petthermotools).
+        version (str, optional): The alphaMELTS version to download (e.g., "2.3.1").
+            Default is "2.3.1".
+    
+    Returns:
+        None. Prints status messages regarding download, extraction, and path configuration.
     '''
     try:
         from meltsdynamic import meltsdynamic
@@ -131,27 +146,48 @@ def install_alphaMELTS(file_location = None, admin = False):
     except:
         system = platform.system()
         machine = platform.machine().lower()
-        version = "2.3.1"
+        # version = "2.3.1"
 
-        base_url = f"https://github.com/magmasource/alphaMELTS/releases/download/v{version}"
-
-        # macOS
-        if system == "Darwin":
-            if "arm" in machine:  # Apple Silicon
-                url = f"{base_url}/alphamelts-py-{version}-macos-arm64.zip"
-            else:  # Intel Mac
-                url = f"{base_url}/alphamelts-py-{version}-macos-x86_64.zip"
-
-        # Windows
-        elif system == "Windows":
-            url = f"{base_url}/alphamelts-py-{version}-win64.zip"
-
-        # Linux (default fallback)
-        elif system == "Linux":
-            url = f"{base_url}/alphamelts-py-{version}-linux.zip"
-
+        if version == "2.3.2":
+            base_url = f"https://github.com/magmasource/alphaMELTS/releases/download/v{version}-beta.0"
+            # macOS
+            if system == "Darwin":
+                if "arm" in machine:  # Apple Silicon
+                    url = f"{base_url}/alphamelts-py-{version}-macosx_14_0-arm64.zip"
+                else:  # Intel Mac
+                    url = f"{base_url}/alphamelts-py-{version}-macosx_14_0-x86_64.zip"
+            elif system == "Windows":
+                if "aarch" in machine:
+                    url = f"{base_url}/alphamelts-py-{version}-win64-aarch64.zip"
+                else:
+                    url = f"{base_url}/alphamelts-py-{version}-win64-x86_64.zip"
+            elif system == "Linux":
+                if "aarch" in machine:
+                    url = f"{base_url}/alphamelts-py-{version}-ubuntu_22_04-aarch64.zip"
+                else:
+                    url = f"{base_url}/alphamelts-py-{version}-ubuntu_22_04-x86_64.zip"
+            else:
+                raise OSError(f"Unsupported system: {system}")
         else:
-            raise OSError(f"Unsupported system: {system}")
+            base_url = f"https://github.com/magmasource/alphaMELTS/releases/download/v{version}"
+
+            # macOS
+            if system == "Darwin":
+                if "arm" in machine:  # Apple Silicon
+                    url = f"{base_url}/alphamelts-py-{version}-macos-arm64.zip"
+                else:  # Intel Mac
+                    url = f"{base_url}/alphamelts-py-{version}-macos-x86_64.zip"
+
+            # Windows
+            elif system == "Windows":
+                url = f"{base_url}/alphamelts-py-{version}-win64.zip"
+
+            # Linux (default fallback)
+            elif system == "Linux":
+                url = f"{base_url}/alphamelts-py-{version}-linux.zip"
+
+            else:
+                raise OSError(f"Unsupported system: {system}")
         
         # if chip == "Apple":
         #     url = "https://github.com/magmasource/alphaMELTS/releases/download/v2.3.1/alphamelts-py-2.3.1-macos-arm64.zip"
@@ -186,7 +222,7 @@ def install_alphaMELTS(file_location = None, admin = False):
             elif system == "Linux":
                 zip_path = file_location + "alphamelts-py-2.3.1-linux.zip"
             else:
-                raise OSError(f"Unsupporte system: {system}")
+                raise OSError(f"Unsupported system: {system}")
 
 
         # Download the file with error handling
@@ -227,7 +263,7 @@ def install_alphaMELTS(file_location = None, admin = False):
                 elif system == "Linux":
                     sys.path.append(os.path.join(extract_path,"alphamelts-py-2.3.1-linux"))
                 else:
-                    raise OSError(f"Unsupporte system: {system}")
+                    raise OSError(f"Unsupported system: {system}")
 
             try:
                 import meltsdynamic
@@ -286,6 +322,15 @@ def install_alphaMELTS(file_location = None, admin = False):
 
 
 def remove_alphaMELTS_path():
+    '''
+    Removes the custom 'my_MELTS_path.pth' file from the Python site-packages directory.
+
+    This file is what permanently adds the alphaMELTS for Python directory to the Python path.
+    Removing it allows you to install or update to a new version without conflicts.
+
+    Note: This function only removes the path file; it does **not** delete the actual
+    alphaMELTS files that were previously downloaded. Those must be removed manually.
+    '''
     print('Please note this does not remove the previously downloaded alphaMELTS files. That has to be done manually. \n This function simply removes the Python path to those files so that you can install/update to a new version of alphaMELTS for Python.')
     site_packages_dirs = site.getsitepackages()
 
@@ -313,18 +358,35 @@ def remove_alphaMELTS_path():
     if fail:
         print(f"Unable to locate {pth_file_path}")
 
-def update_alphaMELTS_path(file_location = None, admin = True):
+def update_alphaMELTS_path(file_location = None, admin = True, version = "2.3.1"):
     '''
-    Update the alphaMELTS for Python files to the latest version. \n Please keep an eye of the alphaMELTS Discord Server for information on when a new version of alphaMELTS for Python is published.
+    Updates the installed alphaMELTS for Python files by removing the old path configuration
+    and installing a new version.
+
+    This function combines 'remove_alphaMELTS_path' and 'install_alphaMELTS'.
+
+    Args:
+        file_location (str, optional): Directory to download and extract the files.
+            Passed directly to 'install_alphaMELTS'.
+        admin (bool, optional): Controls whether to remove the old path file and
+            whether to attempt a permanent path addition for the new version.
+            Default is True. Set to False if you don't have admin privileges.
+        version (str, optional): The alphaMELTS version to download (e.g., "2.3.2").
+            Passed directly to 'install_alphaMELTS'. Default is "2.3.1".
+
+    Returns:
+        None. Prints status messages from the underlying removal and installation functions.
     '''
     if admin:
         remove_alphaMELTS_path()
 
-    install_alphaMELTS(file_location = file_location, admin = admin)
-
-    return
+    install_alphaMELTS(file_location = file_location, admin = admin, version = version)
 
 def test_alphaMELTS(path = None):
+    '''
+    Test the alphaMELTS for Python installation worked! 
+    This function should perform a simple fractional crystallization calculation and print the results.
+    '''
     if path is not None:
         sys.path.append(path)
 
