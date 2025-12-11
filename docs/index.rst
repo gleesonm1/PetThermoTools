@@ -36,6 +36,7 @@ Welcome to PetThermoTools's documentation!
    Examples/CrystallisationTests/BasalticCrystallisation
    Examples/CrystallisationTests/BasalticCrystallisation_withMAGEMin
    Examples/CrystallisationTests/BasalticCrystallisation_polybaric
+   Examples/CrystallisationTests/BasalticCrystallisation_ComparingModels
 
 .. toctree::
    :maxdepth: 2
