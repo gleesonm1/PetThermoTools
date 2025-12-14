@@ -12,7 +12,7 @@ import random
 import time
 
 
-def make_grid_variables_from_phase_diagram(df, x_col, y_col):
+def make_grid_variables_from_phase_diagram(Results = None, x_col = "T_C", y_col = "P_bar"):
     """
     Grid all variables in a phaseDiagram_calc-style dataframe
     onto the same X–Y mesh.
@@ -20,7 +20,7 @@ def make_grid_variables_from_phase_diagram(df, x_col, y_col):
     Parameters
     ----------
     df : pandas.DataFrame
-        Output from pt.phaseDiagram_calc
+        Output from ptt.phaseDiagram_calc
     x_col, y_col : str
         Grid axes (most likely T–P or P–T)
 
@@ -31,6 +31,10 @@ def make_grid_variables_from_phase_diagram(df, x_col, y_col):
     Z_dict : dict
         Dictionary of gridded variables for ALL other columns
     """
+    if Results is None:
+        print('Please provide results from the ptt.phaseDiagram_calc function.')
+        
+    df = Results.copy()
     # Unique grid axes
     x_vals = np.unique(df[x_col])
     y_vals = np.unique(df[y_col])
@@ -44,7 +48,7 @@ def make_grid_variables_from_phase_diagram(df, x_col, y_col):
     Z_dict = {}
     for col in z_cols:
         try:
-            Z_dict[col] = df[col].values.reshape(shape)
+            Z_dict[col] = df[col].values.reshape(shape).T
         except ValueError:
             # Skip columns that cannot be reshaped (e.g. strings, metadata)
             continue
