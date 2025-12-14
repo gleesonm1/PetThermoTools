@@ -11,6 +11,47 @@ from tqdm.notebook import tqdm, trange
 import random
 import time
 
+
+def make_grid_variables_from_phase_diagram(df, x_col, y_col):
+    """
+    Grid all variables in a phaseDiagram_calc-style dataframe
+    onto the same X–Y mesh.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        Output from pt.phaseDiagram_calc
+    x_col, y_col : str
+        Grid axes (most likely T–P or P–T)
+
+    Returns
+    -------
+    X, Y : np.ndarray
+        Meshgrid arrays
+    Z_dict : dict
+        Dictionary of gridded variables for ALL other columns
+    """
+    # Unique grid axes
+    x_vals = np.unique(df[x_col])
+    y_vals = np.unique(df[y_col])
+
+    X, Y = np.meshgrid(x_vals, y_vals)
+    shape = X.shape
+
+    # All columns except the grid axes
+    z_cols = [c for c in df.columns if c not in (x_col, y_col)]
+
+    Z_dict = {}
+    for col in z_cols:
+        try:
+            Z_dict[col] = df[col].values.reshape(shape)
+        except ValueError:
+            # Skip columns that cannot be reshaped (e.g. strings, metadata)
+            continue
+
+    return X, Y, Z_dict
+
+
 def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar = None, 
                       T_min_C = None, T_max_C = None, T_num = None, 
                       P_min_bar = None, P_max_bar = None, P_num = None, 
