@@ -49,6 +49,7 @@ Welcome to PetThermoTools's documentation!
    :caption: Phase Diagram calculations
 
    Examples/PhaseDiagrams/PhaseDiagram_example
+   Examples/PhaseDiagrams/PhaseDiagram_example_MaunaLoa
 
 
 .. toctree::
