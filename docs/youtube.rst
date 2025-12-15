@@ -35,6 +35,16 @@ This video shows how to perform a fractional crystallization calculation and com
     <iframe width="560" height="315" src="https://www.youtube.com/embed/5bN-mNSh-H0?si=4wJpayll-kAnveil" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
 ---------
 
+
+Example Fractional crystallization calculation comparing MELTS and MAGEMin
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+This video builds on the fractional crystallization model above, showing how to compare the results of different thermodynamic models, with a focus on the chemistry of predicted mineral phases. 
+
+.. raw:: html
+
+    <iframe width="560" height="315" src="https://www.youtube.com/embed/0CEVs-p2UV0?si=6bkFcF1gTGXrf7xW" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+---------
+
 Example degassing calculation
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 This video shows how to track volatile and melt chemistry during degassing.
@@ -42,6 +52,16 @@ This video shows how to track volatile and melt chemistry during degassing.
 .. raw:: html
 
     <iframe width="560" height="315" src="https://www.youtube.com/embed/5p1CxClyju8?si=84AUFradAGfsFucS" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+---------
+
+
+Example Phase Diagram Calculation
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+This video shows how to make a phase diagram for a primitive Mauna Loa lava using MAGEMin and MELTS, based on https://doi.org/10.1007/s00445-025-01869-2 
+
+.. raw:: html
+
+    <iframe width="560" height="315" src="https://www.youtube.com/embed/pvUH-nzgZy0?si=7MJ_PBk_51pcoYxY" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
 ---------
 
 
