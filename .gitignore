@@ -10,11 +10,6 @@ ipynb_checkpoints
 /build/
 *.orig
 *.ini
-MELTS/
-Examples/
-docs/Installation/alphamelts_py/
-docs/Installation/alphamelts_py-2.3.1/
-docs/Installation/alphamelts_py-2.3.2/
 
 __pycache__/
 .ipynb_checkpoints/
@@ -28,8 +23,3 @@ ipynb_checkpoints
 /build/
 *.orig
 *.ini
-MELTS/
-Examples/
-docs/Installation/alphamelts_py/
-docs/Installation/alphamelts_py-2.3.1/
-docs/Installation/alphamelts_py-2.3.2/
