@@ -43,9 +43,9 @@ Gleeson, M.L.M., Wieser, P.E., Antoshechkina, P. and Riel, N., 2025. PetThermoTo
 
 Smith, P.M. and Asimow, P.D., 2005. Adiabat_1ph: A new public front‐end to the MELTS, pMELTS, and pHMELTS models. Geochemistry, Geophysics, Geosystems, 6(2). https://doi.org/10.1029/2004GC000816 
 
-*The current distribution of alphaMELTS:*
+*The AGU abstract accompanying the original release of MELTS for MATLAB:*
 
-Antoshechkina, P. and P. Asimow (2025). magma-source/alphaMELTS: Builds for all OS and chip combinations. Version v2.3.2-beta.0. https://doi.org/10.5281/zenodo.17861695.
+Antoshechkina, P.M. and Ghiorso, M.S., 2018, December. MELTS for MATLAB: A new educational and research tool for computational thermodynamics. In AGU Fall Meeting Abstracts (Vol. 2018, pp. ED44B-23).
 
 *The studies that underpin the MELTS thermodynamic models and algorithms:*
 

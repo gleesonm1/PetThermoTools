@@ -18,8 +18,8 @@ Gleeson, M.L.M., Wieser, P.E., Antoshechkina, P. and Riel, N., 2025. PetThermoTo
 *The original Adiabat_1ph release (this is the precursor to the current alphaMELTS distribution):*
 Smith, P.M. and Asimow, P.D., 2005. Adiabat_1ph: A new public front‐end to the MELTS, pMELTS, and pHMELTS models. Geochemistry, Geophysics, Geosystems, 6(2). https://doi.org/10.1029/2004GC000816 
 
-*The current distribution of alphaMELTS:*
-Antoshechkina, P. and P. Asimow (2025). magma-source/alphaMELTS: Builds for all OS and chip combinations. Version v2.3.2-beta.0. https://doi.org/10.5281/zenodo.17861695.
+*The AGU abstract accompanying the original release of MELTS for MATLAB:*
+Antoshechkina, P.M. and Ghiorso, M.S., 2018, December. MELTS for MATLAB: A new educational and research tool for computational thermodynamics. In AGU Fall Meeting Abstracts (Vol. 2018, pp. ED44B-23).
 
 *The studies that underpin the MELTS thermodynamic models and algorithms:*
 Ghiorso, M.S. and Sack, R.O., 1995. Chemical mass transfer in magmatic processes IV. A revised and internally consistent thermodynamic model for the interpolation and extrapolation of liquid-solid equilibria in magmatic systems at elevated temperatures and pressures. Contributions to Mineralogy and Petrology, 119(2), pp.197-212. https://doi.org/10.1007/BF00307281 
@@ -47,4 +47,6 @@ Holland, T.J., Green, E.C. and Powell, R., 2018. Melting of peridotites through 
 **If you are using the Weller et al. (2024) thermodynamic model please cite:**
 Weller, O.M., Holland, T.J., Soderman, C.R., Green, E.C., Powell, R., Beard, C.D. and Riel, N., 2024. New thermodynamic models for anhydrous alkaline-silicate magmatic systems. Journal of Petrology, 65(10), p.egae098. https://doi.org/10.1093/petrology/egae098 
 
+**For example, a study using PetThermoTools to simulate fractional crystallization with the rhyolite-MELTS v1.0.2 thermodynamic model should cite our work, and the underlying packages, as:**
 
+"Fractional crystallization calculations were performed in PetThermoTools utilizing the rhyolite-MELTS v1.0.2 thermodynamic models (Antoshechkina and Ghiorso, 2018; Asimow and Ghiorso, 1998; Ghiorso and Sack, 1995; Gleeson et al. 2025; Gualda et al. 2012; Smith and Asimow, 2005)."
