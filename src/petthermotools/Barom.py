@@ -1,10 +1,10 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-try:
-    import Thermobar as pt
-except:
-    print('Thermobar cannot be imported, please check your numpy version')
+# try:
+#     import Thermobar as pt
+# except:
+#     print('Thermobar cannot be imported, please check your numpy version')
 
 from petthermotools.GenFuncs import *
 from petthermotools.Plotting import *

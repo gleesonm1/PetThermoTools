@@ -46,7 +46,8 @@ def isobaric_crystallisation(Model = None, bulk = None, Frac_solid = None, Frac_
     fO2_offset : float or ndarray, optional
         Log unit offset from fO2 buffer.
     label : str, optional
-        Label for the run.
+        Label for the run, use any key-word argument that triggers multiple runs
+        (e.g., 'H2O_init', 'P_bar', 'fO2_offset', 'Fe3Fet_init').
     Crystallinity_limit : float, optional
         Stops if total crystallinity exceeds this value.
     fluid_sat : bool, optional

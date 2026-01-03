@@ -120,6 +120,24 @@ def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid 
     CO2_Liq    = to_float(CO2_Liq)
     fO2_offset = to_float(fO2_offset)
 
+    T_C        = check_array(T_C)
+    T_start_C  = check_array(T_start_C)
+    T_end_C    = check_array(T_end_C)
+    dt_C       = check_array(dt_C)
+
+    P_bar      = check_array(P_bar)
+    P_start_bar= check_array(P_start_bar)
+    P_end_bar  = check_array(P_end_bar)
+    dp_bar     = check_array(dp_bar)
+
+    Fe3Fet_init= check_array(Fe3Fet_init)
+    Fe3Fet_Liq = check_array(Fe3Fet_Liq)
+    H2O_init   = check_array(H2O_init)
+    H2O_Liq    = check_array(H2O_Liq)
+    CO2_init   = check_array(CO2_init)
+    CO2_Liq    = check_array(CO2_Liq)
+    fO2_offset = check_array(fO2_offset)
+
     if timeout is None:
         timeout = 180
 
@@ -179,7 +197,7 @@ def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid 
     
     if type(comp) == dict:
         if comp['H2O_Liq'] == 0.0 and "MELTS" in Model:
-            raise Warning("Adding small amounts of H$_{2}$O may improve the ability of MELTS to accurately reproduce the saturation of oxide minerals. Additionally, sufficient H$_{2}$O is required in the model for MELTS to predict the crystallisation of apatite, rather than whitlockite.")
+            raise Warning("Adding small amounts of H2O may improve the ability of MELTS to accurately reproduce the saturation of oxide minerals. Additionally, sufficient H2O is required in the model for MELTS to predict the crystallisation of apatite, rather than whitlockite.")
 
         if comp['Fe3Fet_Liq'] == 0.0 and "MELTS" in Model and fO2_buffer is None:
             raise Warning("MELTS often fails to produce any results when no ferric Fe is included in the starting composition and an fO2 buffer is not set.")

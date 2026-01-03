@@ -127,6 +127,24 @@ def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar
     CO2_Liq    = to_float(CO2_Liq)
     fO2_offset = to_float(fO2_offset)
 
+    T_C        = check_array(T_C)
+    T_min_C   = check_array(T_min_C)
+    T_max_C  = check_array(T_max_C)
+    T_num   = check_array(T_num)
+
+    P_bar      = check_array(P_bar)
+    P_min_bar = check_array(P_min_bar)
+    P_max_bar= check_array(P_max_bar)
+    P_num  = check_array(P_num)
+
+    Fe3Fet_init= check_array(Fe3Fet_init)
+    Fe3Fet_Liq = check_array(Fe3Fet_Liq)
+    H2O_init   = check_array(H2O_init)
+    H2O_Liq    = check_array(H2O_Liq)
+    CO2_init   = check_array(CO2_init)
+    CO2_Liq    = check_array(CO2_Liq)
+    fO2_offset = check_array(fO2_offset)
+
     if H2O_Liq is not None:
         print('Warning - the kwarg "H2O_Liq" will be removed from v1.0.0 onwards. Please use "H2O_init" instead.')
         if H2O_init is None:
@@ -357,6 +375,7 @@ def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar
     Combined = Combined.sort_values(['T_C', 'P_bar'])
     Combined = Combined.reset_index(drop = True)
     Combined = Combined.dropna(subset = ['T_C'])
+    # Combined = Combined.drop(columns = 'Phase List')
 
     if refine is not None:
         for i in range(refine):
@@ -420,6 +439,7 @@ def phaseDiagram_refine(Data = None, Model = None, bulk = None, Fe3Fet_Liq = Non
 
     # Apply the function to each row
     Combined['PhaseResults'] = Combined.apply(combine_headers, axis=1).tolist()
+    # Combined = Combined.drop(columns = 'Phase List')
 
     ## find values that match T
     # Convert Combined['T_C'] to a set of rounded unique values for faster lookup
@@ -435,6 +455,7 @@ def phaseDiagram_refine(Data = None, Model = None, bulk = None, Fe3Fet_Liq = Non
     matching_values_P = [value for value in flattened_P if value in unique_combined_P_bar]
 
     matching_df = Data.copy()
+    # matching_df = matching_df.drop(columns = 'Phase List')
     T_C = []
     P_bar = []
     A = None

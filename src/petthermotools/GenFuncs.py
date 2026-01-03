@@ -76,6 +76,16 @@ Names_MM_replace = {'liq1': 'liquid1',
             'liq3': 'liquid3',
             'liq4': 'liquid4'}
 
+def check_array(var):
+    '''
+    Checks the provided data is a numpy array. If a list is provided instead it is converted.
+    '''
+    if type(var) == list:
+        var_new = np.array(var)
+        return var_new
+    else:
+        return var
+
 def rename_keys_with_prefix(d, mapping):
     '''
     Renames keys in a dictionary based on an exact match or a prefix match defined 
@@ -199,6 +209,10 @@ def label_results(Result,label):
     elif label == 'H2O' or label == "H2O_init":
         for r in Results:
             new_out['H2O = ' + str(Results[r]['Input']['comp']['H2O_Liq']) + ' wt%'] = Results[r].copy()
+        new_out = dict(sorted(new_out.items(), key=lambda x: float(x[0].split('=')[1].split(' ')[1])))
+    elif label == 'Fe3Fet' or label == "Fe3Fet_init":
+        for r in Results:
+            new_out['Fe3Fet = ' + str(Results[r]['Input']['comp']['Fe3Fet_Liq'])] = Results[r].copy()
         new_out = dict(sorted(new_out.items(), key=lambda x: float(x[0].split('=')[1].split(' ')[1])))
     
     if len(new_out) == 0:
@@ -783,6 +797,11 @@ def stich_work(Results = None, Order = None, Model = "MELTS", Frac_fluid = None,
             Results_All = pd.concat([Results_All, Results[R]], axis = 1)
 
     Results['All'] = Results_All
+    def combine_headers(row):
+        return ','.join([col[7:] for col in Results['All'].loc[:, Results['All'].columns.str.contains('mass_g_')].columns if row[col] > 0.0 and not pd.isna(row[col])])
+
+    Results['PhaseList'] = pd.DataFrame(Results['All'].apply(combine_headers, axis=1).tolist())
+
     Results['mass_g'] = Results_Mass
     Results['volume_cm3'] = Results_Volume
     Results['rho_kg/m3'] = Results_rho

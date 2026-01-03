@@ -4,9 +4,13 @@ import sys
 import time
 
 def equilibrate_MELTS(Model = None, P_bar = None, T_C = None, comp = None, 
-                      fO2_buffer = None, fO2_offset = None, Suppress = None):
+                      fO2_buffer = None, fO2_offset = None, Suppress = None, Suppress_except=None,
+                      trail = None, melts = None):
     Results = {}
     Affinity = {}
+
+    if trail is not None:
+        trail = False
 
     if comp is None:
         raise Exception("No composition specified")
@@ -18,15 +22,16 @@ def equilibrate_MELTS(Model = None, P_bar = None, T_C = None, comp = None,
 
     bulk = list(100*np.array(bulk)/np.sum(bulk))
 
-    from meltsdynamic import MELTSdynamic
-    if Model is None or Model == "MELTSv1.0.2":
-        melts = MELTSdynamic(1)
-    elif Model == "pMELTS":
-        melts = MELTSdynamic(2)
-    elif Model == "MELTSv1.1.0":
-        melts = MELTSdynamic(3)
-    elif Model == "MELTSv1.2.0":
-        melts = MELTSdynamic(4)
+    if melts is None:
+        from meltsdynamic import MELTSdynamic
+        if Model is None or Model == "MELTSv1.0.2":
+            melts = MELTSdynamic(1)
+        elif Model == "pMELTS":
+            melts = MELTSdynamic(2)
+        elif Model == "MELTSv1.1.0":
+            melts = MELTSdynamic(3)
+        elif Model == "MELTSv1.2.0":
+            melts = MELTSdynamic(4)
 
     melts.engine.setBulkComposition(bulk)
     melts.engine.pressure = P_bar
@@ -44,6 +49,15 @@ def equilibrate_MELTS(Model = None, P_bar = None, T_C = None, comp = None,
                 if p != "fluid":
                     if p != "water":
                         melts.engine.setSystemProperties("Suppress", p)
+        elif Suppress_except is not None:
+            if type(Suppress_except) == str:
+                Suppress_except = [Suppress_except]
+            melts.engine.pressure = np.random.normal(P_bar, P_bar/10)
+            melts.engine.temperature = T_C + 500
+            PL = melts.engine.calcSaturationState()
+            for p in PL:
+                if p not in Suppress_except:
+                    melts.engine.setSystemProperties("Suppress", p)   
         else:
             for p in Suppress:
                 melts.engine.setSystemProperties("Suppress", p)
@@ -59,34 +73,21 @@ def equilibrate_MELTS(Model = None, P_bar = None, T_C = None, comp = None,
         else:
             melts.engine.setSystemProperties(["Log fO2 Path: " + fO2_buffer, "Log fO2 Offset: " + str(fO2_offset)])
 
-    # PhaseList = [None]
-    # PhaseComp = {}
-    # PhaseProp = {}
-    # Props = ['mass', 'rho']
-
     Results['Conditions'] = pd.DataFrame(data = np.zeros((length, 8)), columns = ['temperature', 'pressure', 'h', 's', 'v', 'mass', 'dvdp', 'logfO2'])
     properties = ['g', 'h', 's', 'v', 'cp', 'dcpdt', 'dvdt', 'dpdt', 'd2vdt2', 'd2vdtdp', 'd2vdp2', 'molwt', 'rho', 'mass']
-    # Results['liquid1'] = pd.DataFrame(data = np.zeros((length+1, 14)), columns = ['SiO2', 'TiO2', 'Al2O3', 'Fe2O3', 'Cr2O3', 'FeO', 'MnO', 'MgO', 'CaO', 'Na2O', 'K2O', 'P2O5', 'H2O', 'CO2'])
-    # Results['liquid1_prop'] = pd.DataFrame(data = np.zeros((length+1, 4)), columns = ['h', 'mass', 'v', 'rho'])
 
     try:
         melts.engine.calcEquilibriumState(1,0)
     except:
-        return Results
-
-    # SolidPhase = melts.engine.solidNames
-    # if SolidPhase is not None:
-    #     PhaseList = ['liquid1'] + SolidPhase
-    # else:
-    #     PhaseList = ['liquid1']
-
+        if trail is not None:
+            return Results, Affinity, trail
+        else:
+            return Results, Affinity
     
     if melts.engine.getProperty('mass', 'liquid1') > 0.0:
         PhaseList = ['liquid1'] + melts.engine.solidNames
     else:
         PhaseList = melts.engine.solidNames
-
-    # print(PhaseList)
 
     for R in Results['Conditions']:
         if R == 'temperature':
@@ -123,7 +124,6 @@ def equilibrate_MELTS(Model = None, P_bar = None, T_C = None, comp = None,
                 if pr in properties:
                     Results[phase + '_prop'].loc[0,pr] = melts.engine.getProperty(pr, phase)
                 else:
-                    # melts.engine.calcPhaseProperties(phase[:-1], melts.engine.getProperty('dispComposition', phase))
                     Results[phase + '_prop'].loc[0, pr] = melts.engine.getProperty(pr.split('_')[0], phase, pr.split('_')[1])
         # melts.engine.calcPhaseProperties(phase, melts.engine.dispComposition[phase])
         # melts.engine.calcEndMemberProperties(phase, melts.engine.dispComposition[phase])
@@ -138,32 +138,16 @@ def equilibrate_MELTS(Model = None, P_bar = None, T_C = None, comp = None,
         #         thermo_properties.append(i+'_'+j)
         #         thermodynamics[idx] = melts.engine.getProperty(i, phase, j)
         #         idx = idx + 1
-
-        # if phase not in list(Results.keys()):
-        #     Results[phase] = pd.DataFrame(data = np.zeros((length, 14)), columns = ['SiO2', 'TiO2', 'Al2O3', 'Fe2O3', 'Cr2O3', 'FeO', 'MnO', 'MgO', 'CaO', 'Na2O', 'K2O', 'P2O5', 'H2O', 'CO2'])
-        #     Results[phase + '_prop'] = pd.DataFrame(data = np.zeros((length, 5)), columns = ['g','h', 'mass', 'v', 'rho'])
-
-        # for el in Results[phase]:
-        #     Results[phase].loc[0,el] = melts.engine.getProperty('dispComposition', phase, el)
-
-        # for pr in Results[phase + '_prop']:
-        #     Results[phase + '_prop'][pr].loc[0] = melts.engine.getProperty(pr, phase)
-
-        # df1 = Results[phase + '_prop']
-        # df2 = pd.DataFrame(columns=thermo_properties, data=thermodynamics)
-
-        # # Ensure both have matching indices (fill missing rows with NaN)
-        # max_len = max(len(df1), len(df2))
-        # df1 = df1.reindex(range(max_len))
-        # df2 = df2.reindex(range(max_len))
-
-        # Results[phase + '_prop'] = pd.concat([df1, df2], axis=1)
     
     PhaseList = melts.engine.calcSaturationState()
     Affinity_raw = melts.engine.getProperty('affinity', PhaseList)
     Affinity = {Phase: float_value for Phase, float_value in zip(PhaseList, Affinity_raw)}
+    # Results['Affinity'] = pd.DataFrame(Affinity)
 
-    return Results, Affinity
+    if trail is not None:
+        return Results, Affinity, trail
+    else:
+        return Results, Affinity
 
 def findCO2_MELTS(P_bar = None, Model = None, T_C = None, comp = None, melts = None, fO2_buffer = None, fO2_offset = None, Step = None):
 

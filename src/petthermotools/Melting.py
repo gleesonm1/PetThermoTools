@@ -87,6 +87,7 @@ def AdiabaticDecompressionMelting(cores = multiprocessing.cpu_count(),
     """
     
     Tp_C        = to_float(Tp_C)
+    Tp_C        = check_array(Tp_C)
 
     P_path_bar = to_float(P_path_bar)
     P_start_bar= to_float(P_start_bar)
@@ -95,6 +96,14 @@ def AdiabaticDecompressionMelting(cores = multiprocessing.cpu_count(),
 
     Fe3Fet = to_float(Fe3Fet)
     fO2_offset = to_float(fO2_offset)
+
+    P_path_bar = check_array(P_path_bar)
+    P_start_bar= check_array(P_start_bar)
+    P_end_bar  = check_array(P_end_bar)
+    dp_bar     = check_array(dp_bar)
+
+    Fe3Fet = check_array(Fe3Fet)
+    fO2_offset = check_array(fO2_offset)
 
     if fO2_buffer is not None:
         if fO2_buffer != "NNO":

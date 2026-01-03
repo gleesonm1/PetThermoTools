@@ -161,6 +161,13 @@ def harker(Results=None, x_axis="MgO", y_axis=("SiO2", "TiO2", "Al2O3", "Cr2O3",
                 y = Results["All"][ycol].values
                 ax.plot(x, y, color='k')
 
+        ax.set(xlabel=labelling[x_var], ylabel=labelling[y_var])
+
+        if xlim:
+            ax.set_xlim(xlim)
+        if ylim:
+            ax.set_ylim(ylim)
+
     def plot_data(ax, x_var, y_var):
         # plot external data
         suffix = Names[phase] if phase in Names else ""
@@ -201,12 +208,12 @@ def harker(Results=None, x_axis="MgO", y_axis=("SiO2", "TiO2", "Al2O3", "Cr2O3",
                             linestyle="None",
                             label=k)
 
-        ax.set(xlabel=labelling[x_var], ylabel=labelling[y_var])
+        # ax.set(xlabel=labelling[x_var], ylabel=labelling[y_var])
 
-        if xlim:
-            ax.set_xlim(xlim)
-        if ylim:
-            ax.set_ylim(ylim)
+        # if xlim:
+        #     ax.set_xlim(xlim)
+        # if ylim:
+        #     ax.set_ylim(ylim)
 
     # -------------------- main plotting --------------------
     for i, row in enumerate(rows):
@@ -558,84 +565,108 @@ def phase_plot(Results, x_axis = None, y_axis = None, cmap = "Reds"):
     # Creates one stacked phase plot per run, vs. temperature
     """
     if x_axis is not None and y_axis is not None:
-        raise ValueError("Please provide either a x-axis or y-axis parameter to plot the mass fractions against")
+        raise ValueError("Please provide either a x-axis or y-axis parameter.")
+
+    # 1. Standardize the Results structure into a list of runs for easy scanning
+    if 'All' in Results.keys():
+        runs = {"Default": Results}
+    else:
+        runs = Results.copy()
+
+    # 2. Identify all unique phases across ALL runs
+    all_unique_phases = set()
+    phase_first_index_global = {} # To keep track of crystallization order globally
+
+    for run_id, data in runs.items():
+        mass_df = data['mass_g']
+        use_cumsum = any(col.endswith("_cumsum") for col in mass_df.columns)
+        suffix = "_cumsum" if use_cumsum else ""
+        
+        exclude_cols = {'T_C', None}
+        current_phases = [
+            col.replace(suffix, "") 
+            for col in mass_df.columns 
+            if col.endswith(suffix) or (not use_cumsum and not col.endswith("_cumsum") and col not in exclude_cols)
+        ]
+        
+        # Remove liquid for now to handle it separately later
+        liquid_names = ["liq1", "liquid1"]
+        current_phases = [p for p in current_phases if p not in liquid_names]
+        
+        all_unique_phases.update(current_phases)
+
+        # Track earliest appearance for sorting
+        for p in current_phases:
+            col = p + suffix if (use_cumsum and p + suffix in mass_df.columns) else p
+            vals = mass_df[col].values
+            nz = np.flatnonzero(vals > 0)
+            first_idx = nz[0] if len(nz) > 0 else np.inf
+            
+            # Keep the "earliest" appearance across all runs
+            if p not in phase_first_index_global or first_idx < phase_first_index_global[p]:
+                phase_first_index_global[p] = first_idx
+
+    # 3. Sort the master list of phases
+    phase_priority = {}
+    for order_dict in [Names, Names_MM]:
+        for i, key in enumerate(order_dict.keys()):
+            phase_priority[key] = i
+
+    def global_sort_key(p):
+        return (phase_first_index_global.get(p, np.inf), phase_priority.get(p, 1e6))
+
+    sorted_phases = sorted(list(all_unique_phases), key=global_sort_key)
     
+    # Check if liquid exists in any run and add to the end
+    has_liquid = any("liq1" in d['mass_g'].columns or "liquid1" in d['mass_g'].columns for d in runs.values())
+    liquid_label = "liq1" # Default label for the color map
+    if has_liquid:
+        sorted_phases.append(liquid_label)
+
+    # 4. Generate the Master Color Map
+    c = cm.get_cmap(cmap, len(sorted_phases))
+    MasterPhaseColors = {p: c(i) for i, p in enumerate(sorted_phases)}
+    # Ensure both naming conventions for liquid map to the same color
+    if "liq1" in MasterPhaseColors:
+        MasterPhaseColors["liquid1"] = MasterPhaseColors["liq1"]
+
+    # 5. Define modified makeplot that uses the MasterPhaseColors
     def makeplot(Mass, Res, title = None):
-        # --- Identify whether _cumsum columns exist ---
         use_cumsum = any(col.endswith("_cumsum") for col in Mass.columns)
         suffix = "_cumsum" if use_cumsum else ""
 
-        # --- Identify phases ---
-        exclude_cols = {'T_C', None}
-        phases = [
-            col.replace(suffix, "")
-            for col in Mass.columns
-            if col.endswith(suffix) or (not use_cumsum and not col.endswith("_cumsum") and col not in exclude_cols)
-        ]
+        # Identify local phases and sort them based on the Master list order
+        local_phases = [p for p in sorted_phases if (p+suffix in Mass.columns or p in Mass.columns)]
+        # Special check for liquid names
+        if "liq1" in Mass.columns and "liq1" not in local_phases: local_phases.append("liq1")
+        if "liquid1" in Mass.columns and "liquid1" not in local_phases: local_phases.append("liquid1")
 
-        # --- Handle liquid phase ---
-        liquid_name = None
-        for liq_name in ["liq1", "liquid1"]:
-            if liq_name in Mass.columns:
-                liquid_name = liq_name
-                if liq_name in phases:
-                    phases.remove(liq_name)
-                break  # use the first match
-
-        # --- Create dictionary priority (order in Names/Names_MM) ---
-        phase_priority = {}
-        for order_dict in [Names, Names_MM]:
-            for i, key in enumerate(order_dict.keys()):
-                phase_priority[key] = i  # smaller i = higher priority in tie
-
-        # --- Sort crystalline phases ---
-        phase_first_index = {}
-        for p in phases:
-            col = p + suffix if (use_cumsum and p + suffix in Mass.columns) else p
-            vals = Mass[col].values
-            nz = np.flatnonzero(vals > 0)
-            phase_first_index[p] = nz[0] if len(nz) > 0 else np.inf
-
-        def sort_key(p):
-            return (phase_first_index[p], phase_priority.get(p, 1e6))
-
-        phases = sorted(phases, key=sort_key)
-
-        # --- Append liquid last ---
-        if liquid_name is not None:
-            phases.append(liquid_name)
-
-        # --- Assign colors ---
-        c = cm.get_cmap(cmap, len(phases))
-        PhaseColors = {p: c(i) for i, p in enumerate(phases)}
-
-        # --- Setup figure ---
         if y_axis == "P_bar":
-            f, a = plt.subplots(figsize=(3.5, 5))
+            f, a = plt.subplots(figsize=(4, 5))
         else:
-            f, a = plt.subplots(figsize=(4, 3.5))
+            f, a = plt.subplots(figsize=(5, 3.5))
 
-        # --- Determine orientation ---
         coord = Res[y_axis] if y_axis else Res[x_axis]
         horizontal = y_axis is not None
-
         Stop = np.zeros(len(Mass))
-        for p in phases:
-            col = p + suffix if (use_cumsum and p + suffix in Mass.columns) else p
-            vals = Mass[col].values
 
-            # --- Legend label mapping ---
+        for p in local_phases:
+            col = p + suffix if (use_cumsum and p + suffix in Mass.columns) else p
+            if col not in Mass.columns: continue
+            
+            vals = Mass[col].values
             label = Names.get(p, Names_MM.get(p, p))
-            if '_' in label:
-                label = label[1:]
+            if '_' in label: label = label[1:]
+
+            color = MasterPhaseColors.get(p, "grey") # Fallback to grey if not found
 
             if horizontal:
-                a.fill_betweenx(coord, Stop, Stop + vals, color=PhaseColors[p], alpha=0.75, lw=0, label=label)
+                a.fill_betweenx(coord, Stop, Stop + vals, color=color, alpha=0.75, lw=0, label=label)
             else:
-                a.fill_between(coord, Stop, Stop + vals, color=PhaseColors[p], alpha=0.75, lw=0, label=label)
+                a.fill_between(coord, Stop, Stop + vals, color=color, alpha=0.75, lw=0, label=label)
             Stop += vals
 
-        # --- Labels ---
+        # Labels and formatting
         if horizontal:
             if y_axis == "P_bar":
                 a.set_ylabel("Pressure (bar)")
@@ -647,29 +678,137 @@ def phase_plot(Results, x_axis = None, y_axis = None, cmap = "Reds"):
             a.set_xlabel(x_axis)
             a.set_ylabel("Mass fraction")
 
-        if title is not None:
-            a.set_title(title)
-
-        # --- Remove whitespace ---
+        if title: a.set_title(title)
         a.margins(0)
-        f.tight_layout()
-
         a.legend(loc="center left", bbox_to_anchor=(1.02, 0.5))
-
+        f.tight_layout()
         return f, a
-    fig = []
-    axes = []
 
-    if 'All' in Results.keys():
-        fig, axes = makeplot(Results['mass_g'], Results['All'])
-    else:
-        for val in Results.keys():
-            f, a = makeplot(Results[val]['mass_g'],
-                            Results[val]['All'],
-                            title = val)
-            fig.append(f)
-            axes.append(a)
-    return fig, axes
+    # 6. Execute plotting
+    fig_list = []
+    axes_list = []
+
+    for run_id, data in runs.items():
+        title = run_id if run_id != "Default" else None
+        f, a = makeplot(data['mass_g'], data['All'], title=title)
+        fig_list.append(f)
+        axes_list.append(a)
+
+    return fig_list[0], axes_list[0] if len(fig_list) == 1 else (fig_list, axes_list)
+
+    # if x_axis is not None and y_axis is not None:
+    #     raise ValueError("Please provide either a x-axis or y-axis parameter to plot the mass fractions against")
+    
+    # def makeplot(Mass, Res, title = None):
+    #     # --- Identify whether _cumsum columns exist ---
+    #     use_cumsum = any(col.endswith("_cumsum") for col in Mass.columns)
+    #     suffix = "_cumsum" if use_cumsum else ""
+
+    #     # --- Identify phases ---
+    #     exclude_cols = {'T_C', None}
+    #     phases = [
+    #         col.replace(suffix, "")
+    #         for col in Mass.columns
+    #         if col.endswith(suffix) or (not use_cumsum and not col.endswith("_cumsum") and col not in exclude_cols)
+    #     ]
+
+    #     # --- Handle liquid phase ---
+    #     liquid_name = None
+    #     for liq_name in ["liq1", "liquid1"]:
+    #         if liq_name in Mass.columns:
+    #             liquid_name = liq_name
+    #             if liq_name in phases:
+    #                 phases.remove(liq_name)
+    #             break  # use the first match
+
+    #     # --- Create dictionary priority (order in Names/Names_MM) ---
+    #     phase_priority = {}
+    #     for order_dict in [Names, Names_MM]:
+    #         for i, key in enumerate(order_dict.keys()):
+    #             phase_priority[key] = i  # smaller i = higher priority in tie
+
+    #     # --- Sort crystalline phases ---
+    #     phase_first_index = {}
+    #     for p in phases:
+    #         col = p + suffix if (use_cumsum and p + suffix in Mass.columns) else p
+    #         vals = Mass[col].values
+    #         nz = np.flatnonzero(vals > 0)
+    #         phase_first_index[p] = nz[0] if len(nz) > 0 else np.inf
+
+    #     def sort_key(p):
+    #         return (phase_first_index[p], phase_priority.get(p, 1e6))
+
+    #     phases = sorted(phases, key=sort_key)
+
+    #     # --- Append liquid last ---
+    #     if liquid_name is not None:
+    #         phases.append(liquid_name)
+
+    #     # --- Assign colors ---
+    #     c = cm.get_cmap(cmap, len(phases))
+    #     PhaseColors = {p: c(i) for i, p in enumerate(phases)}
+
+    #     # --- Setup figure ---
+    #     if y_axis == "P_bar":
+    #         f, a = plt.subplots(figsize=(3.5, 5))
+    #     else:
+    #         f, a = plt.subplots(figsize=(4, 3.5))
+
+    #     # --- Determine orientation ---
+    #     coord = Res[y_axis] if y_axis else Res[x_axis]
+    #     horizontal = y_axis is not None
+
+    #     Stop = np.zeros(len(Mass))
+    #     for p in phases:
+    #         col = p + suffix if (use_cumsum and p + suffix in Mass.columns) else p
+    #         vals = Mass[col].values
+
+    #         # --- Legend label mapping ---
+    #         label = Names.get(p, Names_MM.get(p, p))
+    #         if '_' in label:
+    #             label = label[1:]
+
+    #         if horizontal:
+    #             a.fill_betweenx(coord, Stop, Stop + vals, color=PhaseColors[p], alpha=0.75, lw=0, label=label)
+    #         else:
+    #             a.fill_between(coord, Stop, Stop + vals, color=PhaseColors[p], alpha=0.75, lw=0, label=label)
+    #         Stop += vals
+
+    #     # --- Labels ---
+    #     if horizontal:
+    #         if y_axis == "P_bar":
+    #             a.set_ylabel("Pressure (bar)")
+    #             a.invert_yaxis()
+    #         else:
+    #             a.set_ylabel(y_axis)
+    #         a.set_xlabel("Mass fraction")
+    #     else:
+    #         a.set_xlabel(x_axis)
+    #         a.set_ylabel("Mass fraction")
+
+    #     if title is not None:
+    #         a.set_title(title)
+
+    #     # --- Remove whitespace ---
+    #     a.margins(0)
+    #     f.tight_layout()
+
+    #     a.legend(loc="center left", bbox_to_anchor=(1.02, 0.5))
+
+    #     return f, a
+    # fig = []
+    # axes = []
+
+    # if 'All' in Results.keys():
+    #     fig, axes = makeplot(Results['mass_g'], Results['All'])
+    # else:
+    #     for val in Results.keys():
+    #         f, a = makeplot(Results[val]['mass_g'],
+    #                         Results[val]['All'],
+    #                         title = val)
+    #         fig.append(f)
+    #         axes.append(a)
+    # return fig, axes
 
 
 def plot_phaseDiagram(Model = "Holland", Combined = None, P_units = "bar", T_units = "C", 
