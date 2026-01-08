@@ -487,8 +487,55 @@ def residualT_plot(Results = None, P_bar = None, phases = None, H2O_Liq = None, 
                         a[i][j].plot_surface(X_new, Y_new, z_plot, cmap = 'viridis')
                         a[i][j].set_zlim([0,50])
 
+def phase_mass_comparison(Results=None, x_axis = "MgO_Liq", phase = "liquid1", cmap = "Reds", cumsum = True):
+    """
+    Plot the mass of a chosen phase in different models.
 
-def phase_plot(Results, x_axis = None, y_axis = None, cmap = "Reds"):
+    Parameters:
+    -----------
+    Results: dict
+        Dictionary containing model outputs. It should contain the results of multiple calculations
+
+    x_axis: str
+        default = MgO_Liq
+        parameter used to plot on the x-axis against mass of chosen phase on the y-axis.
+
+    phase: str
+        default = liquid1
+        Name of the phase being plotted (from GenFunc.Names)
+
+    cmap : str, default = "Reds"
+        Matplotlib colormap used to assign colors to different models
+
+    cumsum: bool
+        if True (default) will plot the cumulative sum of phase mass (if cumsum exists).
+    """
+    if "All" in Results:
+        print("Phase comparison is designed to work with multiple calculations. You've only provided one")
+        return
+    
+    c = cm.get_cmap(cmap, len(Results))
+    RunColors = {p: c(i) for i, p in enumerate(Results)}
+
+    f, a = plt.subplots(1,1)
+    for run_id, data in Results.items():
+        if phase in data['mass_g'].keys():
+            if phase+'_cumsum' in data['mass_g'].keys() and cumsum:
+                a.plot(data['All']['T_C'],
+                       data['mass_g'][phase+'_cumsum'],
+                       '-', color = RunColors[run_id], label = run_id)
+            else:
+                a.plot(data['All']['T_C'],
+                       data['mass_g'][phase],
+                       '-', color = RunColors[run_id], label = run_id)
+                       
+    a.legend()
+    a.set_xlabel(x_axis)
+    a.set_ylabel('Mass (g) of ' + phase[:-1])
+
+    return f, a    
+
+def phase_plot(Results, x_axis = None, y_axis = None, cmap = "Reds", lines = False):
     """
     Create stacked phase mass-fraction plots from thermodynamic model results.
 
@@ -534,6 +581,9 @@ def phase_plot(Results, x_axis = None, y_axis = None, cmap = "Reds"):
     
     cmap : str, default = "Reds"
         Matplotlib colormap used to assign colors to phases.
+
+    lines: bool, default = False
+        If True plots phase mass fraction as individual lines rather than as a stacked plot.
 
     Returns
     -------
@@ -660,11 +710,14 @@ def phase_plot(Results, x_axis = None, y_axis = None, cmap = "Reds"):
 
             color = MasterPhaseColors.get(p, "grey") # Fallback to grey if not found
 
-            if horizontal:
-                a.fill_betweenx(coord, Stop, Stop + vals, color=color, alpha=0.75, lw=0, label=label)
+            if lines:
+                a.plot(coord, vals, '-', color = color, label = label)
             else:
-                a.fill_between(coord, Stop, Stop + vals, color=color, alpha=0.75, lw=0, label=label)
-            Stop += vals
+                if horizontal:
+                    a.fill_betweenx(coord, Stop, Stop + vals, color=color, alpha=0.75, lw=0, label=label)
+                else:
+                    a.fill_between(coord, Stop, Stop + vals, color=color, alpha=0.75, lw=0, label=label)
+                Stop += vals
 
         # Labels and formatting
         if horizontal:

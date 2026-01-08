@@ -2,6 +2,10 @@
 Change Log
 ================================================
 
+Version 0.3.6 (January 2026)
+====================================
+Added new plotting options for phase abundance (ptt.phase_mass_comparison())
+
 Version 0.3.4 (January 2026)
 ====================================
 Fix minor bug in harker plots

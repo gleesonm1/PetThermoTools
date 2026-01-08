@@ -348,7 +348,7 @@ def saturation_pressure(Model = "MELTSv1.2.0", cores = multiprocessing.cpu_count
                         bulk = None, T_C_init = None, T_fixed_C = None, P_bar_init = 5000,
                         Fe3Fet_Liq = None, Fe3Fet_init = None, H2O_Liq = None, H2O_init = None,
                         CO2_Liq = None, CO2_init = None, fO2_buffer = None, fO2_offset = None, 
-                        copy_columns = None, multi_processing = True, timeout = 180):
+                        copy_columns = None, multi_processing = True, timeout = 10):
     """
     Estimates the pressure at which volatile saturation occurs for one or more melt compositions
     using MELTS thermodynamic models.
@@ -611,16 +611,17 @@ def saturation_pressure(Model = "MELTSv1.2.0", cores = multiprocessing.cpu_count
             df = df.sort_index()
 
             return df
+        
         Results = results_to_dataframe(results, index_in)
         
         if copy_columns is not None:
             if type(copy_columns) == str:
-                Results.insert(0, copy_columns, comp[copy_columns])
+                Results.insert(0, copy_columns, bulk[copy_columns])
                 # Af_Combined.insert(0, copy_columns, comp[copy_columns])
             elif type(copy_columns) == list:
                 j = 0
                 for i in copy_columns:
-                    Results.insert(j, i, comp[i])
+                    Results.insert(j, i, bulk[i])
                     # Af_Combined.insert(j, i, comp[i])
                     j = j + 1
 
@@ -642,6 +643,7 @@ def saturationP_multi(q, index, *, Model = None, comp = None, T_C_init = None, T
         elif Model == "MELTSv1.2.0":
             melts = MELTSdynamic(4)
 
+        melts.engine.setSystemProperties("Output",  "none")
         
         melts.engine.pressure = P_bar_init[0]
         if T_fixed_C[0] is not None:

@@ -529,7 +529,7 @@ def path_multi(q, index, *, Model = None, comp = None, Frac_solid = None, Frac_f
                 if type(comp) == dict:
                     if trail is not None:
                         Results, tr = path_MELTS(Model = Model, comp = comp, Frac_solid = Frac_solid, Frac_fluid = Frac_fluid, 
-                                                T_initial_C = 1400, T_C = T_C[i], T_path_C = T_path_C[i], T_start_C = T_start_C[i], 
+                                                T_initial_C = np.random.random()*200 + 1200, T_C = T_C[i], T_path_C = T_path_C[i], T_start_C = T_start_C[i], 
                                                 T_end_C = T_end_C[i], dt_C = dt_C[i], P_bar = P_bar[i], P_path_bar = P_path_bar[i], 
                                                 P_start_bar = P_start_bar[i], P_end_bar = P_end_bar[i], dp_bar = dp_bar[i], 
                                                 isenthalpic = isenthalpic, isentropic = isentropic, isochoric = isochoric, 
@@ -538,7 +538,7 @@ def path_multi(q, index, *, Model = None, comp = None, Frac_solid = None, Frac_f
                                                 Suppress_except=Suppress_except, trail = trail, melts = melts)
                     else:
                         Results = path_MELTS(Model = Model, comp = comp, Frac_solid = Frac_solid, Frac_fluid = Frac_fluid, 
-                                                T_initial_C = 1400, T_C = T_C[i], T_path_C = T_path_C[i], T_start_C = T_start_C[i], 
+                                                T_initial_C = np.random.random()*200 + 1200, T_C = T_C[i], T_path_C = T_path_C[i], T_start_C = T_start_C[i], 
                                                 T_end_C = T_end_C[i], dt_C = dt_C[i], P_bar = P_bar[i], P_path_bar = P_path_bar[i], 
                                                 P_start_bar = P_start_bar[i], P_end_bar = P_end_bar[i], dp_bar = dp_bar[i], 
                                                 isenthalpic = isenthalpic, isentropic = isentropic, isochoric = isochoric, 
@@ -549,7 +549,7 @@ def path_multi(q, index, *, Model = None, comp = None, Frac_solid = None, Frac_f
                 else:
                     if trail is not None:
                         Results, tr = path_MELTS(Model = Model, comp = comp.loc[i].to_dict(), Frac_solid = Frac_solid, Frac_fluid = Frac_fluid, 
-                                                T_initial_C = 1400, T_C = T_C[i], T_path_C = T_path_C[i], T_start_C = T_start_C[i], 
+                                                T_initial_C = np.random.random()*200 + 1200, T_C = T_C[i], T_path_C = T_path_C[i], T_start_C = T_start_C[i], 
                                                 T_end_C = T_end_C[i], dt_C = dt_C[i], P_bar = P_bar[i], P_path_bar = P_path_bar[i], 
                                                 P_start_bar = P_start_bar[i], P_end_bar = P_end_bar[i], dp_bar = dp_bar[i], 
                                                 isenthalpic = isenthalpic, isentropic = isentropic, isochoric = isochoric, 
@@ -558,7 +558,7 @@ def path_multi(q, index, *, Model = None, comp = None, Frac_solid = None, Frac_f
                                                 Suppress_except=Suppress_except, trail = trail, melts = melts)
                     else:
                         Results = path_MELTS(Model = Model, comp = comp.loc[i].to_dict(), Frac_solid = Frac_solid, Frac_fluid = Frac_fluid, 
-                                                T_initial_C = 1400, T_C = T_C[i], T_path_C = T_path_C[i], T_start_C = T_start_C[i], 
+                                                T_initial_C = np.random.random()*200 + 1200, T_C = T_C[i], T_path_C = T_path_C[i], T_start_C = T_start_C[i], 
                                                 T_end_C = T_end_C[i], dt_C = dt_C[i], P_bar = P_bar[i], P_path_bar = P_path_bar[i], 
                                                 P_start_bar = P_start_bar[i], P_end_bar = P_end_bar[i], dp_bar = dp_bar[i], 
                                                 isenthalpic = isenthalpic, isentropic = isentropic, isochoric = isochoric, 

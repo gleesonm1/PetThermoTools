@@ -375,6 +375,8 @@ def findLiq_MELTS(P_bar = None, Model = None, T_C_init = None, comp = None, melt
     if T_C_init is None:
         T_C_init = 1300
 
+    # T_C_init = np.random.normal(T_C_init, 10)
+
     if comp is None:
         raise Exception("No composition specified")
     else:
@@ -401,6 +403,8 @@ def findLiq_MELTS(P_bar = None, Model = None, T_C_init = None, comp = None, melt
             melts = MELTSdynamic(3)
         elif Model == "MELTSv1.2.0":
             melts = MELTSdynamic(4)
+        
+        melts.engine.setSystemProperties("Output",  "none")
 
         melts.engine.setSystemProperties("Suppress", "rutile")
         melts.engine.setSystemProperties("Suppress", "tridymite")
@@ -519,26 +523,26 @@ def findLiq_MELTS(P_bar = None, Model = None, T_C_init = None, comp = None, melt
                     i = set.intersection(set(Liq),set(PhaseList))
 
         PL = melts.engine.solidNames
-        try:
-            melts = melts.addNodeAfter()
-            melts.engine.temperature = melts.engine.temperature + 4*Step[j]
-            melts.engine.calcEquilibriumState(1,0)
+        # try:
+        #     melts = melts.addNodeAfter()
+        #     melts.engine.temperature = melts.engine.temperature + 4*Step[j]
+        #     melts.engine.calcEquilibriumState(1,0)
 
             
-            melts = melts.addNodeAfter()
-            melts.engine.temperature = melts.engine.temperature - 3*Step[j]
-            melts.engine.calcEquilibriumState(1,0)
-        except:
-            if Affinity is True:
-                if bulk_return is not None:
-                    return Results, Affin, melts
-                else:
-                    return Results, Affin
-            else:
-                if bulk_return is not None:
-                    return Results, melts
-                else:
-                    return Results
+        #     melts = melts.addNodeAfter()
+        #     melts.engine.temperature = melts.engine.temperature - 3*Step[j]
+        #     melts.engine.calcEquilibriumState(1,0)
+        # except:
+        #     if Affinity is True:
+        #         if bulk_return is not None:
+        #             return Results, Affin, melts
+        #         else:
+        #             return Results, Affin
+        #     else:
+        #         if bulk_return is not None:
+        #             return Results, melts
+        #         else:
+        #             return Results
 
     columns = ['T_Liq', 'liquidus_phase', 'fluid_saturated', 'SiO2', 'TiO2', 'Al2O3', 'Fe2O3', 'Cr2O3', 'FeO', 'MnO', 'MgO', 'CaO', 'Na2O', 'K2O', 'P2O5', 'H2O', 'CO2']
     # pd.DataFrame(data = np.zeros((1, 17)), columns = ['T_Liq', 'liquidus_phase', 'fluid_saturated', 'SiO2', 'TiO2', 'Al2O3', 'Fe2O3', 'Cr2O3', 'FeO', 'MnO', 'MgO', 'CaO', 'Na2O', 'K2O', 'P2O5', 'H2O', 'CO2'])
@@ -837,7 +841,7 @@ def phaseSat_MELTS(Model = None, comp = None, phases = None, T_initial_C = None,
 
     return Results
 
-def path_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid = None, T_initial_C = 1400,
+def path_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid = None, T_initial_C = np.random.random()*200 + 1200,
                T_C = None, T_path_C = None, T_start_C = None, T_end_C = None, dt_C = None, T_maxdrop_C = None,
                P_bar = None, P_path_bar = None, P_start_bar = None, P_end_bar = None, dp_bar = None, 
                isenthalpic = None, isentropic = None, isochoric = None, find_liquidus = None, 
@@ -919,6 +923,7 @@ def path_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid = None, 
 
     '''
     Results = {}
+
     if trail is not None:
         trail = False
 
@@ -949,6 +954,8 @@ def path_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid = None, 
 
     bulk = [comp['SiO2_Liq'], comp['TiO2_Liq'], comp['Al2O3_Liq'], comp['Fe3Fet_Liq']*((159.59/2)/71.844)*comp['FeOt_Liq'], comp['Cr2O3_Liq'], (1- comp['Fe3Fet_Liq'])*comp['FeOt_Liq'], comp['MnO_Liq'], comp['MgO_Liq'], 0.0, 0.0, comp['CaO_Liq'], comp['Na2O_Liq'], comp['K2O_Liq'], comp['P2O5_Liq'], comp['H2O_Liq'], comp['CO2_Liq'], 0.0, 0.0, 0.0]
     bulk = list(100*np.array(bulk)/np.sum(bulk))
+
+    melts.engine.setSystemProperties("Output",  "none")
 
     if Suppress_except is False:
         if Suppress is not None:
@@ -990,6 +997,7 @@ def path_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid = None, 
                 else:
                     Liq_Results = findLiq_MELTS(P_bar = P_path_bar, comp = bulk, melts = melts, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, T_C_init = T_initial_C)
             except:
+                print('Liquidus calculation failed')
                 if trail is not None:
                     return Results, trail
                 else:
@@ -998,6 +1006,7 @@ def path_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid = None, 
             try:
                 Liq_Results = findLiq_MELTS(P_bar = P_start_bar, comp = bulk, melts = melts, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, T_C_init = T_initial_C)
             except:
+                print('Liquidus calculation failed')
                 if trail is not None:
                     return Results, trail
                 else:
@@ -1086,10 +1095,6 @@ def path_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid = None, 
 
     Results['Conditions'] = pd.DataFrame(data = np.zeros((length, 8)), columns = ['temperature', 'pressure', 'h', 's', 'v', 'mass', 'dvdp', 'logfO2'])
     properties = ['g', 'h', 's', 'v', 'cp', 'dcpdt', 'dvdt', 'dpdt', 'd2vdt2', 'd2vdtdp', 'd2vdp2', 'molwt', 'rho', 'mass']
-    # Results['liquid1'] = pd.DataFrame(data = np.zeros((length, 14)), columns = ['SiO2', 'TiO2', 'Al2O3', 'Fe2O3', 'Cr2O3', 'FeO', 'MnO', 'MgO', 'CaO', 'Na2O', 'K2O', 'P2O5', 'H2O', 'CO2'])
-    # Results['liquid1_prop'] = pd.DataFrame(data = np.zeros((length, 14)), columns = ['g', 'h', 's', 'v', 'cp', 'dcpdt',
-    #             'dvdt', 'dpdt', 'd2vdt2', 'd2vdtdp',
-    #             'd2vdp2', 'molwt', 'rho', 'mass']) #['h', 'mass', 'v', 'rho'])
 
     for i in range(length):
         if i == 1:
@@ -1144,7 +1149,8 @@ def path_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid = None, 
                 else:
                     melts.engine.calcEquilibriumState(1,0)
             except:
-                trail = False
+                if trail is not None:
+                    trail = False
                 # if trail is not None:
                 #     return Results, trail
                 # else:
@@ -1264,7 +1270,6 @@ def path_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid = None, 
 
         if i != length - 1:
             melts = melts.addNodeAfter()
-
     
     if trail is not None:
         return Results, trail
@@ -1428,7 +1433,7 @@ def findSatPressure_MELTS(Model = None, T_C_init = None, T_fixed_C = None, P_bar
     if P_bar_init is None:
         P_bar_init = 5000
 
-    P_bar = np.random.normal(P_bar_init, P_bar_init/10)
+    P_bar = np.random.normal(P_bar_init, P_bar_init/20)
 
     if T_C_init is None:
         T_C_init = 1200

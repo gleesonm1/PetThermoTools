@@ -10,6 +10,142 @@ import platform
 from petthermotools.Path_wrappers import *
 from petthermotools.Compositions import *
 
+# def warn_if_incompatible_julia():
+#     import platform, subprocess, shutil, warnings
+
+#     def normalize_arch(arch):
+#         if arch in ("x86_64", "amd64"):
+#             return "x86_64"
+#         if arch in ("arm64", "aarch64"):
+#             return "arm64"
+#         return arch
+
+#     julia = shutil.which("julia")
+#     if julia is None:
+#         import juliapkg
+#         py_julia = juliapkg.executable()
+#         try:
+#             jl_arch = subprocess.check_output(
+#                 [py_julia, "-e", "print(Sys.ARCH)"],
+#                 text=True,
+#                 stderr=subprocess.DEVNULL,
+#             ).strip().lower().replace("-", "_")
+#         except Exception:
+#             return
+#         # No system Julia → juliacall will auto-install
+#         return
+#     else:
+#         try:
+#             jl_arch = subprocess.check_output(
+#                 [julia, "-e", "print(Sys.ARCH)"],
+#                 text=True,
+#                 stderr=subprocess.DEVNULL,
+#             ).strip().lower().replace("-","_")
+#         except Exception:
+#             return
+
+#     py_arch = platform.machine().lower()
+
+#     py_arch_n = normalize_arch(py_arch)
+#     jl_arch_n = normalize_arch(jl_arch)
+
+#     if py_arch_n != jl_arch_n:
+#         warnings.simplefilter(
+#             f"Incompatible Julia installation detected.\n"
+#             f" Python architecture: {py_arch} ({py_arch_n})\n"
+#             f" Julia architecture:  {jl_arch} ({jl_arch_n})\n\n"
+#             f"juliacall may crash with a bus error.\n"
+#             f"Consider uninstalling Julia or contact me (screenshot this message).\n"
+#             f"To fix this:\n"
+#             f"1. Install a compatible Julia version (1.10.x or 1.11.x) matching your Python architecture.\n"
+#             f"   - Recommended: Use the official Julia installer from https://julialang.org/downloads/\n"
+#             f"   - Or on macOS/Linux, use juliaup: https://github.com/JuliaLang/juliaup\n\n"
+#             f"2. Ensure this version is the primary Julia that juliacall will find:\n"
+#             f"   - Make sure `julia` is on your PATH points to the compatible installation.\n"
+#             f"   - On macOS/Linux, check with `which julia`.\n"
+#             f"   - On Windows, make sure the executable is in PATH or set the JULIA_EXE environment variable.\n\n"
+#             f"After installing a compatible Julia, restart your Python session and re-run install_MAGEMinCalc().",
+#             RuntimeWarning,
+#         )
+
+def install_MAGEMinCalc_VICTOR():
+    '''
+    Specialized installer for VICTOR. 
+    Runs the Julia installation as a separate process to avoid library 
+    conflicts (libcurl) and kernel timeouts.
+    '''
+    print("--- Starting MAGEMinCalc Installation for VICTOR ---")
+    print("This process handles precompilation in the background to prevent kernel crashes.")
+    
+    env_dir = Path.home() / ".petthermotools_julia_env"
+    env_dir.mkdir(exist_ok=True)
+    jl_env_path = env_dir.as_posix()
+
+    # The Julia script based on your original logic
+    # We remove the nonexistent registry and use Pkg.add(url=...)
+    julia_script = f"""
+    using Pkg
+    try
+        println("Activating environment at {jl_env_path}...")
+        Pkg.activate("{jl_env_path}")
+        
+        println("Updating General Registry...")
+        Pkg.Registry.update()
+
+        # 1. Add PythonCall (Required for PetThermoTools interface)
+        println("Installing PythonCall...")
+        Pkg.add("PythonCall")
+
+        # 2. Install MAGEMin_C (from General Registry)
+        println("Installing MAGEMin_C...")
+        Pkg.add(name="MAGEMin_C", version="2.0.6")
+
+        # 3. Install MAGEMinCalc (via URL as per your original code)
+        println("Installing MAGEMinCalc from GitHub...")
+        Pkg.add(url="https://github.com/gleesonm1/MAGEMinCalc.git", rev="v0.5.2")
+
+        # 4. Finalize and Precompile
+        println("Resolving and Precompiling... (This may take several minutes)")
+        Pkg.resolve()
+        Pkg.precompile()
+        
+        println("SUCCESS: MAGEMin environment is ready.")
+    catch e
+        @error "Installation failed" exception=e
+        exit(1)
+    end
+    """
+
+    # Locate the Julia executable used on VICTOR
+    julia_exe = "/home/jovyan/shared/Models/Executables/julia"
+    if not os.path.exists(julia_exe):
+        julia_exe = "julia" # Fallback if path changes
+
+    try:
+        # Launching as a subprocess to keep the Python kernel 'clean'
+        process = subprocess.Popen(
+            [julia_exe, "-e", julia_script],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1
+        )
+
+        # Stream the Julia output to the user so they know it hasn't frozen
+        for line in process.stdout:
+            print(f"  [Julia]: {line}", end="")
+
+        process.wait()
+
+        if process.returncode == 0:
+            print("\n--- Installation Finished! ---")
+            print("**Action Required**: Please Restart your Kernel (Kernel -> Restart) now.")
+        else:
+            print(f"\n--- Installation Failed (Code {process.returncode}) ---")
+            
+    except Exception as e:
+        print(f"Could not launch Julia: {e}")
+
 def install_MAGEMinCalc():
     '''
     Establish a new julia environment that will be used for any MAGEMin calculations performed through PetThermoTools.
@@ -18,6 +154,9 @@ def install_MAGEMinCalc():
 
     print("If you encounter issues with the installation process please contact me at gleesonm@berkeley.edu")
 
+    # warn_if_incompatible_julia()
+
+    # try:
     from juliacall import Main as jl
     env_dir = Path.home() / ".petthermotools_julia_env"
     env_dir.mkdir(exist_ok=True)
@@ -44,12 +183,12 @@ def install_MAGEMinCalc():
     jl.seval(f""" 
         Pkg.Registry.update()
         Pkg.add("PythonCall")
-             
+            
         using .Sys
         if Sys.iswindows()
             ENV["JULIA_SSL_CA_ROOTS_PATH"] = ""
         end
-             
+            
         # Install MAGEMinCalc and dependencies
         try
             Pkg.add(url="https://github.com/gleesonm1/MAGEMinCalc.git", rev="v0.5.2")
@@ -58,14 +197,57 @@ def install_MAGEMinCalc():
             ENV["JULIA_SSL_CA_ROOTS_PATH"] = ""
             Pkg.add(url="https://github.com/gleesonm1/MAGEMinCalc.git", rev="v0.5.2")
         end
-             
+            
         Pkg.add(name = "MAGEMin_C", version="2.0.6")
-             
+            
         Pkg.resolve()   
         Pkg.precompile()
-             
+            
         println("MAGEMin environment ready at {jl_env_path}")
         """)
+#     except:
+#         print("""Standard installation failed. 
+#               Now checking if you have a pre-existing Julia installation that is inconsistent with MAGEMinCalc through Python.""")
+        
+#         import subprocess
+
+#         system = platform.system()
+#         # platform.machine() tells us what Python is running as
+#         python_arch = platform.machine().lower() 
+#         is_python_arm = "arm" in python_arch or "aarch64" in python_arch
+
+#         if system == "Darwin":
+#             try:
+#                 # Find which julia the system is trying to use
+#                 julia_path = subprocess.check_output(["which", "julia"]).decode().strip()
+                
+#                 # Query that specific julia for its architecture
+#                 julia_arch = subprocess.check_output(
+#                     [julia_path, "-e", 'using Libc; println(Sys.ARCH)'],
+#                     env=os.environ
+#                 ).decode().strip().lower()
+
+#                 # Check for the fatal mismatch: Python is ARM, but Julia is Intel
+#                 if is_python_arm and ("x86_64" in julia_arch or "i386" in julia_arch):
+#                     print(f"""
+# [!] ARCHITECTURE MISMATCH DETECTED
+# Your Python is running natively on Apple Silicon ({python_arch}), 
+# but your Julia installation is the Intel version ({julia_arch}). 
+# These cannot communicate.
+
+# To fix this:
+# 1. Uninstall your current Julia.
+# 2. Install the native ARM version using JuliaUp:
+#    curl -fsSL https://install.julialang.org | sh
+# 3. Restart your terminal and run this installer again.
+#                     """)
+#                 else:
+#                     print(f"Detected {system} with {julia_arch} Julia. Mismatch does not appear to be the cause.")
+#                     print("Please check for internet connectivity or VPN issues affecting GitHub access.")
+
+#             except subprocess.CalledProcessError:
+#                 print("Could not find a working Julia executable in your PATH.")
+#                 print("Please test the `test_MAGEMinCalc()` function. If does doesn't return any results contact me (gleesonm@berkeley.edu).")
 
 def update_MAGEMinCalc():
     '''
