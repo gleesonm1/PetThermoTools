@@ -6,6 +6,7 @@ import site
 import sysconfig
 import importlib
 from pathlib import Path
+import subprocess
 import platform
 from petthermotools.Path_wrappers import *
 from petthermotools.Compositions import *
