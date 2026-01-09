@@ -800,7 +800,7 @@ def stich_work(Results = None, Order = None, Model = "MELTS", Frac_fluid = None,
     def combine_headers(row):
         return ','.join([col[7:] for col in Results['All'].loc[:, Results['All'].columns.str.contains('mass_g_')].columns if row[col] > 0.0 and not pd.isna(row[col])])
 
-    Results['PhaseList'] = pd.DataFrame(Results['All'].apply(combine_headers, axis=1).tolist())
+    Results['PhaseList'] = Results['All'].apply(combine_headers, axis=1)
 
     Results['mass_g'] = Results_Mass
     Results['volume_cm3'] = Results_Volume

@@ -99,7 +99,7 @@ def install_MAGEMinCalc_VICTOR():
 
         # 2. Install MAGEMin_C (from General Registry)
         println("Installing MAGEMin_C...")
-        Pkg.add(name="MAGEMin_C", version="2.0.6")
+        Pkg.add(name="MAGEMin_C", version="2.1.0")
 
         # 3. Install MAGEMinCalc (via URL as per your original code)
         println("Installing MAGEMinCalc from GitHub...")
@@ -157,6 +157,9 @@ def install_MAGEMinCalc():
 
     # warn_if_incompatible_julia()
 
+    import juliapkg
+    juliapkg.require_julia("1.11")
+
     # try:
     from juliacall import Main as jl
     env_dir = Path.home() / ".petthermotools_julia_env"
@@ -199,7 +202,7 @@ def install_MAGEMinCalc():
             Pkg.add(url="https://github.com/gleesonm1/MAGEMinCalc.git", rev="v0.5.2")
         end
             
-        Pkg.add(name = "MAGEMin_C", version="2.0.6")
+        Pkg.add(name = "MAGEMin_C", version="2.1.0")
             
         Pkg.resolve()   
         Pkg.precompile()
@@ -254,6 +257,10 @@ def update_MAGEMinCalc():
     '''
     Update MAGEMinCalc and MAGEMin_C to the latest versions that are compatible with PetThermoTools. It is useful to run this function once following each upgrade of PetThermoTools to ensure compatibility.
     '''
+
+    import juliapkg
+    juliapkg.require_julia("1.11")
+    
     from juliacall import Main as jl
     env_dir = Path.home() / ".petthermotools_julia_env"
     jl_env_path = env_dir.as_posix()
@@ -271,7 +278,7 @@ def update_MAGEMinCalc():
             Pkg.add(url="https://github.com/gleesonm1/MAGEMinCalc.git", rev="v0.5.2")
         end
              
-        Pkg.add(name = "MAGEMin_C", version="2.0.6")
+        Pkg.add(name = "MAGEMin_C", version="2.1.0")
              
         Pkg.resolve()   
         Pkg.precompile()

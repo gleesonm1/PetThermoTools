@@ -345,7 +345,7 @@ def findSatPressure(cores = None, Model = None, bulk = None, T_C_init = None, T_
 
 
 def saturation_pressure(Model = "MELTSv1.2.0", cores = multiprocessing.cpu_count(),
-                        bulk = None, T_C_init = None, T_fixed_C = None, P_bar_init = 5000,
+                        bulk = None, T_init_C = None, T_fixed_C = None, P_init_bar = 5000,
                         Fe3Fet_Liq = None, Fe3Fet_init = None, H2O_Liq = None, H2O_init = None,
                         CO2_Liq = None, CO2_init = None, fO2_buffer = None, fO2_offset = None, 
                         copy_columns = None, multi_processing = True, timeout = 10):
@@ -419,12 +419,16 @@ def saturation_pressure(Model = "MELTSv1.2.0", cores = multiprocessing.cpu_count
     - For MELTS-based models, small amounts of H₂O and ferric iron often improve model stability.
     - The function handles multiprocessing with safe timeouts and partial result recovery.
     """
+
+    # converting back to old naming convention, will eventually be fully replaced.
+    T_C_init = T_init_C
+    P_bar_init = P_init_bar
        
-    if "MELTS" in Model:
-        try:
-            from meltsdynamic import MELTSdynamic
-        except:
-            Warning('alphaMELTS for Python files are not on the python path. \n Please add these files to the path running \n import sys \n sys.path.append(r"insert_your_path_to_melts_here") \n You are looking for the location of the meltsdynamic.py file')
+    # if "MELTS" in Model:
+    #     try:
+    #         from meltsdynamic import MELTSdynamic
+    #     except:
+    #         Warning('alphaMELTS for Python files are not on the python path. \n Please add these files to the path running \n import sys \n sys.path.append(r"insert_your_path_to_melts_here") \n You are looking for the location of the meltsdynamic.py file')
 
     if bulk is not None:
         comp = bulk.copy()
@@ -605,7 +609,7 @@ def saturation_pressure(Model = "MELTSv1.2.0", cores = multiprocessing.cpu_count
             df.index = df.index.str.extract(r'Run (\d+)')[0].values.astype(int)
 
             # Reindex with full range, fill missing with 0.0
-            df = df.reindex(full_index, fill_value=0.0)
+            df = df.reindex(full_index, fill_value=np.nan)
 
             # Optional: sort index if needed
             df = df.sort_index()
@@ -614,6 +618,8 @@ def saturation_pressure(Model = "MELTSv1.2.0", cores = multiprocessing.cpu_count
         
         Results = results_to_dataframe(results, index_in)
         
+
+
         if copy_columns is not None:
             if type(copy_columns) == str:
                 Results.insert(0, copy_columns, bulk[copy_columns])

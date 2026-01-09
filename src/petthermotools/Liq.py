@@ -17,7 +17,7 @@ import time
 def equilibrate_multi(cores = multiprocessing.cpu_count(), Model = "MELTSv1.0.2", bulk = None, T_C = None, P_bar = None, 
                       Fe3Fet_init = None, H2O_init = None, CO2_init = None, 
                       Fe3Fet_Liq = None, H2O_Liq = None, CO2_Liq = None, fO2_buffer = None, fO2_offset = None,
-                      timeout = 30, copy_columns = None, Suppress = None, Suppress_except = None):
+                      timeout = 5, copy_columns = None, Suppress = None, Suppress_except = None):
     '''
     Runs single-step phase equilibrium calculations (isothermal and isobaric) for a batch of 
     compositions and/or P-T conditions in parallel using MELTS or MAGEMinCalc.
@@ -226,6 +226,9 @@ def equilibrate_multi(cores = multiprocessing.cpu_count(), Model = "MELTSv1.0.2"
             return Output
         else:
             # if type(comp) == dict:
+
+            timeout_main = timeout
+
             index_in = np.arange(int(length))
             combined_results = {}
             combined_affinity = {}
@@ -237,6 +240,8 @@ def equilibrate_multi(cores = multiprocessing.cpu_count(), Model = "MELTSv1.0.2"
                 groups = np.array_split(index, cores)
                 non_empty_groups = [g for g in groups if g.size > 0]
                 groups = non_empty_groups
+
+                timeout = timeout_main*len(groups[0])
 
                 processes = []
                 Start = time.time()
@@ -274,7 +279,7 @@ def equilibrate_multi(cores = multiprocessing.cpu_count(), Model = "MELTSv1.0.2"
 
                 print(f"Completed {100*len(index_out)/len(index_in)} %")
                 if time_track > 0:
-                    if saved ==len(index_out)/len(index_in):
+                    if saved == len(index_out)/len(index_in):
                         print('Likely at least 1 calculation did not complete')
                         break
 
@@ -292,7 +297,7 @@ def equilibrate_multi(cores = multiprocessing.cpu_count(), Model = "MELTSv1.0.2"
             for key in all_dict_keys:
                 for it in combined_results:
                     if key in combined_results[it].keys():
-                        Final_Combined[key] = pd.DataFrame(0.0, index = np.arange(length), columns = combined_results[it][key].columns)
+                        Final_Combined[key] = pd.DataFrame(np.nan, index = np.arange(length), columns = combined_results[it][key].columns)
 
                 for run_name, run_data in combined_results.items():
                     if key in run_data:
@@ -760,6 +765,7 @@ def multi_equilibrate(q, index, *, Model = None, comp = None,
         jl.seval("using MAGEMinCalc")
 
     for i in index:
+        melts = melts.addNodeAfter()
         try:
             if "MELTS" in Model:
                 if type(comp) == dict:
