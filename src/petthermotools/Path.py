@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 from petthermotools.GenFuncs import *
+from petthermotools.GenFuncs import _ensure_julia_ready
 from petthermotools.Plotting import *
 from petthermotools.MELTS import *
 import multiprocessing
@@ -139,7 +140,7 @@ def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid 
     fO2_offset = check_array(fO2_offset)
 
     if timeout is None:
-        timeout = 180
+        timeout = 300
 
     timeout_main = timeout
 
@@ -262,7 +263,7 @@ def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid 
 
             p.start()
             try:
-                ret = q.get(timeout = 180)
+                ret = q.get(timeout = timeout)
             except:
                 ret = []
 
@@ -510,6 +511,7 @@ def path_multi(q, index, *, Model = None, comp = None, Frac_solid = None, Frac_f
         elif Model == "MELTSv1.2.0":
             melts = MELTSdynamic(4)
     else:
+        _ensure_julia_ready()
         from juliacall import Main as jl
         env_dir = Path.home() / ".petthermotools_julia_env"
         jl_env_path = env_dir.as_posix()
@@ -755,6 +757,7 @@ def path(q, index, *, Model = None, comp = None, Frac_solid = None, Frac_fluid =
         # q.put([Results, index])
 
         # import julia
+        _ensure_julia_ready()
         from juliacall import Main as jl, convert as jlconvert
         env_dir = Path.home() / ".petthermotools_julia_env"
         jl_env_path = env_dir.as_posix()

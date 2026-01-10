@@ -124,6 +124,30 @@ def rename_keys_with_prefix(d, mapping):
         new_dict[new_key] = v
     return new_dict
 
+# Create a global flag to ensure we only setup once per session
+_JULIA_INITIALIZED = False
+
+def _ensure_julia_ready():
+    """
+    Private helper to configure Julia only when actually needed.
+    This prevents 'import PetThermoTools' from being slow.
+    """
+    global _JULIA_INITIALIZED
+    
+    if not _JULIA_INITIALIZED:
+        import os
+        import juliapkg
+        from pathlib import Path
+        
+        env_path = Path.home() / ".petthermotools_julia_env"
+        
+        if env_path.exists():
+            # Register the project and version requirement
+            os.environ["JULIA_PROJECT"] = str(env_path)
+            juliapkg.require_julia("~1.11")
+        
+        _JULIA_INITIALIZED = True
+
 def activate_petthermotools_env():
     '''
     Activates the custom Julia environment (.petthermotools_julia_env) required 

@@ -864,6 +864,104 @@ def phase_plot(Results, x_axis = None, y_axis = None, cmap = "Reds", lines = Fal
     # return fig, axes
 
 
+def plot_phaseDiagram_multi(Combined_data, P_units="bar", T_units="C", colormap='Reds', label=True):
+    priority_order = [
+        'Liq', 'Ol', 'Opx', 'Cpx', 'Grt', 'Sp', 'Kspar', 'Qtz', 'Rhm', 'Apa', 
+        'Ol2', 'Plag', 'Cpx2', 'Plag2', 'Sp2', 'Kspar2', 'Grt2', 'Rhm2', 'Qtz2', 
+        'Opx2', 'Apa2', 'Fl', 'Liq2', 'Liq3', 'Liq4', 'Fsp', 'Fsp2'
+    ]
+    
+    def sort_assemblage(assemblage_str):
+        if assemblage_str == "None": return "None"
+        parts = assemblage_str.split()
+        def sort_key(phase):
+            if phase in priority_order:
+                return (0, priority_order.index(phase))
+            return (1, phase)
+        return " ".join(sorted(parts, key=sort_key))
+
+    # Standardize input
+    data_dict = {'Results': Combined_data} if isinstance(Combined_data, pd.DataFrame) else Combined_data
+    all_unique_assemblages = set()
+    processed_dfs = {}
+
+    for name, df in data_dict.items():
+        temp_df = df.copy()
+        phase_cols = [c for c in temp_df.columns if 'mass_g' in c and '%' not in c and 'mole' not in c]
+        assemblages = []
+        
+        for _, row in temp_df.iterrows():
+            # 1. Identify active phases
+            active = [p[7:] for p in phase_cols if not np.isnan(row[p]) and row[p] > 0.0]
+            
+            if active:
+                # 2. Standardize 'Plag' to 'Fsp'
+                active = ['Fsp' if x == 'Plag' else x for x in active]
+                
+                # 3. Remove duplicates (in case both Plag and Fsp were recorded)
+                # and join to a string for sorting
+                unique_active = list(set(active))
+                raw_str = " ".join(unique_active)
+                
+                # 4. Sort based on priority_order
+                assemblages.append(sort_assemblage(raw_str))
+            else:
+                assemblages.append("None")
+        
+        temp_df['Phase'] = assemblages
+        all_unique_assemblages.update([a for a in assemblages if a != "None"])
+        processed_dfs[name] = temp_df
+
+    # Master mapping
+    master_phases = sorted(list(all_unique_assemblages))
+    phase_to_id = {phase: i for i, phase in enumerate(master_phases)}
+    max_id, min_id = len(master_phases) - 1, 0
+
+    # Vertical Layout Setup
+    n_plots = len(processed_dfs)
+    # Create a grid: n_plots rows, 2 columns (Plot area and Legend area)
+    fig = plt.figure(figsize=(10, 5 * n_plots))
+    gs = fig.add_gridspec(n_plots, 2, width_ratios=[7, 3], hspace=0.3)
+
+    # 4. Plot each diagram in the first column
+    for i, (name, df) in enumerate(processed_dfs.items()):
+        ax = fig.add_subplot(gs[i, 0])
+        
+        df['PhaseNo.'] = df['Phase'].map(phase_to_id)
+        T_vals = np.unique(df['T_C'])
+        P_vals = np.unique(df['P_bar'])
+        grid = df['PhaseNo.'].values.reshape((len(T_vals), len(P_vals)))
+
+        p_scale = {"bar": 1, "MPa": 0.1, "kbar": 0.001, "GPa": 0.0001}.get(P_units, 1)
+        extent = [T_vals.min(), T_vals.max(), P_vals.min() * p_scale, P_vals.max() * p_scale]
+
+        ax.imshow(grid.T, extent=extent, cmap=colormap, vmin=min_id, vmax=max_id,
+                  origin='lower', aspect='auto', zorder=2)
+        
+        ax.set_title(name)
+        ax.set_ylabel(f"Pressure ({P_units})")
+        ax.set_xlabel(f"Temperature ($\degree${T_units})")
+
+        if label:
+            for phase_name, p_id in phase_to_id.items():
+                subset = df[df['Phase'] == phase_name]
+                if not subset.empty:
+                    ax.text(subset['T_C'].median(), subset['P_bar'].median() * p_scale, 
+                            str(p_id), ha='center', va='center', fontsize=8)
+
+    # 5. Create Master Legend in a single axis spanning all rows
+    legend_ax = fig.add_subplot(gs[:, 1])
+    legend_ax.axis("off")
+    
+    # Dynamic spacing for legend text
+    y_start = 0.95
+    y_step = 0.03 # Adjusted for longer lists
+    for phase_name, p_id in phase_to_id.items():
+        legend_ax.text(0, y_start - (p_id * y_step), f"{p_id}. {phase_name}", 
+                       fontsize=9, transform=legend_ax.transAxes)
+
+    return fig, fig.axes
+
 def plot_phaseDiagram(Model = "Holland", Combined = None, P_units = "bar", T_units = "C", 
                       lines = None, T_C = None, P_bar = None, label = True, colormap = None):
     '''

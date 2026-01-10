@@ -16,6 +16,17 @@ from subprocess import Popen, PIPE
 
 from os import path
 
+# # Define the path to your custom environment
+# from pathlib import Path
+# JULIA_ENV_PATH = Path.home() / ".petthermotools_julia_env"
+
+# if JULIA_ENV_PATH.exists():
+#     import juliapkg
+    
+#     # Lock the Julia version to the 1.11 series
+#     # This is lightweight and doesn't download anything yet
+#     juliapkg.require_julia("~1.11")
+
 try:
     if os.path.exists('/home/jovyan/shared/Models/alphaMELTS'):
         sys.path.append('/home/jovyan/shared/Models/alphaMELTS')

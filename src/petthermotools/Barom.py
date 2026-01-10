@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 #     print('Thermobar cannot be imported, please check your numpy version')
 
 from petthermotools.GenFuncs import *
+from petthermotools.GenFuncs import _ensure_julia_ready
 from petthermotools.Plotting import *
 from petthermotools.Liq import *
 from petthermotools.MELTS import *
@@ -79,6 +80,8 @@ def path_4_saturation_multi(q, index, *, Model = None, P_bar = None, comp = None
         elif Model == "MELTSv1.2.0":
             melts = MELTSdynamic(4)
     else:
+        _ensure_julia_ready()
+
         from juliacall import Main as jl, convert as jlconvert
         env_dir = Path.home() / ".petthermotools_julia_env"
         jl_env_path = env_dir.as_posix()
@@ -291,6 +294,7 @@ def mineral_cosaturation(Model="MELTSv1.0.2", cores=int(np.floor(multiprocessing
             elif Model == "MELTSv1.2.0":
                 melts = MELTSdynamic(4)
         else:
+            _ensure_julia_ready()
             from juliacall import Main as jl, convert as jlconvert
             env_dir = Path.home() / ".petthermotools_julia_env"
             jl_env_path = env_dir.as_posix()

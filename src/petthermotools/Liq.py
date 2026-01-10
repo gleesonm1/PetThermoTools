@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 from petthermotools.GenFuncs import *
+from petthermotools.GenFuncs import _ensure_julia_ready
 from petthermotools.Plotting import *
 from petthermotools.MELTS import *
 # try:
@@ -17,7 +18,7 @@ import time
 def equilibrate_multi(cores = multiprocessing.cpu_count(), Model = "MELTSv1.0.2", bulk = None, T_C = None, P_bar = None, 
                       Fe3Fet_init = None, H2O_init = None, CO2_init = None, 
                       Fe3Fet_Liq = None, H2O_Liq = None, CO2_Liq = None, fO2_buffer = None, fO2_offset = None,
-                      timeout = 5, copy_columns = None, Suppress = None, Suppress_except = None):
+                      timeout = 20, copy_columns = None, Suppress = None, Suppress_except = None):
     '''
     Runs single-step phase equilibrium calculations (isothermal and isobaric) for a batch of 
     compositions and/or P-T conditions in parallel using MELTS or MAGEMinCalc.
@@ -627,6 +628,7 @@ def equilibrate_multi(cores = multiprocessing.cpu_count(), Model = "MELTSv1.0.2"
         # Output['Affinity'] = Af_Combined
         # return Combined
     else:
+        _ensure_julia_ready()
         from juliacall import Main as jl, convert as jlconvert
         env_dir = Path.home() / ".petthermotools_julia_env"
         jl_env_path = env_dir.as_posix()
@@ -753,6 +755,7 @@ def multi_equilibrate(q, index, *, Model = None, comp = None,
         elif Model == "MELTSv1.2.0":
             melts = MELTSdynamic(4)
     else:
+        _ensure_julia_ready()
         from juliacall import Main as jl
         env_dir = Path.home() / ".petthermotools_julia_env"
         jl_env_path = env_dir.as_posix()

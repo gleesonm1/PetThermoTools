@@ -158,7 +158,8 @@ def install_MAGEMinCalc():
     # warn_if_incompatible_julia()
 
     import juliapkg
-    juliapkg.require_julia("1.11")
+    juliapkg.require_julia("~1.11")
+    juliapkg.resolve()
 
     # try:
     from juliacall import Main as jl
@@ -259,8 +260,9 @@ def update_MAGEMinCalc():
     '''
 
     import juliapkg
-    juliapkg.require_julia("1.11")
-    
+    juliapkg.require_julia("~1.11")
+    juliapkg.resolve()
+
     from juliacall import Main as jl
     env_dir = Path.home() / ".petthermotools_julia_env"
     jl_env_path = env_dir.as_posix()

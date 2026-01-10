@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 from petthermotools.GenFuncs import *
+from petthermotools.GenFuncs import _ensure_julia_ready
 from petthermotools.Plotting import *
 from petthermotools.MELTS import *
 from petthermotools.Compositions import *
@@ -235,7 +236,8 @@ def AdiabaticDecompressionMelting(cores = multiprocessing.cpu_count(),
                 T_start_C = mantle.adiabat(P_start_bar/10000.0, Tp_C)
             else:
                 T_start_C = None
-
+            
+            _ensure_julia_ready()
             from juliacall import Main as jl, convert as jlconvert
             env_dir = Path.home() / ".petthermotools_julia_env"
             jl_env_path = env_dir.as_posix()
@@ -409,6 +411,7 @@ def AdiabaticMelt(q, index, *, Model = None, comp_1 = None, comp_2 = None, comp_
         else:
             T_start_C = None
 
+        _ensure_julia_ready()
         from juliacall import Main as jl, convert as jlconvert
         env_dir = Path.home() / ".petthermotools_julia_env"
         jl_env_path = env_dir.as_posix()
