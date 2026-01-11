@@ -45,6 +45,7 @@ Then per oxide and per phase, the following are given
 .. list-table::
    :header-rows: 1
    :widths: 30 70
+
    * - Name
      - Description
    * - ``activity_{oxide)_{phase}``
