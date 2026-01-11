@@ -858,7 +858,7 @@ def findCO2_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P
 
     Returns
     -------
-    T_Liq : np.ndarray
+    T_Liq_C : np.ndarray
         Liquid temperature ($^{\circ}\text{C}$) at which the $\text{CO}_2$ saturation was determined.
     H2O : np.ndarray
         $\text{H}_2\text{O}$ content (wt%) in the liquid at $\text{CO}_2$ saturation.
@@ -899,12 +899,12 @@ def findCO2_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P
 
     if type(comp) != dict or type(P_bar) == np.ndarray:
         if type(comp) != dict:
-            T_Liq_C = np.zeros(len(comp['SiO2_Liq'].values))
+            T_Liq = np.zeros(len(comp['SiO2_Liq'].values))
             H2O_melt = np.zeros(len(comp['SiO2_Liq'].values))
             CO2_melt = np.zeros(len(comp['SiO2_Liq'].values))
             index = np.zeros(len(comp['SiO2_Liq'].values)) - 1
         else:
-            T_Liq_C = np.zeros(len(P_bar))
+            T_Liq = np.zeros(len(P_bar))
             H2O_melt = np.zeros(len(P_bar))
             CO2_melt = np.zeros(len(P_bar))
             index = np.zeros(len(P_bar)) - 1
@@ -1003,21 +1003,21 @@ def findCO2_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P
     if type(comp) != dict or type(P_bar) == np.ndarray:
         for i in range(len(qs)):
             if len(qs[i])>0:
-                T_Liq_C[i], H2O_melt[i], CO2_melt[i], index[i] = qs[i]
+                T_Liq[i], H2O_melt[i], CO2_melt[i], index[i] = qs[i]
 
-        T_Liq = np.zeros(len(T_Liq_C))
-        H2O = np.zeros(len(T_Liq_C))
-        CO2 = np.zeros(len(T_Liq_C))
+        T_Liq_C = np.zeros(len(T_Liq))
+        H2O = np.zeros(len(T_Liq))
+        CO2 = np.zeros(len(T_Liq))
 
         for i in range(len(index)):
             if len(CO2[index == i]) > 0:
-                T_Liq[i] = T_Liq_C[index == i]
+                T_Liq_C[i] = T_Liq[index == i]
                 H2O[i] = H2O_melt[index == i]
                 CO2[i] = CO2_melt[index == i]
     else:
-        T_Liq, H2O, CO2, index = qs[0]
+        T_Liq_C, H2O, CO2, index = qs[0]
 
-    return T_Liq, H2O, CO2
+    return T_Liq_C, H2O, CO2
 
 def findLiq_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P_bar = None, 
                   Fe3Fet_Liq = None, H2O_Liq = None, CO2_Liq = None, fO2_buffer = None, fO2_offset = None, Affinity = False):
@@ -1094,15 +1094,15 @@ def findLiq_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P
 
     if type(comp) != dict or type(P_bar) == np.ndarray:
         if type(comp) != dict:
-            T_Liq = np.zeros(len(comp['SiO2_Liq'].values))
+            T_Liq_C = np.zeros(len(comp['SiO2_Liq'].values))
             T_in = np.zeros(len(comp['SiO2_Liq'].values))
             index = np.zeros(len(comp['SiO2_Liq'].values)) - 1
         else:
-            T_Liq = np.zeros(len(P_bar))
+            T_Liq_C = np.zeros(len(P_bar))
             T_in = np.zeros(len(P_bar))
             index = np.zeros(len(P_bar)) - 1
     else:
-        T_Liq = 0
+        T_Liq_C = 0
         T_in = 0
         index = 0
 
@@ -1203,7 +1203,7 @@ def findLiq_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P
 
         Affin = {}
         if type(comp) != dict or type(P_bar) == np.ndarray:
-            Results = pd.DataFrame(data = np.zeros((len(T_Liq), 17)), columns = ['T_Liq', 'liquidus_phase', 'fluid_saturated', 'SiO2', 'TiO2', 'Al2O3', 'Fe2O3', 'Cr2O3', 'FeO', 'MnO', 'MgO', 'CaO', 'Na2O', 'K2O', 'P2O5', 'H2O', 'CO2'])
+            Results = pd.DataFrame(data = np.zeros((len(T_Liq_C), 17)), columns = ['T_Liq_C', 'liquidus_phase', 'fluid_saturated', 'SiO2', 'TiO2', 'Al2O3', 'Fe2O3', 'Cr2O3', 'FeO', 'MnO', 'MgO', 'CaO', 'Na2O', 'K2O', 'P2O5', 'H2O', 'CO2'])
             for i in range(len(qs)):
                 if len(qs[i])>0:
                     if Affinity is True:
@@ -1223,7 +1223,7 @@ def findLiq_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P
         if type(Res) == dict:
             Res = pd.DataFrame.from_dict(Res, orient = "index").T
 
-        Res = Res[['T_Liq', 'liquidus_phase', 'fluid_saturated', 
+        Res = Res[['T_Liq_C', 'liquidus_phase', 'fluid_saturated', 
         'SiO2_Liq', 'TiO2_Liq', 'Al2O3_Liq', 'Cr2O3_Liq', 'FeOt_Liq','MnO_Liq', 'MgO_Liq', 'CaO_Liq',
         'Na2O_Liq', 'K2O_Liq', 'P2O5_Liq', 'H2O_Liq', 'CO2_Liq', 
         'Fe3Fet_Liq', 'Fe2O3', 'FeO', ]]
@@ -1263,7 +1263,7 @@ def findLiq_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P
         else:
             return Res
     else:
-        # T_Liq = MM.findLiq_multi(P_bar = P_bar, T_initial_C = T_initial_C, comp = comp)
+        # T_Liq_C = MM.findLiq_multi(P_bar = P_bar, T_initial_C = T_initial_C, comp = comp)
         return "find liquidus calculations are currently not available through the MAGEMin models. This is an issue I'm working to fix as soon as possible."
 
 def findCO2(q, index, *, Model = None, P_bar = None, T_initial_C = None, comp = None, fO2_buffer = None, fO2_offset = None):
@@ -1296,19 +1296,19 @@ def findCO2(q, index, *, Model = None, P_bar = None, T_initial_C = None, comp = 
     ----------
     None
         The function returns results via `q.put()`:
-        `q.put([T_Liq, H2O_Melt, CO2_Melt, index])`
+        `q.put([T_Liq_C, H2O_Melt, CO2_Melt, index])`
     '''
-    T_Liq = 0
+    T_Liq_C = 0
     H2O_Melt = 0
     CO2_Melt = 0
 
     if "MELTS" in Model:
         #try:
-        T_Liq, H2O_Melt, CO2_Melt = findCO2_MELTS(P_bar = P_bar, Model = Model, T_C = T_initial_C, comp = comp, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset)
-        q.put([T_Liq, H2O_Melt, CO2_Melt, index])
+        T_Liq_C, H2O_Melt, CO2_Melt = findCO2_MELTS(P_bar = P_bar, Model = Model, T_C = T_initial_C, comp = comp, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset)
+        q.put([T_Liq_C, H2O_Melt, CO2_Melt, index])
         return
         #except:
-        #    q.put([T_Liq, H2O_Melt, CO2_Melt, index])
+        #    q.put([T_Liq_C, H2O_Melt, CO2_Melt, index])
         #    return
 
 def findLiq(q, index,*, Model = None, P_bar = None, T_initial_C = None, comp = None, fO2_buffer = None, fO2_offset = None, Affinity = False):

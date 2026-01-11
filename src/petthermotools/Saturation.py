@@ -324,7 +324,7 @@ def findSatPressure(cores = None, Model = None, bulk = None, T_C_init = None, T_
                     p.join()
                     p.terminate()
 
-        Res = pd.DataFrame(data = np.zeros((int(L),15)), columns = ['SiO2_Liq', 'TiO2_Liq', 'Al2O3_Liq', 'FeOt_Liq', 'MnO_Liq', 'MgO_Liq', 'CaO_Liq', 'Na2O_Liq', 'K2O_Liq', 'P2O5_Liq', 'H2O_Liq', 'CO2_Liq', 'Fe3Fet_Liq', 'P_bar', 'T_Liq'])
+        Res = pd.DataFrame(data = np.zeros((int(L),15)), columns = ['SiO2_Liq', 'TiO2_Liq', 'Al2O3_Liq', 'FeOt_Liq', 'MnO_Liq', 'MgO_Liq', 'CaO_Liq', 'Na2O_Liq', 'K2O_Liq', 'P2O5_Liq', 'H2O_Liq', 'CO2_Liq', 'Fe3Fet_Liq', 'P_bar', 'T_Liq_C'])
         for i in range(len(qs)):
             if len(qs[i]) > 0:
                 Results, index = qs[i]
@@ -628,10 +628,11 @@ def saturation_pressure(Model = "MELTSv1.2.0", cores = multiprocessing.cpu_count
                 failed_mask = Results[sat_col].isna()
                 failed_indices = Results.index[failed_mask].tolist()
 
-                if retry_count == 0:
-                    T_C_init = T_C_init + 25
-                elif retry_count == 1:
-                    T_C_init = T_C_init - 25
+                if T_C_init is not None:
+                    if retry_count == 0:
+                        T_C_init = T_C_init + 25
+                    elif retry_count == 1:
+                        T_C_init = T_C_init - 25
                 
                 P_bar_init = P_bar_init * 0.8
 
