@@ -340,7 +340,7 @@ def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar
                 Combined = Combined.sort_values(['T_C', 'P_bar'])
                 Combined = Combined.reset_index(drop = True)
                 if "MELTS" in Model:
-                    Combined = Combined.dropna(subset = ['h_J'])
+                    Combined = Combined.dropna(subset = ['H_J'])
 
         Res_flat = np.array([Combined['T_C'], Combined['P_bar']]).T
         new_flat = flat[np.where((flat[:, None] == Res_flat).all(-1).any(-1) == False)]
@@ -555,12 +555,12 @@ def phaseDiagram_refine(Data = None, Model = None, bulk = None, Fe3Fet_Liq = Non
     P_bar = np.array(P_bar)
 
     if "MELTS" in Model:
-        idx_add = np.where(matching_df['h_J'] == 0.0)[0]
+        idx_add = np.where(matching_df['H_J'] == 0.0)[0]
 
         T_C = np.round(np.concatenate((T_C, matching_df.loc[idx_add,'T_C'].values)),2)
         P_bar = np.round(np.concatenate((P_bar, matching_df.loc[idx_add,'P_bar'].values)),2)
 
-        matching_df = matching_df.loc[np.where(matching_df['h_J'] != 0.0)[0],:]
+        matching_df = matching_df.loc[np.where(matching_df['H_J'] != 0.0)[0],:]
         matching_df = matching_df.reset_index(drop = True)
 
     New = phaseDiagram_calc(cores = multiprocessing.cpu_count(), 

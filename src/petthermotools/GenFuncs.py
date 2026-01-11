@@ -721,44 +721,54 @@ def stich_work(Results = None, Order = None, Model = "MELTS", Frac_fluid = None,
             
     ### Fix units
     if "MELTS" in Model:
-        Results['Conditions'] = Results['Conditions'].rename(columns=dict(zip(['h', 's', 'v', 'mass', 'logfO2', 'dvdp'],['h_J', 's_J/K', 'v_cm3', 'mass_g', 'log10(fO2)', 'dvdp_cm3/bar'])))
-        Results['Conditions']['rho_kg/m3'] = 1000*Results['Conditions']['mass_g']/Results['Conditions']['v_cm3']
+        Results['Conditions'] = Results['Conditions'].rename(columns=dict(zip(['h', 's', 'v', 'mass', 'logfO2', 'dvdp'],['H_J', 'S_J/K', 'V_cm^3', 'mass_g', 'log10(fO2)', 'dVdP_cm^3/bar'])))
+        Results['Conditions']['rho_kg/m^3'] = 1000*Results['Conditions']['mass_g']/Results['Conditions']['V_cm^3']
         for n in SN:
             Results[n + '_prop']['rho'] = Results[n + '_prop']['rho']*1000 #convert to kg/m3
-            Results[n + '_prop']['cp'] = Results[n + '_prop']['cp']/(Results[n + '_prop']['mass']/1000)
+            Results[n + '_prop']['cp'] = Results[n + '_prop']['cp']/(Results[n + '_prop']['mass']/1000) #
             Results[n + '_prop'] = Results[n + '_prop'].rename(columns=dict(zip(['g','h','s','v','cp','dcpdt','dvdt','dpdt',
                                                                                  'd2vdt2','d2vdtdp','d2vdp2','rho','mass'],
-                                                                                ['g_J','h_J','s_J/K', 'v_cm3','cp_J/kg/K',
-                                                                                 'dcpdt_J/K','dvdt_cm3/K','dpdt_bar/K',
-                                                                                 'd2vdt2_cm3/K2', 'd2vdtdp_cm3/bar.K', 'd2vdp2_cm3/bar2',
-                                                                                 'rho_kg/m3','mass_g'])))
+                                                                                 ['G_J','H_J','S_J/K', 'V_cm^3','Cp_J/(kg.K^2)',
+                                                                                 'dCpdT_J/(kg.K^2)','dVdT_cm^3/K','dPdT_bar/K',
+                                                                                 'd2VdT2_cm^3/K^2', 'd2VdTdP_cm^3/(bar.K)', 'd2VdP2_cm^3/bar^2',
+                                                                                 'rho_kg/m^3','mass_g'])))
+                                                                                # ['g_J','h_J','s_J/K', 'v_cm3','cp_J/kg/K',
+                                                                                #  'dcpdt_J/K','dvdt_cm3/K','dpdt_bar/K',
+                                                                                #  'd2vdt2_cm3/K2', 'd2vdtdp_cm3/bar.K', 'd2vdp2_cm3/bar2',
+                                                                                #  'rho_kg/m3','mass_g'])))
     else:
         Results['Conditions']['h_kJ/mol'] = 1000*Results['Conditions']['h_kJ/mol']*Results['Conditions']['mass_g']/Results['Conditions']['mass_per_mole_g/mol']
         Results['Conditions']['s_kJ/K'] = 1000*Results['Conditions']['s_kJ/K']*Results['Conditions']['mass_g']/Results['Conditions']['mass_per_mole_g/mol']
         Results['Conditions']['v_cm3'] = Results['Conditions']['mass_g']/(Results['Conditions']['rho_kg/m3']/1000)
-        Results['Conditions'] = Results['Conditions'].rename(columns=dict(zip(['h_kJ/mol','s_kJ/K'],['h_J','s_J/K'])))
+        Results['Conditions'] = Results['Conditions'].rename(columns=dict(zip(['h_kJ/mol','s_kJ/K', 'v_cm3',
+                                                                               'rho_kg/m3', 'cp_J/K/kg'],
+                                                                              ['H_J','S_J/K','V_cm^3',
+                                                                               'rho_kg/m^3', 'Cp_J/(kg.K^2)'])))
 
         for n in SN:
-            Results[n + '_prop']['v_cm3'] = Results['Conditions']['v_cm3']*Results[n+'_prop']['vol%']
+            Results[n + '_prop']['v_cm3'] = Results['Conditions']['V_cm^3']*Results[n+'_prop']['vol%']
             Results[n+'_prop']['h_kJ/mol'] = 1000*Results[n+'_prop']['h_kJ/mol']*Results[n+'_prop']['mol%']*(Results[n+'_prop']['mass_g']/(Results['Conditions']['mass_per_mole_g/mol']*Results[n+'_prop']['mass%']))
             Results[n+'_prop']['s_kJ/K'] = 1000*Results[n+'_prop']['s_kJ/K']*(Results[n+'_prop']['mass_g']/(Results['Conditions']['mass_per_mole_g/mol']*Results[n+'_prop']['mass%']))
-            Results[n+'_prop'] = Results[n+'_prop'].rename(columns=dict(zip(['h_kJ/mol','s_kJ/K'],['h_J', 's_J/K'])))
+            Results[n+'_prop'] = Results[n+'_prop'].rename(columns=dict(zip(['h_kJ/mol','s_kJ/K', 'v_cm3',
+                                                                             'cp_J/kg/K', 'rho_kg/m3'],
+                                                                             ['H_J', 'S_J/K', 'V_cm^3',
+                                                                              'Cp_J/(kg.K^2)', 'rho_kg/m^3'])))
 
     for s in Results:
         if s == "Conditions":
-            priority = ['T_C', 'P_bar', 'mass_g', 'h_J', 's_J/K', 'v_cm3', 'rho_kg/m3', 'log10(fO2)']
+            priority = ['T_C', 'P_bar', 'mass_g', 'H_J', 'S_J/K', 'V_cm^3', 'rho_kg/m^3', 'log10(fO2)']
             others = [c for c in Results['Conditions'].columns if c not in priority]
             Results['Conditions'] = Results['Conditions'][priority + others]
         elif s != "sys":
             if '_prop' in s:
                 if "MELTS" in Model:
-                    priority = ['mass_g', 'rho_kg/m3', 'v_cm3', 'g_J','h_J','s_J/K', 'cp_J/kg/K',
-                                'dcpdt_J/K','dvdt_cm3/K','dpdt_bar/K',
-                                'd2vdt2_cm3/K2', 'd2vdtdp_cm3/bar.K', 'd2vdp2_cm3/bar2']
+                    priority = ['mass_g', 'rho_kg/m^3', 'V_cm^3', 'G_J','H_J','S_J/K', 'Cp_J/(kg.K^2)',
+                                'dCpdT_J/(kg.K^2)','dVdT_cm^3/K','dPdT_bar/K',
+                                'd2VdT2_cm^3/K^2', 'd2VdTdP_cm^3/(bar.K)', 'd2VdP2_cm^3/bar^2']
                     others = [c for c in Results[s].columns if c not in priority]
                     Results[s] = Results[s][priority + others]
                 else:
-                    priority = ['mass_g', 'rho_kg/m3','v_cm3', 'h_J', 's_J/K', 'cp_J/kg/K']
+                    priority = ['mass_g', 'rho_kg/m^3','V_cm^3', 'H_J', 'S_J/K', 'Cp_J/(kg.K^2)']
                     others = [c for c in Results[s].columns if c not in priority]
                     Results[s] = Results[s][priority + others]
 
@@ -775,8 +785,8 @@ def stich_work(Results = None, Order = None, Model = "MELTS", Frac_fluid = None,
     Results_rho = Results_Mass.copy()
     for n in SN:
         Results_Mass[n] = Results[n + '_prop']['mass_g']
-        Results_Volume[n] = Results[n + '_prop']['v_cm3']
-        Results_rho[n] = Results[n + '_prop']['rho_kg/m3']
+        Results_Volume[n] = Results[n + '_prop']['V_cm^3']
+        Results_rho[n] = Results[n + '_prop']['rho_kg/m^3']
 
     if Frac_solid is True or Frac_fluid is True:
         if Frac_solid is None:

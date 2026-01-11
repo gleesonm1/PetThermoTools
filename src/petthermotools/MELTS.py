@@ -375,7 +375,7 @@ def findLiq_MELTS(P_bar = None, Model = None, T_C_init = None, comp = None, melt
     if T_C_init is None:
         T_C_init = 1300
 
-    # T_C_init = np.random.normal(T_C_init, 10)
+    # T_C_init = np.round(np.random.normal(T_C_init, T_C_init/100))
 
     if comp is None:
         raise Exception("No composition specified")
@@ -1308,7 +1308,7 @@ def findSatPressure_MELTS_multi(Model = None, comp = None, fO2_buffer = None, fO
                 comp.loc[i,'H2O_Liq'], comp.loc[i,'CO2_Liq'], 0.0, 0.0, 0.0]
         bulk = list(100*np.array(bulk)/np.sum(bulk))
         if i == 0:
-            melts.engine.pressure = np.random.normal(P_bar[i], P_bar[i]/10)
+            melts.engine.pressure = P_bar[i] # np.round(np.random.normal(P_bar[i], P_bar[i]/10))
             melts.engine.temperature = T_fixed_C[i] + 500
             melts.engine.setBulkComposition(bulk)
             PL = melts.engine.calcSaturationState()
@@ -1433,7 +1433,7 @@ def findSatPressure_MELTS(Model = None, T_C_init = None, T_fixed_C = None, P_bar
     if P_bar_init is None:
         P_bar_init = 5000
 
-    P_bar = np.random.normal(P_bar_init, P_bar_init/20)
+    P_bar = P_bar_init # np.random.normal(P_bar_init, P_bar_init/20)
 
     if T_C_init is None:
         T_C_init = 1200
@@ -1455,7 +1455,7 @@ def findSatPressure_MELTS(Model = None, T_C_init = None, T_fixed_C = None, P_bar
 
     if T_fixed_C is not None:
         if suppressed is None:
-            melts.engine.pressure = P_bar_init
+            melts.engine.pressure = P_bar
             melts.engine.temperature = T_fixed_C + 500
             melts.engine.setBulkComposition(bulk)
             PL = melts.engine.calcSaturationState()
@@ -1464,7 +1464,7 @@ def findSatPressure_MELTS(Model = None, T_C_init = None, T_fixed_C = None, P_bar
                     if p != "water":
                         melts.engine.setSystemProperties("Suppress", p)
 
-        melts.engine.pressure = P_bar_init
+        melts.engine.pressure = P_bar
         melts.engine.temperature = T_fixed_C
         melts.engine.setBulkComposition(bulk)
         try:

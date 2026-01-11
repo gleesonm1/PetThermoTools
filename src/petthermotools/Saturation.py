@@ -348,7 +348,7 @@ def saturation_pressure(Model = "MELTSv1.2.0", cores = multiprocessing.cpu_count
                         bulk = None, T_init_C = None, T_fixed_C = None, P_init_bar = 5000,
                         Fe3Fet_Liq = None, Fe3Fet_init = None, H2O_Liq = None, H2O_init = None,
                         CO2_Liq = None, CO2_init = None, fO2_buffer = None, fO2_offset = None, 
-                        copy_columns = None, multi_processing = True, timeout = 10):
+                        copy_columns = None, multi_processing = True, timeout = 20, max_retries = 2):
     """
     Estimates the pressure at which volatile saturation occurs for one or more melt compositions
     using MELTS thermodynamic models.
@@ -618,7 +618,77 @@ def saturation_pressure(Model = "MELTSv1.2.0", cores = multiprocessing.cpu_count
         
         Results = results_to_dataframe(results, index_in)
         
+        # --- RETRY LOGIC ---
+        # We check if there are any NaNs in the saturation pressure column
+        # Assuming the column name is 'P_bar' (adjust if findSatPressure_MELTS uses another name)
+        sat_col = 'P_bar' 
+        
+        if max_retries > 0:
+            for retry_count in range(max_retries):
+                failed_mask = Results[sat_col].isna()
+                failed_indices = Results.index[failed_mask].tolist()
 
+                if retry_count == 0:
+                    T_C_init = T_C_init + 25
+                elif retry_count == 1:
+                    T_C_init = T_C_init - 25
+                
+                P_bar_init = P_bar_init * 0.8
+
+                if len(failed_indices) == 0:
+                    break
+                    
+                print(f"Attempting to resolve {len(failed_indices)} failed calculations (Retry {retry_count + 1})...")
+
+                # comp = bulk.copy()
+                # Re-prepare inputs for only the failed indices
+                # We increase the timeout slightly for retries to handle edge-case convergence
+                retry_timeout = timeout * 1.5 
+                
+                # Extract subsets for failed indices
+                # retry_comp = bulk.iloc[failed_indices] if isinstance(bulk, pd.DataFrame) else bulk
+                # retry_T_C_init = np.array(T_C_init)[failed_indices]
+                # retry_T_fixed_C = np.array(T_fixed_C)[failed_indices]
+                # retry_P_bar_init = np.array(P_bar_init)[failed_indices]
+                # retry_fO2_offset = np.array(fO2_offset)[failed_indices]
+
+                # Use the same multi-processing logic but on the subset
+                # (You can encapsulate your while loop into a helper to keep this clean)
+                retry_combined_results = {}
+                index_in_retry = np.array(failed_indices)
+                index_out_retry = np.array([], dtype=int)
+
+                while len(index_out_retry) < len(index_in_retry):
+                    curr_idx = np.setdiff1d(index_in_retry, index_out_retry)
+                    groups = np.array_split(curr_idx, cores)
+                    groups = [g for g in groups if g.size > 0]
+
+                    processes = []
+                    for i in range(len(groups)):
+                        q = Queue()
+                        p = Process(target=saturationP_multi, args=(q, groups[i]),
+                                    kwargs={'Model': Model, 'comp': comp, 'T_C_init': T_C_init,
+                                            'T_fixed_C': T_fixed_C, 'P_bar_init': P_bar_init, 
+                                            'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset})
+                        processes.append([p, q, groups[i]])
+                        p.start()
+
+                    for p, q, group in processes:
+                        try:
+                            res = q.get(timeout=retry_timeout)
+                            if len(res) > 0:
+                                idx_chunks, results = res
+                                retry_combined_results.update(results)
+                                index_out_retry = np.hstack((index_out_retry, idx_chunks))
+                        except:
+                            index_out_retry = np.hstack((index_out_retry, [group[0]])) # Mark as attempted
+                        p.join(timeout=2)
+                        p.terminate()
+                
+                if len(retry_combined_results)>0:
+                    # Convert retry results to DF and update the main Results DF
+                    retry_df = results_to_dataframe(retry_combined_results, failed_indices)
+                    Results.update(retry_df)
 
         if copy_columns is not None:
             if type(copy_columns) == str:
