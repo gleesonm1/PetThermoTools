@@ -26,5 +26,11 @@ The keys ``_prop`` (like ``liquid1_prop``) return the thermodynamic properties o
      - Enthalpy in J of the phase
    * - ``s_J/K_{phase}``
      - Entropy in J/K of the phase
-   * - ``cp_J/kg/K_Liq``
-     - Specific heat capacity of the phase (J kg⁻¹ K⁻¹)
+   * - ``cp_J/kg/K_{phase}``
+     - Specific heat capacity of the phase (J kg-1 K-1)
+   * - ``dcpdt_J/kg/K_{phase}``
+     - Partial derivative of specific heat capacity with respect to temperature (J kg⁻¹ K⁻¹)
+   * - ``dvdt_cm3/K_{phase}``
+     - Partial derivative of phase volume with respect to temperature at constant pressure (cm³ K⁻¹)
+   * - ``dpdt_bar/K_{phase}``
+     - Partial derivative of pressure with respect to temperature at constant volume (bar K⁻¹)
