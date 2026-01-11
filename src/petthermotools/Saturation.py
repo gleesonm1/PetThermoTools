@@ -628,7 +628,7 @@ def saturation_pressure(Model = "MELTSv1.2.0", cores = multiprocessing.cpu_count
                 failed_mask = Results[sat_col].isna()
                 failed_indices = Results.index[failed_mask].tolist()
 
-                if T_C_init is not None:
+                if T_C_init[0] is not None:
                     if retry_count == 0:
                         T_C_init = T_C_init + 25
                     elif retry_count == 1:

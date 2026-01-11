@@ -52,7 +52,7 @@ def equilibrate_MELTS(Model = None, P_bar = None, T_C = None, comp = None,
         elif Suppress_except is not None:
             if type(Suppress_except) == str:
                 Suppress_except = [Suppress_except]
-            melts.engine.pressure = np.random.normal(P_bar, P_bar/10)
+            melts.engine.pressure = P_bar # np.random.normal(P_bar, P_bar/10)
             melts.engine.temperature = T_C + 500
             PL = melts.engine.calcSaturationState()
             for p in PL:
@@ -61,7 +61,7 @@ def equilibrate_MELTS(Model = None, P_bar = None, T_C = None, comp = None,
         else:
             for p in Suppress:
                 melts.engine.setSystemProperties("Suppress", p)
-                
+
         melts = melts.addNodeAfter()
 
         melts.engine.pressure = P_bar
@@ -962,7 +962,7 @@ def path_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid = None, 
     if Suppress_except is False:
         if Suppress is not None:
             if Suppress == "All":
-                melts.engine.pressure = np.random.normal(500, 500/10)
+                melts.engine.pressure = 500 #np.random.normal(500, 500/10)
                 melts.engine.temperature = 1200 + 200
                 melts.engine.setBulkComposition(bulk)
                 PL = melts.engine.calcSaturationState()
@@ -977,7 +977,7 @@ def path_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid = None, 
                 else:
                     melts.engine.setSystemProperties("Suppress", Suppress)
     else:
-        melts.engine.pressure = np.random.normal(500, 500/10)
+        melts.engine.pressure = 500 #np.random.normal(500, 500/10)
         melts.engine.temperature = 1200 + 200
         melts.engine.setBulkComposition(bulk)
         PL = melts.engine.calcSaturationState()
@@ -1466,6 +1466,7 @@ def findSatPressure_MELTS(Model = None, T_C_init = None, T_fixed_C = None, P_bar
                     if p != "water":
                         melts.engine.setSystemProperties("Suppress", p)
 
+        melts = melts.addNodeAfter()
         melts.engine.pressure = P_bar
         melts.engine.temperature = T_fixed_C
         melts.engine.setBulkComposition(bulk)

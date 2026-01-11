@@ -32,7 +32,7 @@ try:
         sys.path.append('/home/jovyan/shared/Models/alphaMELTS')
     from meltsdynamic import MELTSdynamic
 except:
-    print('alphaMELTS for Python files are not on the python path. \n Please add these files to the path running \n import sys \n sys.path.append(r"insert_your_path_to_melts_here") \n You are looking for the location of the meltsdynamic.py file')
+    print('Could not find meltsdynamic.py file on Python path. Please append the alphaMELTS for Python files to the Python path \nAdd these files to the path running \nimport sys \nsys.path.append(r"insert_your_path_to_melts_here") \n You are looking for the location of the meltsdynamic.py file')
 
 # test installation script
 from petthermotools.Installation import *
