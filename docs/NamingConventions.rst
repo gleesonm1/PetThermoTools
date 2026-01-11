@@ -42,6 +42,8 @@ The keys ``_prop`` (like ``liquid1_prop``) return the thermodynamic properties o
      - Second partial derivative of phase volume with respect to pressure at constant temperature (cm^3 bar^-2)
 
 Then per oxide and per phase, the following are given 
+
+
 .. list-table::
    :header-rows: 1
    :widths: 30 70
