@@ -632,9 +632,12 @@ def saturation_pressure(Model = "MELTSv1.2.0", cores = multiprocessing.cpu_count
                     if retry_count == 0:
                         T_C_init = T_C_init + 25
                     elif retry_count == 1:
-                        T_C_init = T_C_init - 25
+                        T_C_init = T_C_init - 15
                 
-                P_bar_init = P_bar_init * 0.8
+                if retry_count % 2 == 0:
+                    P_bar_init = P_bar_init * 0.7
+                else:
+                    P_bar_init = P_bar_init * 2
 
                 if len(failed_indices) == 0:
                     break

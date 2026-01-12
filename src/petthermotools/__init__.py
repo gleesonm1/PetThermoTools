@@ -5,6 +5,10 @@ import pandas as pd
 import sys
 import os
 import warnings
+import site
+import sysconfig
+import importlib
+from pathlib import Path
 import matplotlib.pyplot as plt
 # import subprocess
 # import glob
@@ -27,12 +31,32 @@ from os import path
 #     # This is lightweight and doesn't download anything yet
 #     juliapkg.require_julia("~1.11")
 
-try:
-    if os.path.exists('/home/jovyan/shared/Models/alphaMELTS'):
-        sys.path.append('/home/jovyan/shared/Models/alphaMELTS')
-    from meltsdynamic import MELTSdynamic
-except:
-    print('Could not find meltsdynamic.py file on Python path. Please append the alphaMELTS for Python files to the Python path \nAdd these files to the path running \nimport sys \nsys.path.append(r"insert_your_path_to_melts_here") \n You are looking for the location of the meltsdynamic.py file')
+# try:
+if os.path.exists('/home/jovyan/shared/Models/alphaMELTS'):
+    sys.path.append('/home/jovyan/shared/Models/alphaMELTS')
+    # from meltsdynamic import MELTSdynamic
+else:
+    site_packages_dirs = site.getsitepackages()
+
+    # for dir in site_packages_dirs:
+    #     # print(f"Checking {dir} for .pth files")
+    #     for file in os.listdir(dir):
+    #         if file.endswith(".pth"):
+    #             print(f"Found .pth file: {file}")
+
+    # Path to your site-packages directory (adjust as needed)
+    site_packages_path = site.getsitepackages()
+
+    fail = True
+    for i in range(len(site_packages_path)):
+        # Path to the .pth file
+        pth_file_path = os.path.join(site_packages_path[i], "my_MELTS_path.pth")
+
+        # Check file location the .pth file
+        if os.path.exists(pth_file_path):
+            print("alphaMELTS for Python files located.")
+        else:
+            print('Could not find meltsdynamic.py file on Python path. Please append the alphaMELTS for Python files to the Python path \nAdd these files to the path running \nimport sys \nsys.path.append(r"insert_your_path_to_melts_here") \n You are looking for the location of the meltsdynamic.py file')
 
 # test installation script
 from petthermotools.Installation import *
