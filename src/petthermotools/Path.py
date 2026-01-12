@@ -157,11 +157,11 @@ def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid 
     if Model is None:
         Model == "MELTSv1.0.2"
 
-    if "MELTS" in Model:
-        try:
-            from meltsdynamic import MELTSdynamic
-        except:
-            Warning('alphaMELTS for Python files are not on the python path. \n Please add these files to the path running \n import sys \n sys.path.append(r"insert_your_path_to_melts_here") \n You are looking for the location of the meltsdynamic.py file')
+    # if "MELTS" in Model:
+    #     try:
+    #         from meltsdynamic import MELTSdynamic
+    #     except:
+    #         Warning('alphaMELTS for Python files are not on the python path. \n Please add these files to the path running \n import sys \n sys.path.append(r"insert_your_path_to_melts_here") \n You are looking for the location of the meltsdynamic.py file')
 
     if H2O_Liq is not None:
         print('Warning - the kwarg "H2O_Liq" will be removed from v1.0.0 onwards. Please use "H2O_init" instead.')

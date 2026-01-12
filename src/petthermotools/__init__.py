@@ -48,6 +48,7 @@ else:
     site_packages_path = site.getsitepackages()
 
     fail = True
+    test = True
     for i in range(len(site_packages_path)):
         # Path to the .pth file
         pth_file_path = os.path.join(site_packages_path[i], "my_MELTS_path.pth")
@@ -56,7 +57,9 @@ else:
         if os.path.exists(pth_file_path):
             print("alphaMELTS for Python files located.")
         else:
-            print('Could not find meltsdynamic.py file on Python path. Please append the alphaMELTS for Python files to the Python path \nAdd these files to the path running \nimport sys \nsys.path.append(r"insert_your_path_to_melts_here") \n You are looking for the location of the meltsdynamic.py file')
+            if Test:
+                print('alphaMELTS for Python files not automatically located on the Python path. \nPlease append the alphaMELTS for Python files to the Python path \nimport sys \nsys.path.append(r"insert_your_path_to_melts_here") \nYou are looking for the location of the meltsdynamic.py file.')
+                Test = False
 
 # test installation script
 from petthermotools.Installation import *

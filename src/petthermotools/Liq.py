@@ -105,11 +105,11 @@ def equilibrate_multi(cores = multiprocessing.cpu_count(), Model = "MELTSv1.0.2"
         if fO2_buffer == "NNO":
             fO2_buffer = "nno"
 
-    if "MELTS" in Model:
-        try:
-            from meltsdynamic import MELTSdynamic
-        except:
-            Warning('alphaMELTS for Python files are not on the python path. \n Please add these files to the path running \n import sys \n sys.path.append(r"insert_your_path_to_melts_here") \n You are looking for the location of the meltsdynamic.py file')
+    # if "MELTS" in Model:
+    #     try:
+    #         from meltsdynamic import MELTSdynamic
+    #     except:
+    #         Warning('alphaMELTS for Python files are not on the python path. \n Please add these files to the path running \n import sys \n sys.path.append(r"insert_your_path_to_melts_here") \n You are looking for the location of the meltsdynamic.py file')
 
     comp = bulk.copy()
 
