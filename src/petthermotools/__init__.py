@@ -57,9 +57,9 @@ else:
         if os.path.exists(pth_file_path):
             print("alphaMELTS for Python files located.")
         else:
-            if Test:
+            if test:
                 print('alphaMELTS for Python files not automatically located on the Python path. \nPlease make sure you have appended the alphaMELTS for Python files to the Python path \nimport sys \nsys.path.append(r"insert_your_path_to_melts_here") \nYou are looking for the location of the meltsdynamic.py file.')
-                Test = False
+                test = False
 
 # test installation script
 from petthermotools.Installation import *
