@@ -206,6 +206,9 @@ def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid 
     if cores is None:
         cores = multiprocessing.cpu_count()
 
+    if "MELTS" not in Model:
+        cores = memory_limit(cores = cores)
+
     # specify the number of calculations to be performed in each sequence
     One = 0
     if type(comp) == pd.core.frame.DataFrame: # simplest scenario - one calculation per bulk composition imported

@@ -13,53 +13,25 @@ import matplotlib.pyplot as plt
 # import subprocess
 # import glob
 from subprocess import Popen, PIPE
-# try:
-#     import Thermobar as pt
-# except:
-#     print('Thermobar import not successful. This is likely due to your numpy version. \n If you are using numpy version > 2 this is currently incompatible with Thermobar.')
-
 from os import path
 
-# # Define the path to your custom environment
-# from pathlib import Path
-# JULIA_ENV_PATH = Path.home() / ".petthermotools_julia_env"
+# import importlib.util
 
-# if JULIA_ENV_PATH.exists():
-#     import juliapkg
-    
-#     # Lock the Julia version to the 1.11 series
-#     # This is lightweight and doesn't download anything yet
-#     juliapkg.require_julia("~1.11")
+# # Check if 'meltsdynamic' exists in the current Python path
+# spec = importlib.util.find_spec("meltsdynamic")
 
-# try:
-if os.path.exists('/home/jovyan/shared/Models/alphaMELTS'):
-    sys.path.append('/home/jovyan/shared/Models/alphaMELTS')
-    # from meltsdynamic import MELTSdynamic
-else:
-    site_packages_dirs = site.getsitepackages()
+# if spec is not None:
+#     print("Module found!")
+# else:
+#     print("Module not found on the current path.")
 
-    # for dir in site_packages_dirs:
-    #     # print(f"Checking {dir} for .pth files")
-    #     for file in os.listdir(dir):
-    #         if file.endswith(".pth"):
-    #             print(f"Found .pth file: {file}")
-
-    # Path to your site-packages directory (adjust as needed)
-    site_packages_path = site.getsitepackages()
-
-    fail = True
-    test = True
-    for i in range(len(site_packages_path)):
-        # Path to the .pth file
-        pth_file_path = os.path.join(site_packages_path[i], "my_MELTS_path.pth")
-
-        # Check file location the .pth file
-        if os.path.exists(pth_file_path):
-            print("alphaMELTS for Python files located.")
-        else:
-            if test:
-                print('alphaMELTS for Python files not automatically located on the Python path. \nPlease make sure you have appended the alphaMELTS for Python files to the Python path \nimport sys \nsys.path.append(r"insert_your_path_to_melts_here") \nYou are looking for the location of the meltsdynamic.py file.')
-                test = False
+try:
+    if os.path.exists('/home/jovyan/shared/Models/alphaMELTS'):
+        sys.path.append('/home/jovyan/shared/Models/alphaMELTS')
+    from meltsdynamic import MELTSdynamic
+    print("alphaMELTS for Python files successfully located.")
+except (ImportError, ModuleNotFoundError) as e:
+    warnings.warn(f"Failed to import MELTSdynamic: {e}. \nUse `import sys; sys.path.append(r'path_to_alphaMELTS_4_python')` to add the alphaMELTS for Python files to the Python path.")
 
 # test installation script
 from petthermotools.Installation import *

@@ -10,6 +10,7 @@ from multiprocessing import Process
 from tqdm.notebook import tqdm, trange
 import random
 import time
+import psutil
 
 
 def make_grid_variables_from_phase_diagram(Results = None, x_col = "T_C", y_col = "P_bar"):
@@ -178,6 +179,9 @@ def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar
 
     if Model is None:
         Model = "MELTSv1.0.2"
+
+    if "MELTS" not in Model:
+        cores = memory_limit(cores = cores)
 
     # if comp is entered as a pandas series, it must first be converted to a dict
     if type(comp) == pd.core.series.Series:
@@ -379,13 +383,13 @@ def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar
 
     if refine is not None:
         for i in range(refine):
-            Combined = phaseDiagram_refine(Data = Combined, Model = Model, bulk = bulk, Fe3Fet_Liq=Fe3Fet_init,
+            Combined = phaseDiagram_refine(Data = Combined, Model = Model, bulk = bulk, Fe3Fet_Liq=Fe3Fet_init, cores = cores,
                                            H2O_Liq=H2O_init, CO2_Liq=CO2_init, fO2_buffer=fO2_buffer, fO2_offset=fO2_offset, i_max = i_max)
 
     return Combined
 
 def phaseDiagram_refine(Data = None, Model = None, bulk = None, Fe3Fet_Liq = None, H2O_Liq = None, CO2_Liq = None, 
-                        fO2_buffer = None, fO2_offset = None, i_max = 15):
+                        fO2_buffer = None, fO2_offset = None, i_max = 15, cores = None):
     """
     Refines an existing Phase Diagram calculation by identifying and calculating new P-T points 
     near inferred phase boundaries.
@@ -563,7 +567,7 @@ def phaseDiagram_refine(Data = None, Model = None, bulk = None, Fe3Fet_Liq = Non
         matching_df = matching_df.loc[np.where(matching_df['H_J'] != 0.0)[0],:]
         matching_df = matching_df.reset_index(drop = True)
 
-    New = phaseDiagram_calc(cores = multiprocessing.cpu_count(), 
+    New = phaseDiagram_calc(cores = cores,
                             Model = Model, bulk = bulk, T_C = T_C, P_bar = P_bar, Fe3Fet_init = Fe3Fet_Liq, H2O_init = H2O_Liq, CO2_init = CO2_Liq, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, i_max = i_max, grid = False)
 
     # A = New.values

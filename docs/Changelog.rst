@@ -2,6 +2,34 @@
 Change Log
 ================================================
 
+Version 0.3.16 (January 2026)
+====================================
+Update to import messages and identification of potential memory issues when using julia
+
+Version 0.3.12 (January 2026)
+====================================
+Relabelling of T_Liq to T_Liq_C in saturation pressure outputs
+
+Version 0.3.11 (January 2026)
+====================================
+Fix the no solution issue for solubility calculations
+
+Version 0.3.10 (January 2026)
+====================================
+Updated installation routine for julia packages
+
+Version 0.3.9 (January 2026)
+====================================
+Replace zeros with nans in saturation pressure calculations
+
+Version 0.3.8 (January 2026)
+====================================
+Implement of new installation routine for MAGEMinCalc via Victor.
+
+Version 0.3.7 (January 2026)
+====================================
+Small update to PyPI distribution to fix error in distribution of v0.3.6
+
 Version 0.3.6 (January 2026)
 ====================================
 Added new plotting options for phase abundance (ptt.phase_mass_comparison())

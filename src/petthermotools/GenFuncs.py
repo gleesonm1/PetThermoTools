@@ -2,6 +2,8 @@ import numpy as np
 import pandas as pd
 import copy
 from pathlib import Path
+import psutil
+import multiprocessing
 # from petthermotools.Barom import *
 # from petthermotools.Liq import *
 # from petthermotools.Crystallise import *
@@ -76,6 +78,26 @@ Names_MM_replace = {'liq1': 'liquid1',
             'liq3': 'liquid3',
             'liq4': 'liquid4'}
 
+def memory_limit(cores = multiprocessing.cpu_count()):
+    if psutil.virtual_memory().available/(1034**3) < 2:
+        if cores > 2:
+            print("Limiting calculations to 2 processes due to limitations in available memory")
+            return 2
+        else:
+            return cores
+    elif psutil.virtual_memory().available/(1034**3) < 4:
+        if cores > 4:
+            print("Limiting calculations to 4 processes due to limitations in available memory")
+            return 4
+        else:
+            return cores
+    elif psutil.virtual_memory().available/(1024**3)<6:
+        if cores > 6:
+            print("Limiting calculations to 8 processes due to limitations in available memory")
+            return 6
+        else:
+            return cores
+
 def check_array(var):
     '''
     Checks the provided data is a numpy array. If a list is provided instead it is converted.
@@ -145,8 +167,12 @@ def _ensure_julia_ready():
             # Register the project and version requirement
             os.environ["JULIA_PROJECT"] = str(env_path)
             juliapkg.require_julia("~1.11")
+            _JULIA_INITIALIZED = True
+            print("Julia environment detected.")
+        else:
+            print("Julia environment not available. Please run the `install_MAGEMinCalc()` function first.")
         
-        _JULIA_INITIALIZED = True
+        
 
 def activate_petthermotools_env():
     '''

@@ -38,7 +38,8 @@ setup(
             'scipy',
             'tinynumpy',
             'shapely',
-            'tqdm'
+            'tqdm',
+            'psutil'
             ],
 
     classifiers=[

@@ -214,7 +214,7 @@ def equilibrate_multi(cores = multiprocessing.cpu_count(), Model = "MELTSv1.0.2"
 
             if len(ret)>1:
                 Results, index = ret
-                print(Results)
+                # print(Results)
                 Output = Results[0]
                 Affinity = pd.DataFrame([Results[1]])
                 Af_Combined = Affinity.copy()
