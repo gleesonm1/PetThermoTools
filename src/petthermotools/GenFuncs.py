@@ -93,10 +93,12 @@ def memory_limit(cores = multiprocessing.cpu_count()):
             return cores
     elif psutil.virtual_memory().available/(1024**3)<6:
         if cores > 6:
-            print("Limiting calculations to 8 processes due to limitations in available memory")
+            print("Limiting calculations to 6 processes due to limitations in available memory")
             return 6
         else:
             return cores
+    else:
+        return cores
 
 def check_array(var):
     '''
