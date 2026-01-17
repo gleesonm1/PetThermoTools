@@ -755,7 +755,6 @@ def multi_equilibrate(q, index, *, Model = None, comp = None,
         elif Model == "MELTSv1.2.0":
             melts = MELTSdynamic(4)
     else:
-        _ensure_julia_ready()
         from juliacall import Main as jl
         env_dir = Path.home() / ".petthermotools_julia_env"
         jl_env_path = env_dir.as_posix()

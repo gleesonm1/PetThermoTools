@@ -192,6 +192,7 @@ def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid 
             fO2_buffer = "qfm"
         if fO2_buffer == "NNO":
             fO2_buffer = "nno"
+        _ensure_julia_ready()
 
     # ensure the bulk composition has the correct headers etc.
     comp = comp_fix(Model = Model, comp = comp, Fe3Fet_Liq = Fe3Fet_init, H2O_Liq = H2O_init, CO2_Liq = CO2_init)
@@ -514,7 +515,6 @@ def path_multi(q, index, *, Model = None, comp = None, Frac_solid = None, Frac_f
         elif Model == "MELTSv1.2.0":
             melts = MELTSdynamic(4)
     else:
-        _ensure_julia_ready()
         from juliacall import Main as jl
         env_dir = Path.home() / ".petthermotools_julia_env"
         jl_env_path = env_dir.as_posix()
@@ -760,7 +760,6 @@ def path(q, index, *, Model = None, comp = None, Frac_solid = None, Frac_fluid =
         # q.put([Results, index])
 
         # import julia
-        _ensure_julia_ready()
         from juliacall import Main as jl, convert as jlconvert
         env_dir = Path.home() / ".petthermotools_julia_env"
         jl_env_path = env_dir.as_posix()

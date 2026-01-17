@@ -411,7 +411,6 @@ def AdiabaticMelt(q, index, *, Model = None, comp_1 = None, comp_2 = None, comp_
         else:
             T_start_C = None
 
-        _ensure_julia_ready()
         from juliacall import Main as jl, convert as jlconvert
         env_dir = Path.home() / ".petthermotools_julia_env"
         jl_env_path = env_dir.as_posix()

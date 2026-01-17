@@ -80,8 +80,6 @@ def path_4_saturation_multi(q, index, *, Model = None, P_bar = None, comp = None
         elif Model == "MELTSv1.2.0":
             melts = MELTSdynamic(4)
     else:
-        _ensure_julia_ready()
-
         from juliacall import Main as jl, convert as jlconvert
         env_dir = Path.home() / ".petthermotools_julia_env"
         jl_env_path = env_dir.as_posix()
@@ -227,6 +225,7 @@ def mineral_cosaturation(Model="MELTSv1.0.2", cores=int(np.floor(multiprocessing
             fO2_buffer = "qfm"
         if fO2_buffer == "NNO":
             fO2_buffer = "nno"
+        _ensure_julia_ready()
             
     if H2O_Sat:
         comp['H2O_Liq'] = 20
@@ -294,7 +293,6 @@ def mineral_cosaturation(Model="MELTSv1.0.2", cores=int(np.floor(multiprocessing
             elif Model == "MELTSv1.2.0":
                 melts = MELTSdynamic(4)
         else:
-            _ensure_julia_ready()
             from juliacall import Main as jl, convert as jlconvert
             env_dir = Path.home() / ".petthermotools_julia_env"
             jl_env_path = env_dir.as_posix()
