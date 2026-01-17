@@ -372,10 +372,10 @@ def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid 
             non_empty_groups = [g for g in groups if g.size > 0]
             groups = non_empty_groups
 
-            if len(groups[0])< 15:
+            if len(groups[0])< 3:
                 timeout = len(groups[0])*timeout_main
             else:
-                timeout = 15*timeout_main
+                timeout = 3*timeout_main
                 
             processes = []
             Start = time.time()
@@ -500,8 +500,8 @@ def path_multi(q, index, *, Model = None, comp = None, Frac_solid = None, Frac_f
     results = {}
     idx = []
 
-    if len(index) > 15:
-        index = index[:15]
+    if len(index) > 3:
+        index = index[:3]
     
     if "MELTS" in Model:
         from meltsdynamic import MELTSdynamic
