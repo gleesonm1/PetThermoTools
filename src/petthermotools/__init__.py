@@ -35,6 +35,8 @@ except (ImportError, ModuleNotFoundError) as e:
 
 # test installation script
 from petthermotools.Installation import *
+# General functions that are used to assess core numbers
+from petthermotools.core_config import *
 # General functions that are used across multiple types of calculations
 from petthermotools.GenFuncs import *
 # Plotting functions that are used in multiple types of calculations
@@ -65,3 +67,5 @@ from petthermotools.Compositions import *
 
 # version
 from ._version import __version__
+
+

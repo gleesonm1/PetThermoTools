@@ -521,11 +521,11 @@ def phase_mass_comparison(Results=None, x_axis = "MgO_Liq", phase = "liquid1", c
     for run_id, data in Results.items():
         if phase in data['mass_g'].keys():
             if phase+'_cumsum' in data['mass_g'].keys() and cumsum:
-                a.plot(data['All']['T_C'],
+                a.plot(data['All'][x_axis],
                        data['mass_g'][phase+'_cumsum'],
                        '-', color = RunColors[run_id], label = run_id)
             else:
-                a.plot(data['All']['T_C'],
+                a.plot(data['All'][x_axis],
                        data['mass_g'][phase],
                        '-', color = RunColors[run_id], label = run_id)
                        

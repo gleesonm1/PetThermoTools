@@ -2,6 +2,11 @@
 Change Log
 ================================================
 
+Version 0.3.20 (January 2026)
+====================================
+Automatic detection of parallelization based on number of performance cores (rather than total logical processors).
+Added examples for saving results to ReadTheDocs.
+
 Version 0.3.16 (January 2026)
 ====================================
 Update to import messages and identification of potential memory issues when using julia

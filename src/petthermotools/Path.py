@@ -139,8 +139,28 @@ def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid 
     CO2_Liq    = check_array(CO2_Liq)
     fO2_offset = check_array(fO2_offset)
 
+    ## add check to ensure that there arn't multiple lists provided with different lengths
+    l = []
+    for item in [Fe3Fet_init,Fe3Fet_Liq,H2O_init,H2O_Liq,CO2_init,CO2_Liq,fO2_offset,P_bar,P_start_bar, P_end_bar, dp_bar, T_C, T_start_C, T_end_C, dt_C]:
+        if type(item) == np.ndarray:
+            l.append(len(item))
+    
+    if type(comp) == pd.core.frame.DataFrame:
+        l.append(len(comp))
+
+    if len(l) > 1:
+        if len(set(l))>1:
+            raise ValueError("Error: non-identical length in provided conditions. \nPlease check lists or arrays are the same length and/or specify single values.")
+        
+    # check label is allowed
+    if label is not None:
+        if label not in ["CO2", "CO2_init", "pressure", "P", "P_bar", "P_start_bar", "fO2", "fO2_offset", "H2O", "H2O_init", "Fe3Fet", "Fe3Fet_init"]:
+            raise ValueError(f"Do not recognise the label chosen. Availabily labels are {['CO2', 'CO2_init', 'pressure', 'P', 'P_bar', 'P_start_bar', 'fO2', 'fO2_offset', 'H2O', 'H2O_init', 'Fe3Fet', 'Fe3Fet_init']}")
+
+    # make sure a timeout is specified
     if timeout is None:
         timeout = 300
+        print('A default timeout of 5 minutes has been specified. If you are not getting any results try increasing this using the timeout kwarg.')
 
     timeout_main = timeout
 

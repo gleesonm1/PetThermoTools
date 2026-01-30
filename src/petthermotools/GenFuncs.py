@@ -4,6 +4,9 @@ import copy
 from pathlib import Path
 import psutil
 import multiprocessing
+import os
+import platform
+import subprocess
 # from petthermotools.Barom import *
 # from petthermotools.Liq import *
 # from petthermotools.Crystallise import *
@@ -173,8 +176,38 @@ def _ensure_julia_ready():
             print("Julia environment detected.")
         else:
             print("Julia environment not available. Please run the `install_MAGEMinCalc()` function first.")
-        
-        
+
+def get_performance_core_count():
+    system = platform.system()
+    arch = platform.machine() # 'arm64' or 'x86_64'
+    
+    # --- macOS Logic ---
+    if system == "Darwin":
+        if arch == "arm64":
+            try:
+                # Apple Silicon: perflevel0 is Performance
+                cmd = ["sysctl", "-n", "hw.perflevel0.physicalcpu"]
+                return int(subprocess.check_output(cmd).decode().strip())
+            except Exception:
+                return psutil.cpu_count(logical=False) or 1
+        else:
+            # Intel Mac: No E-cores, so all physical cores are P-cores
+            return psutil.cpu_count(logical=False) or 1
+
+    # --- Windows & Linux Logic (Intel Hybrid/AMD) ---
+    lt = psutil.cpu_count(logical=True) or 1
+    lf = psutil.cpu_count(logical=False) or 1
+
+    if lt > lf:
+        # Heuristic: P-cores have Hyper-threading, E-cores don't.
+        # Math: P = logical - physical
+        p_cores = lt - lf
+        # If calculation seems wrong (e.g., E-cores > P-cores), 
+        # fallback to physical core count.
+        return p_cores if p_cores > 0 else lf
+    
+    # Fallback for non-hyperthreaded or non-hybrid CPUs
+    return lf
 
 def activate_petthermotools_env():
     '''

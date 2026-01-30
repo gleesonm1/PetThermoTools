@@ -41,6 +41,12 @@ Welcome to PetThermoTools's documentation!
 
 .. toctree::
    :maxdepth: 2
+   :caption: Exporting calculation results
+
+   Examples/CrystallisationTests/SavingResults
+
+.. toctree::
+   :maxdepth: 2
    :caption: Decompression Calculations
 
    Examples/DecompressionTests/StHelens_decompress_simple
