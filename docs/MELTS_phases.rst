@@ -120,7 +120,7 @@ Solid solution phases
 Pure phases included in all versions of MELTS
 =====================
 * **sphene** :math:`CaTiSiO_5`
-* **aenigmatite** :math:`Na_2Fe_5TiSi_6_O_{20}`
+* **aenigmatite** :math:`Na_2Fe_5TiSi_6O_{20}`
 * **muscovite** :math:`KAl_2Si_3AlO_{10}(OH)_2`
 * **quartz** :math:`SiO_2`
 * **tridymite** :math:`SiO_2`
@@ -139,9 +139,9 @@ Additional pure phases included in alphaMELTS
 * **kyanite** :math:`Al_2SiO_5`
 * **coesite** :math:`SiO_2`
 * **talc** :math:`Mg_3Si_4O_{10}(OH)_2`
-* **anthophyllite** :math:`Mg_7Si_8_O_{22}(OH)_2`
+* **anthophyllite** :math:`Mg_7Si_8O_{22}(OH)_2`
 * **cordierite** :math:`Mg_2Al_4Si_5O_{18}`
-* **lawsonite** :math:`CaAl_2Si_2_O_6(OH)_4`
+* **lawsonite** :math:`CaAl_2Si_2O_6(OH)_4`
 * **antigorite** :math:`Mg_{48}Si_{34}O_{85}(OH)_{62}`
 * **chrysotile** :math:`Mg_{3}Si_{2}O_{5}(OH)_{4}`
 * **brucite** :math:`Mg(OH)_2`
