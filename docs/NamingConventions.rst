@@ -18,7 +18,7 @@ The keys ``_prop`` (like ``liquid1_prop``) return the thermodynamic properties o
      - Mass in g of each phase (see equation below)
    * - ``rho_kg/m3_{phase}``
      - Density of phase in kg/m3
-   * - ``v_cm3_{phase}``
+   * - ``V_cm3_{phase}``
      - Volume of phase in cm3
    * - ``G_J_{phase}``
      - Gibbs free energy in J of the phase
