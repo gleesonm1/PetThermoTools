@@ -88,7 +88,7 @@ Solid solution phases
 * **leucite**
     * leucite :math:`KAlSi_2O_6`
     * analcime :math:`NaAlSi_2O_5(OH)_2`
-    * na-leucite :math:`NaAlSi_2_O_6`
+    * na-leucite :math:`NaAlSi_2O_6`
 
 * **spinel**
     * chromite :math:`Fe^{2+}Cr_2O_4`

@@ -14,7 +14,6 @@ Welcome to PetThermoTools's documentation!
    Installation/InstallationScript
    Installation/MAGEMin_PythonCall
    available_functions_pdf
-   NamingConventions
    
 
 .. toctree::
