@@ -25,6 +25,12 @@ Welcome to PetThermoTools's documentation!
 
 .. toctree::
    :maxdepth: 2
+   :caption: Education Materials to use PetThermoTools in teaching
+
+   teachingmaterials
+
+.. toctree::
+   :maxdepth: 2
    :caption: Melt liquidus temperature
 
    Examples/LiquidusTests/LiquidusTest
