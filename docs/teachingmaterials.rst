@@ -16,7 +16,7 @@ Students do not have to have any python experience, or local installation. In th
 The Jupyter Notebook for students to work from is here:
 https://github.com/gleesonm1/PetThermoTools/blob/master/docs/teaching_materials/FractionalCrystallization_Viscosity_CalcAlkalineTrends/PropertiesofMagmas_MELTSCrystallizationExamples_Final.ipynb
 
-The homework excersize for students to fill in is here:
+The homework exersize for students to fill in is here:
 https://github.com/gleesonm1/PetThermoTools/blob/master/docs/teaching_materials/FractionalCrystallization_Viscosity_CalcAlkalineTrends/HW2-%20Fractional%20Crystallization_StudentVersion.docx
 
 And the answer key here:
