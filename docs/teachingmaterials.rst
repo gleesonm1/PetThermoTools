@@ -14,7 +14,7 @@ This practical was developed for EPS114/214 at UC Berkeley - a mixed undergradua
 Students do not have to have any python experience, or local installation. In the week prior to this class slot, I make them all sign up for a VICTOR account, and then they just have to download the notebook and upload it to VICTOR (https://victor.ldeo.columbia.edu/). I also give the students extra credit if they get PetThermoTools running locally. The first few questoins just require them to run cells and change inputs. We take about 40 minutes in class on this, and they complete the rest for homework (mostly just copying and pasting cells and editing code slightly). 
 
 The Jupyter Notebook for students to work from is here:
-teaching_materials/FractionalCrystallization_Viscosity_CalcAlkalineTrends/PropertiesofMagmas_MELTSCrystallizationExamples_Final
+https://github.com/gleesonm1/PetThermoTools/blob/master/docs/teaching_materials/FractionalCrystallization_Viscosity_CalcAlkalineTrends/PropertiesofMagmas_MELTSCrystallizationExamples_Final.ipynb
 
 The homework excersize for students to fill in is here:
 https://github.com/gleesonm1/PetThermoTools/blob/master/docs/teaching_materials/FractionalCrystallization_Viscosity_CalcAlkalineTrends/HW2-%20Fractional%20Crystallization_StudentVersion.docx
