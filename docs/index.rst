@@ -85,6 +85,7 @@ Welcome to PetThermoTools's documentation!
    :caption: Helpful Information
 
    MELTS_phases
+   MAGEMin_phases
    NamingConventions
 
 .. toctree::
