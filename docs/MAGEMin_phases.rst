@@ -15,6 +15,7 @@ Green et al. (2025) - named `ig` in MAGEMin
 =====================
 
 :math:`K_2O - Na_2O - CaO - FeO - MgO - Al_2O_3 - SiO_2 - H_2O - TiO_2 - O - Cr_2O_3` chemical system
+
 .. note::
     In PetThermoTools we specify an fO2 buffer and/or an Fe redox state so the `O` content of the system is defined indirectly by one of these two parameters.
 
@@ -53,6 +54,7 @@ Weller et al. (2024) - named `igad` in MAGEMin
 =====================
 
 :math:`K_2O - Na_2O - CaO - FeO - MgO - Al_2O_3 - SiO_2 - TiO_2 - O - Cr_2O_3` chemical system
+
 .. note::
     In PetThermoTools we specify an fO2 buffer and/or an Fe redox state so the `O` content of the system is defined indirectly by one of these two parameters. Additionally, the Weller et al. (2024) model is currently anhydrous.
 
