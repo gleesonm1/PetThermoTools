@@ -2,6 +2,10 @@
 Change Log
 ================================================
 
+Version 0.3.21 (February 2026)
+====================================
+Update to harker plotting function to fix bug with individual models
+
 Version 0.3.20 (January 2026)
 ====================================
 Automatic detection of parallelization based on number of performance cores (rather than total logical processors).

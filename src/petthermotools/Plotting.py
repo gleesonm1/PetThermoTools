@@ -87,14 +87,29 @@ def harker(Results=None, x_axis="MgO", y_axis=("SiO2", "TiO2", "Al2O3", "Cr2O3",
         found = False
 
         # Check Results
-        for r in (Results.keys() if isinstance(Results, dict) else [Results]):
-            Res = Results[r] if isinstance(Results, dict) else Results
-            if "All" in Res:
+        if "All" in Results.keys():
+            cols = Results["All"].columns
+            if (y + Names[phase]) in cols or y in cols:
+                if np.nanmax(Results["All"][y + Names[phase]]) > 0.0:
+                    found = True
+        else:
+            for r in Results.keys():
+                Res = Results[r].copy()
                 cols = Res["All"].columns
                 if (y + Names[phase]) in cols or y in cols:
                     if np.nanmax(Res["All"][y + Names[phase]]) > 0.0:
                         found = True
-                    break
+                        break
+
+
+        # for r in (Results.keys() if isinstance(Results, dict) else [Results]):
+        #     Res = Results[r] if isinstance(Results, dict) else Results
+        #     if "All" in Res:
+        #         cols = Res["All"].columns
+        #         if (y + Names[phase]) in cols or y in cols:
+        #             if np.nanmax(Res["All"][y + Names[phase]]) > 0.0:
+        #                 found = True
+        #             break
 
         # Check data (dict or DataFrame)
         if not found and data is not None:
