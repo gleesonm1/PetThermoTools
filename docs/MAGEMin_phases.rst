@@ -42,7 +42,7 @@ Solution phases
     * mont :math:`CaMgSiO_4`
     * fa :math:`Fe_2SiO_4`
     * fo :math:`Mg_2SiO_4`
-    * cfm :math:`MgFeSiO_4`(ordered - Mg in M1, Fe in M2)
+    * cfm :math:`MgFeSiO_4` (ordered - Mg in M1, Fe in M2)
 * **feldspar**
     * ab :math:`NaAlSi_3O_8`
     * san :math:`KAlSi_3O_8`
@@ -170,7 +170,7 @@ Solution phases
     * mont :math:`CaMgSiO_4`
     * fa :math:`Fe_2SiO_4`
     * fo :math:`Mg_2SiO_4`
-    * cfm :math:`MgFeSiO_4`(ordered - Mg in M1, Fe in M2)
+    * cfm :math:`MgFeSiO_4` (ordered - Mg in M1, Fe in M2)
 * **feldspar**
     * ab :math:`NaAlSi_3O_8`
     * san :math:`KAlSi_3O_8`
@@ -241,8 +241,8 @@ Solution phases
     * q3L :math:`Si_3O_6`
     * sl1L :math:`Al_2SiO_5`
     * wo1L :math:`CaSiO_3`
-    * fo2L :math:`Mg_4Si_2_O_8`
-    * fa2L :math:`Fe_4Si_2_O_8`
+    * fo2L :math:`Mg_4Si_2O_8`
+    * fa2L :math:`Fe_4Si_2O_8`
     * nml :math:`NaSi_{0.5}O_{1.5}`
     * hml :math:`Fe^{3+}O_{1.5}`
     * ekl :math:`CrO_{1.5}`
