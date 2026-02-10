@@ -18,9 +18,10 @@ Welcome to PetThermoTools's documentation!
 
 .. toctree::
    :maxdepth: 2
-   :caption: Narrated You Tube videos
+   :caption: You Tube videos and workshops
 
    youtube
+   workshops
 
 .. toctree::
    :maxdepth: 2
