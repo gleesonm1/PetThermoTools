@@ -10,7 +10,7 @@ To try and help all users understand the capabilities and limitations of each th
    This list is adapted from the the MAGEMin documentation https://computationalthermodynamics.github.io/MAGEMin_C.jl/dev/
 
 
-====================
+
 Green et al. (2025) - named `ig` in MAGEMin
 =====================
 
@@ -20,7 +20,7 @@ Green et al. (2025) - named `ig` in MAGEMin
     In PetThermoTools we specify an fO2 buffer and/or an Fe redox state so the `O` content of the system is defined indirectly by one of these two parameters.
 
 Pure phases
-=====================
+---------------------
 * **quartz** :math:`SiO_2`
 * **cristobalite** :math:`SiO_2`
 * **tridymite** :math:`SiO_2`
@@ -33,7 +33,7 @@ Pure phases
 * **sphene** :math:`CaTiSiO_5`
 
 Solution phases
-======================
+----------------------
 * **olivine**
 * **feldspar**
 * **clinopyroxene**
@@ -49,7 +49,7 @@ Solution phases
 * **fluid**
 * **silicate melt**
 
-====================
+
 Weller et al. (2024) - named `igad` in MAGEMin
 =====================
 
@@ -59,7 +59,7 @@ Weller et al. (2024) - named `igad` in MAGEMin
     In PetThermoTools we specify an fO2 buffer and/or an Fe redox state so the `O` content of the system is defined indirectly by one of these two parameters. Additionally, the Weller et al. (2024) model is currently anhydrous.
 
 Pure phases
-=====================
+--------------------
 * **quartz** :math:`SiO_2`
 * **cristobalite** :math:`SiO_2`
 * **tridymite** :math:`SiO_2`
@@ -72,7 +72,7 @@ Pure phases
 * **sphene** :math:`CaTiSiO_5`
 
 Solution phases
-======================
+--------------------
 * **olivine**
 * **feldspar**
 * **clinopyroxene**
