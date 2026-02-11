@@ -8,6 +8,12 @@ Important Notice
 ===========
 As of v0.2.48 the package is hosted on PyPI as `petthermotools` (i.e., all lower case). This means that installation and import of PetThermoTools must ALWAYS use the lower case name.
 
+Useful links and information
+============================
+News about updates to petthermotools and the underlying packages will be announced on our Discord served. Please contact Matt Gleeson or Paula Antoshechkina for a invite link.
+
+Additionally, if you are having trouble with any aspect of the code Matt Gleeson holds a vitual office hours session every other week (https://docs.google.com/spreadsheets/d/1Khc4LNZqLvPSQe-dCFQWldyVJcgDDM1j3Ogzgq0lIjA/edit?usp=sharing).
+
 Using MELTS
 ===========
 
