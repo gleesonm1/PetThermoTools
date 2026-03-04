@@ -1,0 +1,3 @@
+The aim of this practical was first use VESical (Iacovino et al. 2021) to get students to investigate how solubility models differ. We use IaconoMarziano and Dixon as neither of these requires students to use a local thermoengine installation. 
+Then students use PetThermoTools to investigate what happens to volatiles from the mantle to the surface. They start by ascending a magma to see when volatile saturation initiates. Then, they let the same magma undergo fractional crystallization, noting the differential behavoir of H2O and CO2. 
+Finally, they ascend it towards the surface to see the large change in volatile volume (i.e. the driving force of volcanic eruptions!). 
