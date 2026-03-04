@@ -1,1 +1,1 @@
-This folder contains teaching materials developed to use PetThermoTools in an educational setting. 
+This folder contains teaching materials developed to use PetThermoTools in an educational setting. These were largely developed for EPS114 taught in 2026 by Penny Wieser with help from GSI Alex Bearden 
