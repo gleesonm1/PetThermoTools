@@ -26,4 +26,11 @@ And the answer key here:
 https://github.com/gleesonm1/PetThermoTools/blob/master/docs/teaching_materials/FractionalCrystallization_Viscosity_CalcAlkalineTrends/HW2-%20Fractional%20Crystallization_InstructorVersion.docx
 
 
+Investigating Volatile Solubility and degassing behavoir
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+This practical was developed for EPS114/214 at UC Berkeley - a mixed undergraduate/graduate class in Petrology. In the lectures before, we discuss how volatiles dissolve in magmas, discuss different solubility models, and the importance of volatiles as a driving force of eruptions. The aim of this practical was first use VESical (Iacovino et al. 2021) to get students to investigate how solubility models differ, and understand what non-ideality looks like (we discussed it in lectures). We use IaconoMarziano and Dixon as neither of these requires students to use a local thermoengine installation. 
+Then students use PetThermoTools to investigate what happens to volatiles from the mantle to the surface. They start by ascending a magma to see when volatile saturation initiates. Then, they let the same magma undergo fractional crystallization, noting the differential behavoir of H2O and CO2. Finally, they ascend it towards the surface to see the large change in volatile volume (i.e. the driving force of volcanic eruptions!).  
 
+All the files (student and instructor versions) of notebooks and homework questions are here:
+
+https://github.com/gleesonm1/PetThermoTools/tree/master/docs/teaching_materials/VolatileSaturation
