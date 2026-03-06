@@ -17,7 +17,7 @@ from multiprocessing import Queue
 from multiprocessing import Process
 import time
 from scipy import interpolate
-from shapely.geometry import MultiPoint, Point, Polygon
+# from shapely.geometry import MultiPoint, Point, Polygon
 
 import numpy as np
 import pandas as pd
@@ -96,6 +96,7 @@ def path_4_saturation_multi(q, index, *, Model = None, P_bar = None, comp = None
     for i in index:
         # try:
         if "MELTS" in Model:
+            q.put([i, -1, "Start"])
             Results, tr = path_MELTS(P_bar = P_bar[i],
                     Model=Model,
                     comp=comp,
@@ -109,7 +110,9 @@ def path_4_saturation_multi(q, index, *, Model = None, P_bar = None, comp = None
                     Suppress=['rutile', 'tridymite'],
                     phases=phases,
                     trail = True,
-                    melts = melts
+                    melts = melts,
+                    q = q,
+                    index = i
                 )
         else:
             if fO2_offset is None:
@@ -136,8 +139,8 @@ def path_4_saturation_multi(q, index, *, Model = None, P_bar = None, comp = None
             break
         # except:
         #     idx.append(i)
-
-    q.put([idx, results])
+    if "MELTS" not in Model:
+        q.put([idx, results])
     return
 
 def mineral_cosaturation(Model="MELTSv1.0.2", cores=int(np.floor(multiprocessing.cpu_count())), bulk=None,
@@ -257,29 +260,64 @@ def mineral_cosaturation(Model="MELTSv1.0.2", cores=int(np.floor(multiprocessing
                 processes.append((p, q, groups[i]))
                 p.start()
 
-            for p, q, group in processes:
-                try:
-                    if time.time() - Start > timeout + 10:
-                        res = q.get(timeout = 10)
-                    else:
-                        res = q.get(timeout=timeout)
-                except:
-                    if "MELTS" not in Model:
-                        print(f"Timeout warning reached. Calculation P_bar = {P_bar[group[0]]} will not be returned. Try increasing the timeout.")
-                    res = []
-                    idx_chunks = np.array([group[0]], dtype = int)
-                    mask = np.ones(len(P_bar), dtype=bool)
-                    mask[idx_chunks] = False
-                    P_bar = P_bar[mask]
+            if "MELTS" not in Model:
+                for p, q, group in processes:
+                    try:
+                        if time.time() - Start > timeout + 10:
+                            res = q.get(timeout = 10)
+                        else:
+                            res = q.get(timeout=timeout)
+                    except:
+                        if "MELTS" not in Model:
+                            print(f"Timeout warning reached. Calculation P_bar = {P_bar[group[0]]} will not be returned. Try increasing the timeout.")
+                        res = []
+                        idx_chunks = np.array([group[0]], dtype = int)
+                        mask = np.ones(len(P_bar), dtype=bool)
+                        mask[idx_chunks] = False
+                        P_bar = P_bar[mask]
 
-                p.join(timeout = 2)
-                p.terminate()
+                    p.join(timeout = 2)
+                    p.terminate()
 
-                if len(res) > 0.0:
-                    idx_chunks, results = res
-                    combined_results.update(results)
+                    if len(res) > 0.0:
+                        idx_chunks, results = res
+                        combined_results.update(results)
 
-                index_out = np.hstack((index_out, idx_chunks))
+                    index_out = np.hstack((index_out, idx_chunks))
+            else:
+                for p, q, group in processes:
+                    while True:
+                        try:
+                            item = q.get(timeout=0.1)
+
+                            run_index, step_i, data = item
+                            combined_results.setdefault(run_index, {})[step_i] = data
+
+                        except Empty:
+                            time.sleep(0.001)
+                            pass
+
+                        # Timeout condition
+                        if time.time() - Start > timeout:
+                            print("Timeout — terminating process")
+                            p.terminate()
+                            break
+
+                    # If process finished and queue empty → break
+                        if not p.is_alive():
+                            try:
+                                # Drain remaining items
+                                while True:
+                                    item = q.get_nowait()
+                                    run_index, step_i, data = item
+                                    combined_results.setdefault(run_index, {})[step_i] = data
+                            except Empty:
+                                time.sleep(0.001)
+                                pass
+                            break
+
+                index_out = np.array(list(combined_results.keys()))
+
     else:
         if "MELTS" in Model:
             from meltsdynamic import MELTSdynamic
@@ -323,7 +361,7 @@ def mineral_cosaturation(Model="MELTSv1.0.2", cores=int(np.floor(multiprocessing
                         phases=phases,
                         melts = melts
                     )
-                results[f"Run {i}"] = Results
+                results[i] = Results
                 combined_results.update(results)
         else:
             if fO2_offset is None:
@@ -345,7 +383,20 @@ def mineral_cosaturation(Model="MELTSv1.0.2", cores=int(np.floor(multiprocessing
             
     results = combined_results
 
-    Results = stich(Res=results, multi=True, Model=Model)
+    if "MELTS" in Model:
+        full_results = {}
+        for run in results:
+            if results[run]:
+                if results[run][-1]:
+                    del results[run][-1]
+                res = results[run]
+                new_results = compile_results(res)
+
+                full_results[f"Run {run}"] = new_results
+
+        Results = stich(Res=full_results, multi=True, Model=Model)
+    else:
+        Results = stich(Res=results, multi=True, Model=Model)
 
     ## determine the offset between the phases
     if len(phases)  == 3:

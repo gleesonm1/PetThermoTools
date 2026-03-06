@@ -15,6 +15,56 @@ from tqdm.notebook import tqdm, trange
 from pathlib import Path
 import time
 
+def supCalc(Model = "MELTSv1.0.2", bulk = None, phase = None, T_C = None, P_bar = None,
+             Fe3Fet_Liq = None, H2O_Liq = None, CO2_Liq = None, fO2_buffer = None, fO2_offset = None, 
+             melts = None):
+    '''
+    A wrapper function to run a extrac the thermodynamic properties of a user specified
+    phase in alphaMELTS for Python for a given composition and specified P-T-fO2 conditions.
+
+    The function first standardizes the composition using `comp_fix` and then passes 
+    the parameters to the underlying MELTS calculation function (`supCalc_MELTS`).
+
+    Parameters:
+    ----------
+    Model : str, default "MELTSv1.0.2"
+        Thermodynamic model to use (e.g., "MELTSv1.0.2", "pMELTS").
+    bulk : dict or pd.Series
+        Bulk composition of the starting material (oxides in wt%).
+    phase : str, optional
+        Phase name (e.g., 'olivine1') to monitor or target in the calculation.
+    T_C : float
+        Temperature in Celsius.
+    P_bar : float
+        Pressure in bars.
+    Fe3Fet_Liq, H2O_Liq, CO2_Liq : float, optional
+        Overrides for initial redox state and volatile content in the liquid.
+    fO2_buffer : str, optional
+        Oxygen fugacity buffer (e.g., "FMQ", "NNO").
+    fO2_offset : float, optional
+        Offset in log units from the specified fO2 buffer.
+    melts : MELTSdynamic object, optional
+        An existing MELTSdynamic instance, reduces the overhead associated with initiating new MELTS objects.
+
+    Returns:
+    ----------
+    Results : dict
+        The raw results dictionary from the underlying MELTS simulation.
+    '''
+    
+    comp = bulk.copy()
+
+    if type(comp) == pd.core.series.Series:
+        comp = comp.to_dict()
+    
+    comp = comp_fix(Model = Model, comp = comp, H2O_Liq = H2O_Liq, CO2_Liq = CO2_Liq, Fe3Fet_Liq = Fe3Fet_Liq)
+
+    Results = supCalc_MELTS(Model = Model, comp = comp, phase = phase, T_C = T_C, P_bar = P_bar,
+             fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, 
+             melts = melts)
+    
+    return Results
+
 def equilibrate_multi(cores = multiprocessing.cpu_count(), Model = "MELTSv1.0.2", bulk = None, T_C = None, P_bar = None, 
                       Fe3Fet_init = None, H2O_init = None, CO2_init = None, 
                       Fe3Fet_Liq = None, H2O_Liq = None, CO2_Liq = None, fO2_buffer = None, fO2_offset = None,
@@ -142,22 +192,23 @@ def equilibrate_multi(cores = multiprocessing.cpu_count(), Model = "MELTSv1.0.2"
     else:
         length = 1
 
-    if type(P_bar) != np.ndarray:
-        P_bar = np.zeros(length) + P_bar
+    if length > 1:
+        if type(P_bar) != np.ndarray:
+            P_bar = np.zeros(length) + P_bar
 
-    if type(T_C) != np.ndarray:
-        T_C = np.zeros(length) + T_C
+        if type(T_C) != np.ndarray:
+            T_C = np.zeros(length) + T_C
 
-    if fO2_offset is not None:
-        if type(fO2_offset) != np.ndarray:
-            if "MELTS" in Model:
-                fO2_offset = np.zeros(length) + fO2_offset
-    else:
-        if "MELTS" in Model:
-            fO2_offset = [None]*length
+        if fO2_offset is not None:
+            if type(fO2_offset) != np.ndarray:
+                if "MELTS" in Model:
+                    fO2_offset = np.zeros(length) + fO2_offset
         else:
-            # raise Warning("Currently the code only allows a single value of fO2_offset to be supplied to MAGEMin. Please supply a single value and/or use the Fe3Fet_init kwarg")
-            fO2_offset = None
+            if "MELTS" in Model:
+                fO2_offset = [None]*length
+            else:
+                # raise Warning("Currently the code only allows a single value of fO2_offset to be supplied to MAGEMin. Please supply a single value and/or use the Fe3Fet_init kwarg")
+                fO2_offset = None
 
     if type(comp) == pd.core.frame.DataFrame:
         if "MELTS" in Model:
@@ -167,12 +218,13 @@ def equilibrate_multi(cores = multiprocessing.cpu_count(), Model = "MELTSv1.0.2"
             if len(comp['SiO2_Liq']) != len(T_C) or len(comp['SiO2_Liq']) != len(P_bar):
                 raise ValueError("Inconsistent length between loaded variables")
     else:
-        if "MELTS" in Model:
-            if len(P_bar) != len(T_C) or len(P_bar) != len(fO2_offset):
-                raise ValueError("Inconsistent length between loaded variables")
-        else:
-            if len(P_bar) != len(T_C):
-                raise ValueError("Inconsistent length between loaded variables")
+        if length > 1:
+            if "MELTS" in Model:
+                if len(P_bar) != len(T_C) or len(P_bar) != len(fO2_offset):
+                    raise ValueError("Inconsistent length between loaded variables")
+            else:
+                if len(P_bar) != len(T_C):
+                    raise ValueError("Inconsistent length between loaded variables")
 
 
     if "MELTS" in Model:
@@ -214,7 +266,7 @@ def equilibrate_multi(cores = multiprocessing.cpu_count(), Model = "MELTSv1.0.2"
 
             if len(ret)>1:
                 Results, index = ret
-                # print(Results)
+                print(Results)
                 Output = Results[0]
                 Affinity = pd.DataFrame([Results[1]])
                 Af_Combined = Affinity.copy()
@@ -299,6 +351,10 @@ def equilibrate_multi(cores = multiprocessing.cpu_count(), Model = "MELTSv1.0.2"
                 for it in combined_results:
                     if key in combined_results[it].keys():
                         Final_Combined[key] = pd.DataFrame(np.nan, index = np.arange(length), columns = combined_results[it][key].columns)
+
+                        # Final_Combined[key][["liquidus_phase","fluid_saturated"]] = (
+                        #     Final_Combined[key][["liquidus_phase","fluid_saturated"]].astype("string")
+                        # )
 
                 for run_name, run_data in combined_results.items():
                     if key in run_data:
@@ -1060,11 +1116,6 @@ def findLiq_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P
     Af_Combined : pd.DataFrame, optional
         Returned only if `Affinity=True`. Contains chemical affinity data for the liquidus phase.
     '''
-    # try:
-    #     from meltsdynamic import MELTSdynamic
-    # except:
-    #     Warning('alphaMELTS for Python files are not on the python path. \n Please add these files to the path running \n import sys \n sys.path.append(r"insert_your_path_to_melts_here") \n You are looking for the location of the meltsdynamic.py file')
-
     comp = bulk.copy()
 
     if fO2_buffer is not None:
@@ -1080,9 +1131,6 @@ def findLiq_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P
 
     if Model is None:
         Model = "MELTSv1.0.2"
-
-    # if Model == "Holland":
-    #     import pyMAGEMINcalc as MM
 
     # if comp is entered as a pandas series, it must first be converted to a dict
     if type(comp) == pd.core.series.Series:
@@ -1107,12 +1155,13 @@ def findLiq_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P
 
     if T_initial_C is None:
         if type(comp) != dict or type(P_bar) == np.ndarray:
-            if type(comp) != dict:
-                T_initial_C = np.zeros(len(comp['SiO2_Liq'].values)) + 1300.0
-            else:
-                T_initial_C = np.zeros(len(P_bar)) + 1300.0
+            T_initial_C = estimate_t(comp=comp, P_bar=P_bar).values+60.0
+            # if type(comp) != dict:
+            #     T_initial_C = estimate_t(comp=comp, P_bar=P_bar)
+            # else:
+            #     T_initial_C = np.zeros(len(P_bar)) + 1300.0
         else:
-            T_initial_C = np.array([1300.0])
+            T_initial_C = np.array([estimate_t(comp=comp, P_bar=P_bar)+60.0])
     else:
         if type(T_initial_C) == int or type(T_initial_C) == float:
             if type(comp) != dict or type(P_bar) == np.ndarray:
@@ -1203,6 +1252,7 @@ def findLiq_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P
         Affin = {}
         if type(comp) != dict or type(P_bar) == np.ndarray:
             Results = pd.DataFrame(data = np.zeros((len(T_Liq_C), 17)), columns = ['T_Liq_C', 'liquidus_phase', 'fluid_saturated', 'SiO2', 'TiO2', 'Al2O3', 'Fe2O3', 'Cr2O3', 'FeO', 'MnO', 'MgO', 'CaO', 'Na2O', 'K2O', 'P2O5', 'H2O', 'CO2'])
+            Results[['liquidus_phase', 'fluid_saturated']] = (Results[['liquidus_phase', 'fluid_saturated']].astype("string"))
             for i in range(len(qs)):
                 if len(qs[i])>0:
                     if Affinity is True:

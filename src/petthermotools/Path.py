@@ -4,6 +4,7 @@ from petthermotools.GenFuncs import *
 from petthermotools.GenFuncs import _ensure_julia_ready
 from petthermotools.Plotting import *
 from petthermotools.MELTS import *
+from petthermotools.core_config import MAX_WORKERS
 import multiprocessing
 from multiprocessing import Queue
 from multiprocessing import Process
@@ -11,6 +12,7 @@ import time
 import sys
 from tqdm.notebook import tqdm, trange
 from pathlib import Path
+from queue import Empty
 
 try:
     shell = get_ipython().__class__.__name__
@@ -28,7 +30,7 @@ def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid 
                T_C = None, T_path_C = None, T_start_C = None, T_end_C = None, dt_C = None, 
                P_bar = None, P_path_bar = None, P_start_bar = None, P_end_bar = None, dp_bar = None, 
                Fe3Fet_init = None, Fe3Fet_Liq = None, H2O_init = None, H2O_Liq = None, CO2_init = None, CO2_Liq = None, 
-               isenthalpic = None, isentropic = None, isochoric = None, find_liquidus = None, 
+               isenthalpic = None, isentropic = None, isochoric = None, find_liquidus = False, 
                fO2_buffer = None, fO2_offset = None, 
                Print_suppress = None, fluid_sat = False, Crystallinity_limit = None, Combined = None,
                label = None, timeout = None, print_label = True, Suppress = ['rutile', 'tridymite'], Suppress_except=False,
@@ -177,12 +179,6 @@ def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid 
     if Model is None:
         Model = "MELTSv1.0.2"
 
-    # if "MELTS" in Model:
-    #     try:
-    #         from meltsdynamic import MELTSdynamic
-    #     except:
-    #         Warning('alphaMELTS for Python files are not on the python path. \n Please add these files to the path running \n import sys \n sys.path.append(r"insert_your_path_to_melts_here") \n You are looking for the location of the meltsdynamic.py file')
-
     if H2O_Liq is not None:
         print('Warning - the kwarg "H2O_Liq" will be removed from v1.0.0 onwards. Please use "H2O_init" instead.')
         if H2O_init is None:
@@ -225,7 +221,7 @@ def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid 
             raise Warning("MELTS often fails to produce any results when no ferric Fe is included in the starting composition and an fO2 buffer is not set.")
 
     if cores is None:
-        cores = multiprocessing.cpu_count()
+        cores = MAX_WORKERS #multiprocessing.cpu_count()
 
     if "MELTS" not in Model:
         cores = memory_limit(cores = cores)
@@ -272,8 +268,7 @@ def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid 
     
     # perform calculation if only 1 calculation is specified
     if One == 1:
-        manager = multiprocessing.Manager()
-        shared_dict = manager.dict()
+        Results = {}
         if Print_suppress is None:
             print("Running " + Model + " calculation...", end = "", flush = True)
             s = time.time()
@@ -285,47 +280,91 @@ def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid 
                                 'P_bar': P_bar, 'P_path_bar': P_path_bar, 'P_start_bar': P_start_bar, 'P_end_bar': P_end_bar, 'dp_bar': dp_bar,
                                 'isenthalpic': isenthalpic, 'isentropic': isentropic, 'isochoric': isochoric, 'find_liquidus': find_liquidus,
                                 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset, 'fluid_sat': fluid_sat, 'Crystallinity_limit': Crystallinity_limit,
-                                'Suppress': Suppress, 'Suppress_except': Suppress_except, 'shared_dict': shared_dict})
+                                'Suppress': Suppress, 'Suppress_except': Suppress_except})
 
             p.start()
-            try:
-                ret = q.get(timeout = timeout)
-            except:
-                ret = []
 
-            TIMEOUT = 5
             start = time.time()
-            if p.is_alive():
-                while time.time() - start <= TIMEOUT:
-                    if not p.is_alive():
-                        p.join()
+            if "MELTS" in Model:
+                # drain queue while waiting for calculation to finish
+                while True:
+                    try:
+                        item = q.get(timeout=0.1)
+
+                        run_index, step_i, data = item
+                        Results[step_i] = data
+
+                    except Empty:
+                        time.sleep(0.001)
+                        pass
+
+                    # Timeout condition
+                    if time.time() - start > timeout_main:
+                        print("Timeout — terminating process")
                         p.terminate()
                         break
-                    time.sleep(.1)
-                else:
-                    p.terminate()
-                    p.join(5)
-            else:
+
+                # If process finished and queue empty → break
+                    if not p.is_alive():
+                        try:
+                            # Drain remaining items
+                            while True:
+                                item = q.get_nowait()
+                                run_index, step_i, data = item
+                                Results[step_i] = data
+                        except Empty:
+                            time.sleep(0.001)
+                            pass
+                        break
+
                 p.join()
-                p.terminate()
+
+                if Results:
+                    new_results = compile_results(Results)
+
+                    # stich and return results
+                    Results = stich(new_results, Model = Model, Frac_fluid = Frac_fluid, Frac_solid = Frac_solid)
+                    if Print_suppress is None:
+                        print(" Complete (time taken = " + str(round(time.time() - s,2)) + " seconds)", end = "", flush = True)
+                    return Results
+                else:
+                    print("No calculations returned")
+                    return Results
+
+            else:
+                try:
+                    ret = q.get(timeout=timeout_main)
+                except:
+                    ret = []
+
+                TIMEOUT = 5
+                start = time.time()
+                if p.is_alive():
+                    while time.time() - start <= TIMEOUT:
+                        if not p.is_alive():
+                            p.join()
+                            p.terminate()
+                            break
+                        time.sleep(.1)
+                    else:
+                        p.terminate()
+                        p.join(5)
+                else:
+                    p.join()
+                    p.terminate()
+
+                if len(ret) > 0:
+                    Results, index = ret
+                    if len(Results.keys())> 1:
+                        Results = stich(Results, Model = Model, Frac_fluid = Frac_fluid, Frac_solid = Frac_solid)
+                    return Results
 
             if Print_suppress is None:
                 print(" Complete (time taken = " + str(round(time.time() - s,2)) + " seconds)", end = "", flush = True)
 
-            if len(ret) > 0:
-                Results, index = ret
-                if len(Results.keys())> 1:
-                    Results = stich(Results, Model = Model, Frac_fluid = Frac_fluid, Frac_solid = Frac_solid)
-                return Results
-            else:
-                if len(shared_dict)>0:
-                    Results = shared_dict[0]
-                    if len(Results.keys()) > 1:
-                        Results = stich(Results, Model = Model, Frac_fluid = Frac_fluid, Frac_solid = Frac_solid)
-                    return Results
-                else:
-                    Results = {}
-                    return Results
+            Results = stich(Results, Model = Model, Frac_fluid = Frac_fluid, Frac_solid = Frac_solid)
+
+            return Results
         else:
             Results = path_MELTS(Model = Model, comp = comp, Frac_solid = Frac_solid, Frac_fluid = Frac_fluid, 
                                      T_C = T_C, T_path_C = T_path_C, T_start_C = T_start_C, T_end_C = T_end_C, 
@@ -335,7 +374,64 @@ def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid 
                                      fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, fluid_sat = fluid_sat, 
                                      Crystallinity_limit = Crystallinity_limit, Suppress = Suppress, Suppress_except = Suppress_except)
             
-            Results = stich(Results, Model = Model, Frac_fluid = Frac_fluid, Frac_solid = Frac_solid)
+            if Results:
+                # identify all unique keys to set up output dataframes
+                unique_keys = set()
+                properties = {}
+
+                for step_data in Results.values():
+                    for key, value in step_data.items():
+                        if "_keys" not in key:
+                            unique_keys.add(key)
+                        else:
+                            base_key = key[:-5]
+                            if base_key not in properties:
+                                properties[base_key] = value
+                            # properties[base_key].update(value)
+
+                unique_keys = sorted(unique_keys)
+
+                sorted_steps = sorted(Results.keys())
+                n_steps = len(sorted_steps)
+
+                index_map = {step: i for i, step in enumerate(sorted_steps)}
+
+                # create new output to populate with results
+                new_results = {}
+
+                for key in unique_keys:
+                    if key == "Conditions":
+                        columns = ['temperature', 'pressure', 'h', 's', 'v', 'mass', 'dvdp', 'logfO2']
+                        new_results[key] = pd.DataFrame(index=range(n_steps), columns=columns, dtype=float)
+
+                    elif "_prop" not in key:
+                        columns = ['SiO2', 'TiO2', 'Al2O3', 'Fe2O3', 'Cr2O3', 'FeO',
+                                'MnO', 'MgO', 'CaO', 'Na2O', 'K2O',
+                                'P2O5', 'H2O', 'CO2']
+                        new_results[key] = pd.DataFrame(index=range(n_steps), columns=columns, dtype=float)
+
+                    elif "_key" not in key:
+                        columns = properties[key]
+                        new_results[key] = pd.DataFrame(index=range(n_steps), columns=columns, dtype=float)
+
+                # fill output
+                for step, step_data in Results.items():
+
+                    row_i = index_map[step]
+
+                    for key, value in step_data.items():
+
+                        if key.endswith("_keys"):
+                            continue
+
+                        if key not in new_results:
+                            continue
+                        
+                        if len(value) == len(new_results[key].iloc[row_i]):
+                            new_results[key].iloc[row_i] = value
+                        else:
+                            print(f"Size mismatch, potentially errored results on step {row_i}")
+                Results = stich(new_results, Model = Model, Frac_fluid = Frac_fluid, Frac_solid = Frac_solid)
             return Results
 
     else: # perform multiple crystallisation calculations
@@ -392,11 +488,8 @@ def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid 
             fO2_offset = np.zeros(int(L)) + fO2_offset
 
         index_in = np.arange(int(L))
-        combined_results = {}
+        Results = {}
         index_out = np.array([], dtype=int)
-
-        manager = multiprocessing.Manager()
-        shared_dict = manager.dict()
 
         while len(index_out) < len(index_in):
             index = np.setdiff1d(index_in, index_out)
@@ -404,12 +497,13 @@ def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid 
             non_empty_groups = [g for g in groups if g.size > 0]
             groups = non_empty_groups
 
-            if len(groups[0])< 3:
-                timeout = len(groups[0])*timeout_main
+            if len(groups[-1])< 3:
+                timeout = len(groups[-1])*timeout_main
             else:
                 timeout = 3*timeout_main
                 
             processes = []
+            start = time.time()
             for i in range(len(groups)):
                 q = Queue()
                 p = Process(target = path_multi, args = (q, groups[i]),
@@ -418,71 +512,87 @@ def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid 
                                         'P_bar': P_bar, 'P_path_bar': P_path_bar, 'P_start_bar': P_start_bar, 'P_end_bar': P_end_bar, 'dp_bar': dp_bar,
                                         'isenthalpic': isenthalpic, 'isentropic': isentropic, 'isochoric': isochoric, 'find_liquidus': find_liquidus,
                                         'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset, 'fluid_sat': fluid_sat, 'Crystallinity_limit': Crystallinity_limit,
-                                        'Suppress': Suppress, 'Suppress_except': Suppress_except, 'shared_dict': shared_dict})
+                                        'Suppress': Suppress, 'Suppress_except': Suppress_except})
                 
                 p.start()
                 time.sleep(0.1)
                 
                 processes.append((p, q, groups[i]))
 
+                
+            # drain queue while waiting for calculation to finish
+            if "MELTS" in Model:
+                for p, q, group in processes:
 
-            # for p, q, group in processes:
-            #     # try:
-            #     #     if time.time() - Start < timeout + 5:
-            #     #         res = q.get(timeout=timeout)
-            #     #     else:
-            #     #         res = q.get(timeout=10)
-            #     # except:
-            #     #     res = []
-            #     #     idx_chunks = np.array([group[0]], dtype = int)
+                    while True:
+                        try:
+                            item = q.get(timeout=0.1)
 
-            #     # p.join(timeout = 2)
-            #     # p.terminate()
+                            run_index, step_i, data = item
+                            Results.setdefault(run_index, {})[step_i] = data
 
-            #     # if len(res) > 0.0:
-            #     #     idx_chunks, results = res
-            #     #     combined_results.update(results)
-            #     if time.time() - Start < timeout + 5:
-            #         p.join(timeout = timeout)
-            #     else:
-            #         p.join(timeout = 5)
+                        except Empty:
+                            time.sleep(0.001)
+                            pass
 
-            #     p.terminate()
-            #     p.join()
-            start_wait = time.time()
-            for p, q, group in processes:
-                # We give each process the remaining time from the total timeout
-                remaining = max(0, timeout - (time.time() - start_wait))
-                # p.join(timeout=remaining+5)
-                try:
-                    ret = q.get(timeout=remaining)
-                except Exception as e:
-                    print(f"Failure on data extraction, likely due to an incomplete calculation: {e}")
-                    ret = []
-                    
+                        # Timeout condition
+                        if time.time() - start > timeout:
+                            print("Timeout — terminating process")
+                            p.terminate()
+                            break
 
-            # kill anyone still hanging
-            for p, q, group in processes:
-                # if p.is_alive():
-                p.terminate()
-                p.join()
+                    # If process finished and queue empty → break
+                        if not p.is_alive():
+                            try:
+                                # Drain remaining items
+                                while True:
+                                    item = q.get_nowait()
+                                    run_index, step_i, data = item
+                                    Results.setdefault(run_index, {})[step_i] = data
+                            except Empty:
+                                time.sleep(0.001)
+                                pass
+                            break
 
-            idx_chunks = list(shared_dict.keys())
-            index_out = idx_chunks
-                # index_out = np.hstack((index_out, idx_chunks))
+                index_out = np.array(list(Results.keys()))
+            
+            else:
+                idx_chunks = []
+                for p, q, group in processes:
+                    # We give each process the remaining time from the total timeout
+                    remaining = max(0, timeout - (time.time() - start))
+                    try:
+                        ret = q.get(timeout=remaining)
+                        idx, results = ret
+                        Results.update(results)
+                        # idx_chunks.append(idx)
+                    except Exception as e:
+                        print(f"Failure on data extraction, likely due to an incomplete calculation: {e}")
+                        ret = []
+                        idx = np.array([group[0]],dtype = int)
+
+                    index_out = np.hstack((index_out, idx))
+
+                for p, q, group in processes:
+                    p.terminate()
+                    p.join()
 
             print(f"Completed {100*len(index_out)/len(index_in)} %")
 
-        # results = combined_results
-        results = shared_dict
-        new_results = {}
-        for i, val in results.items():
-            new_results[f"Run {i}"] = val
+        if "MELTS" in Model:
+            full_results = {}
+            for run in Results:
+                if Results[run]:
+                    del Results[run][-1]
+                    if Results[run]:
+                        results = Results[run]
+                        new_results = compile_results(results)
 
-        results = new_results
+                        full_results[f"Run {run}"] = new_results
 
-        # print(results)
-        Results = stich(Res=results, multi=True, Model=Model, Frac_fluid = Frac_fluid, Frac_solid = Frac_solid)
+            Results = stich(Res=full_results, multi=True, Model=Model, Frac_fluid = Frac_fluid, Frac_solid = Frac_solid)
+        else:
+            Results = stich(Res=Results, multi=True, Model=Model, Frac_fluid = Frac_fluid, Frac_solid = Frac_solid)
         
         for r in Results:
             i = int(r.split(' ')[1].strip())
@@ -598,7 +708,9 @@ def path_multi(q, index, *, Model = None, comp = None, Frac_solid = None, Frac_f
     for i in index:
         try:
             if "MELTS" in Model:
-                shared_dict[i] = {}
+                q.put([i, -1, "Start"])
+                if i != 0:
+                    melts = melts.addNodeAfter()
                 if type(comp) == dict:
                     Results, tr = path_MELTS(Model = Model, comp = comp, Frac_solid = Frac_solid, Frac_fluid = Frac_fluid, 
                                             T_initial_C = np.random.random()*200 + 1200, T_C = T_C[i], T_path_C = T_path_C[i], T_start_C = T_start_C[i], 
@@ -607,7 +719,7 @@ def path_multi(q, index, *, Model = None, comp = None, Frac_solid = None, Frac_f
                                             isenthalpic = isenthalpic, isentropic = isentropic, isochoric = isochoric, 
                                             find_liquidus = find_liquidus, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset[i], 
                                             fluid_sat = fluid_sat, Crystallinity_limit = Crystallinity_limit, Suppress = Suppress, 
-                                            Suppress_except=Suppress_except, trail = trail, melts = melts, shared_dict = shared_dict, index = i)
+                                            Suppress_except=Suppress_except, trail = trail, melts = melts, q = q, index = i)
                 else:
                     Results, tr = path_MELTS(Model = Model, comp = comp.loc[i].to_dict(), Frac_solid = Frac_solid, Frac_fluid = Frac_fluid, 
                                             T_initial_C = np.random.random()*200 + 1200, T_C = T_C[i], T_path_C = T_path_C[i], T_start_C = T_start_C[i], 
@@ -616,10 +728,9 @@ def path_multi(q, index, *, Model = None, comp = None, Frac_solid = None, Frac_f
                                             isenthalpic = isenthalpic, isentropic = isentropic, isochoric = isochoric, 
                                             find_liquidus = find_liquidus, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset[i], 
                                             fluid_sat = fluid_sat, Crystallinity_limit = Crystallinity_limit, Suppress = Suppress, 
-                                            Suppress_except=Suppress_except, trail = trail, melts = melts, shared_dict = shared_dict, index = i)
+                                            Suppress_except=Suppress_except, trail = trail, melts = melts, q = q, index = i)
                     
             else:
-                shared_dict[i] = {}
                 if fO2_offset[i] is None:
                     fO2_offset[i] = 0.0
 
@@ -655,11 +766,8 @@ def path_multi(q, index, *, Model = None, comp = None, Frac_solid = None, Frac_f
                 
                 tr = True
 
-            idx.append(i)
-            results[i] = Results
-
-            if "MELTS" not in Model:
-                shared_dict[i] = Results
+                idx.append(i)
+                results[f"Run {i}"] = Results
 
             if tr is False:
                 break
@@ -667,7 +775,9 @@ def path_multi(q, index, *, Model = None, comp = None, Frac_solid = None, Frac_f
             idx.append(i)
             break
 
-    q.put([idx, results])
+    if "MELTS" not in Model:
+        q.put([idx, results])
+
     return
 
 
@@ -777,7 +887,7 @@ def path(q, index, *, Model = None, comp = None, Frac_solid = None, Frac_fluid =
                                         P_end_bar = P_end_bar, dp_bar = dp_bar, isenthalpic = isenthalpic, 
                                         isentropic = isentropic, isochoric = isochoric, find_liquidus = find_liquidus, 
                                         fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, fluid_sat = fluid_sat, 
-                                        Crystallinity_limit = Crystallinity_limit, Suppress = Suppress, Suppress_except = Suppress_except, shared_dict=shared_dict, index = 0)
+                                        Crystallinity_limit = Crystallinity_limit, Suppress = Suppress, Suppress_except = Suppress_except, q = q, index = 0)
         else:
             Results = path_MELTS(Model = Model, comp = comp, Frac_solid = Frac_solid, Frac_fluid = Frac_fluid, 
                                     T_C = T_C, T_path_C = T_path_C, T_start_C = T_start_C, T_end_C = T_end_C, 
@@ -785,13 +895,13 @@ def path(q, index, *, Model = None, comp = None, Frac_solid = None, Frac_fluid =
                                     P_end_bar = P_end_bar, dp_bar = dp_bar, isenthalpic = isenthalpic, 
                                     isentropic = isentropic, isochoric = isochoric, find_liquidus = find_liquidus, 
                                     fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, fluid_sat = fluid_sat, 
-                                    Crystallinity_limit = Crystallinity_limit, Suppress = Suppress, Suppress_except = Suppress_except, shared_dict=shared_dict, index = 0)
+                                    Crystallinity_limit = Crystallinity_limit, Suppress = Suppress, Suppress_except = Suppress_except, q = q, index = 0)
         
-        if shared_dict[0]:
-            results = shared_dict[0]
-            q.put([results, index])
-        else:
-            q.put([])
+        # if shared_dict[0]:
+        #     results = shared_dict[0]
+        #     q.put([results, index])
+        # else:
+        #     q.put([])
         # try:
         #     q.put([Results,index])
         # except:

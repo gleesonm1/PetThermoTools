@@ -2,6 +2,12 @@
 Change Log
 ================================================
 
+Version 0.3.22 (March 2026)
+====================================
+Major update to the way path calculations are computed, allowing the results of partial calculations to be returned. Influences phase diagram and barometry calculations as well. 
+Should also lead to a small speed improvement due to a move away from Pandas
+Code compatible with Pandas v3.
+
 Version 0.3.21 (February 2026)
 ====================================
 Update to harker plotting function to fix bug with individual models

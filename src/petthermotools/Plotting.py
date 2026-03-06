@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from shapely.geometry import MultiPoint, Point, Polygon
+# from shapely.geometry import MultiPoint, Point, Polygon
 import matplotlib.pyplot as plt
 from matplotlib import cm
 import matplotlib.colors as mc
@@ -1039,10 +1039,10 @@ def plot_phaseDiagram(Model = "Holland", Combined = None, P_units = "bar", T_uni
     Results.loc[Results['Phase'] == "None", 'PhaseNo.'] = np.nan
 
     PT_Results = {}
-    PT_Results['T_C'] = Results['T_C'].values.reshape((len(T_C),len(P_bar)))
-    PT_Results['P_bar'] = Results['P_bar'].values.reshape((len(T_C),len(P_bar)))
-    PT_Results['Phase'] = Results['Phase'].values.reshape((len(T_C),len(P_bar)))
-    PT_Results['PhaseNo.'] = Results['PhaseNo.'].values.reshape((len(T_C),len(P_bar)))
+    PT_Results['T_C'] = Results['T_C'].to_numpy().reshape((len(T_C),len(P_bar)))
+    PT_Results['P_bar'] = Results['P_bar'].to_numpy().reshape((len(T_C),len(P_bar)))
+    PT_Results['Phase'] = Results['Phase'].to_numpy().reshape((len(T_C),len(P_bar)))
+    PT_Results['PhaseNo.'] = Results['PhaseNo.'].to_numpy().reshape((len(T_C),len(P_bar)))
 
     if T_units == "K":
         PT_Results['T_C'] = PT_Results['T_C'] + 273.15

@@ -10,7 +10,7 @@ import subprocess
 # from petthermotools.Barom import *
 # from petthermotools.Liq import *
 # from petthermotools.Crystallise import *
-from petthermotools.MELTS import *
+# from petthermotools.MELTS import *
 from petthermotools.Compositions import *
 # try:
 #     from petthermotools.Holland import *
@@ -80,6 +80,129 @@ Names_MM_replace = {'liq1': 'liquid1',
             'liq2': 'liquid2',
             'liq3': 'liquid3',
             'liq4': 'liquid4'}
+
+# Molar masses
+molar_masses = {
+    "SiO2_Liq": 60.0843,
+    "Al2O3_Liq": 101.9613,
+    "TiO2_Liq": 79.866,
+    "FeOt_Liq": 71.844,
+    "MgO_Liq": 40.304,
+    "MnO_Liq": 70.937,
+    "CaO_Liq": 56.077,
+    "Na2O_Liq": 61.979,
+    "K2O_Liq": 94.196
+}
+
+# Number of cations per oxide
+cation_numbers = {
+    "SiO2_Liq": 1,
+    "Al2O3_Liq": 2,
+    "TiO2_Liq": 1,
+    "FeOt_Liq": 1,
+    "MgO_Liq": 1,
+    "MnO_Liq": 1,
+    "CaO_Liq": 1,
+    "Na2O_Liq": 2,
+    "K2O_Liq": 2
+}
+
+
+def estimate_t(comp=None, P_bar=None):
+    # Use eq22 from Putirka 2008 to estimate the liquidus temperate of a melt - provides a starting point for the liquidus search routine
+    if isinstance(comp, dict):
+        df = pd.DataFrame([comp])
+        comp_is_single = True
+    elif isinstance(comp, pd.DataFrame):
+        df = comp.copy()
+        comp_is_single = False
+    else:
+        raise TypeError("comp must be dict or pandas DataFrame")
+
+    df = df.fillna(0.0)
+
+    n_rows = len(df)
+
+    if np.isscalar(P_bar):
+        P = pd.Series(P_bar, index=df.index)
+    else:
+        P = pd.Series(P_bar)
+
+        if comp_is_single:
+            # Single composition, multiple pressures
+            df = pd.concat([df]*len(P), ignore_index=True)
+            P = pd.Series(P.values, index=df.index)
+            n_rows = len(df)
+        else:
+            if len(P) != n_rows:
+                raise ValueError("Length of P_bar must match number of compositions")
+
+            P.index = df.index
+
+    P_GPa = P / 10000.0
+
+    oxide_moles = pd.DataFrame(index=df.index)
+
+    for oxide in molar_masses:
+        oxide_moles[oxide] = df.get(oxide, 0.0) / molar_masses[oxide]
+
+    cation_moles = pd.DataFrame(index=df.index)
+
+    for oxide in oxide_moles.columns:
+        moles = oxide_moles[oxide] * cation_numbers[oxide]
+        cation_moles[oxide] = moles
+
+    cation_moles = cation_moles.div(cation_moles.sum(axis=1), axis=0)
+
+    # Extract components
+    Fe = cation_moles.get('FeOt_Liq', 0)
+    Mg = cation_moles.get('MgO_Liq', 0)
+    Mn = cation_moles.get('MnO_Liq', 0)
+    Ca = cation_moles.get('CaO_Liq', 0)
+    Si = cation_moles.get('SiO2_Liq', 1e-12)
+    Al = cation_moles.get('Al2O3_Liq', 0)
+    Ti = cation_moles.get('TiO2_Liq', 0)
+
+    CNM = Fe + Mg + Mn + Ca
+    CSi = Si
+
+    # Numerical safety
+    CNM = np.clip(CNM, 1e-12, None)
+    CSi = np.clip(CSi, 1e-12, None)
+    Al  = np.clip(Al, 0, 0.999999)
+    Ti  = np.clip(Ti, 0, 0.999999)
+    Mn  = np.clip(Mn, 0, 0.999999)
+    Fe  = np.clip(Fe, 0, 0.999999)
+    Mg  = np.clip(Mg, 1e-12, None)
+
+    NF = (7/2)*np.log(1-Al) + 7*np.log(1-Ti)
+
+    H2O = df.get("H2O_Liq", 0)
+
+    lnD = np.log(
+        (0.666 - (-0.049*Mn + 0.027*Fe))
+        /
+        (Mg + 0.259*Mn + 0.299*Fe)
+    )
+
+    T = (
+        (15294.6 + 1318.8*P_GPa + 2.4834*(P_GPa**2))
+        /
+        (8.048
+         + 2.8352*lnD
+         + 2.097*np.log(1.5*CNM)
+         + 2.575*np.log(3*CSi)
+         - 1.41*NF
+         + 0.222*H2O
+         + 0.5*P_GPa)
+    )
+
+    T[T < 750] = 750
+
+    if comp_is_single and np.isscalar(P_bar):
+        return T.iloc[0]
+
+    return T
 
 def memory_limit(cores = multiprocessing.cpu_count()):
     if psutil.virtual_memory().available/(1034**3) < 2:
@@ -304,56 +427,6 @@ def label_results(Result,label):
         new_out = Results.copy()
     
     return new_out
-
-def supCalc(Model = "MELTSv1.0.2", bulk = None, phase = None, T_C = None, P_bar = None,
-             Fe3Fet_Liq = None, H2O_Liq = None, CO2_Liq = None, fO2_buffer = None, fO2_offset = None, 
-             melts = None):
-    '''
-    A wrapper function to run a extrac the thermodynamic properties of a user specified
-    phase in alphaMELTS for Python for a given composition and specified P-T-fO2 conditions.
-
-    The function first standardizes the composition using `comp_fix` and then passes 
-    the parameters to the underlying MELTS calculation function (`supCalc_MELTS`).
-
-    Parameters:
-    ----------
-    Model : str, default "MELTSv1.0.2"
-        Thermodynamic model to use (e.g., "MELTSv1.0.2", "pMELTS").
-    bulk : dict or pd.Series
-        Bulk composition of the starting material (oxides in wt%).
-    phase : str, optional
-        Phase name (e.g., 'olivine1') to monitor or target in the calculation.
-    T_C : float
-        Temperature in Celsius.
-    P_bar : float
-        Pressure in bars.
-    Fe3Fet_Liq, H2O_Liq, CO2_Liq : float, optional
-        Overrides for initial redox state and volatile content in the liquid.
-    fO2_buffer : str, optional
-        Oxygen fugacity buffer (e.g., "FMQ", "NNO").
-    fO2_offset : float, optional
-        Offset in log units from the specified fO2 buffer.
-    melts : MELTSdynamic object, optional
-        An existing MELTSdynamic instance, reduces the overhead associated with initiating new MELTS objects.
-
-    Returns:
-    ----------
-    Results : dict
-        The raw results dictionary from the underlying MELTS simulation.
-    '''
-    
-    comp = bulk.copy()
-
-    if type(comp) == pd.core.series.Series:
-        comp = comp.to_dict()
-    
-    comp = comp_fix(Model = Model, comp = comp, H2O_Liq = H2O_Liq, CO2_Liq = CO2_Liq, Fe3Fet_Liq = Fe3Fet_Liq)
-
-    Results = supCalc_MELTS(Model = Model, comp = comp, phase = phase, T_C = T_C, P_bar = P_bar,
-             fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, 
-             melts = melts)
-    
-    return Results
 
 def comp_check(comp_lith, Model, MELTS_filter, Fe3Fet):
     '''
@@ -646,6 +719,65 @@ def comp_fix(Model=None, comp=None, Fe3Fet_Liq=None, H2O_Liq=None, CO2_Liq=None,
 
     return comp
 
+def compile_results(results):
+    # identify all unique keys to set up output dataframes
+    unique_keys = set()
+    properties = {}
+
+    for step_data in results.values():
+        for key, value in step_data.items():
+            if "_keys" not in key:
+                unique_keys.add(key)
+            else:
+                base_key = key[:-5]
+                if base_key not in properties:
+                    properties[base_key] = value
+
+    unique_keys = sorted(unique_keys)
+
+    sorted_steps = sorted(results.keys())
+    n_steps = len(sorted_steps)
+
+    index_map = {step: i for i, step in enumerate(sorted_steps)}
+
+    # create new output to populate with results
+    new_results = {}
+
+    for key in unique_keys:
+        if key == "Conditions":
+            columns = ['temperature', 'pressure', 'h', 's', 'v', 'mass', 'dvdp', 'logfO2']
+            new_results[key] = pd.DataFrame(index=range(n_steps), columns=columns, dtype=float)
+
+        elif "_prop" not in key:
+            columns = ['SiO2', 'TiO2', 'Al2O3', 'Fe2O3', 'Cr2O3', 'FeO',
+                    'MnO', 'MgO', 'CaO', 'Na2O', 'K2O',
+                    'P2O5', 'H2O', 'CO2']
+            new_results[key] = pd.DataFrame(index=range(n_steps), columns=columns, dtype=float)
+
+        elif "_key" not in key:
+            columns = properties[key]
+            new_results[key] = pd.DataFrame(index=range(n_steps), columns=columns, dtype=float)
+
+    # fill output
+    for step, step_data in results.items():
+
+        row_i = index_map[step]
+
+        for key, value in step_data.items():
+
+            if key.endswith("_keys"):
+                continue
+
+            if key not in new_results:
+                continue
+            
+            if len(value) == len(new_results[key].iloc[row_i]):
+                new_results[key].iloc[row_i] = value
+            else:
+                print(f"Size mismatch, potentially errored results on step {row_i}")
+    
+    return new_results
+
 def stich(Res, multi = None, Model = None, Frac_fluid = None, Frac_solid = None):
     '''
     Processes, cleans, and combines the raw output from single or multiple 
@@ -747,8 +879,8 @@ def stich_work(Results = None, Order = None, Model = "MELTS", Frac_fluid = None,
 
     for R in SN:
         if "MELTS" in Model:
-            Results[R].loc[:,'FeOt'] = Results[R].loc[:,'FeO'] + 71.844/(159.69/2)*Results[R].loc[:,'Fe2O3']
-            Results[R].loc[:,'Fe3Fet'] = (71.844/(159.69/2)*Results[R].loc[:,'Fe2O3'])/Results[R].loc[:,'FeOt']
+            Results[R].loc[:,'FeOt'] = Results[R].loc[:,'FeO'].fillna(0.0) + 71.844/(159.69/2)*Results[R].loc[:,'Fe2O3'].fillna(0.0)
+            Results[R].loc[:,'Fe3Fet'] = (71.844/(159.69/2)*Results[R].loc[:,'Fe2O3'].fillna(0.0))/Results[R].loc[:,'FeOt'].fillna(0.0)
             try:
                 Results[R][Results[R + '_prop']['mass'] == 0.0] = np.nan
             except:
@@ -845,21 +977,21 @@ def stich_work(Results = None, Order = None, Model = "MELTS", Frac_fluid = None,
     Results_Volume = Results_Mass.copy()
     Results_rho = Results_Mass.copy()
     for n in SN:
-        Results_Mass[n] = Results[n + '_prop']['mass_g']
-        Results_Volume[n] = Results[n + '_prop']['V_cm^3']
-        Results_rho[n] = Results[n + '_prop']['rho_kg/m^3']
+        Results_Mass[n] = Results[n + '_prop']['mass_g'].fillna(0.0)
+        Results_Volume[n] = Results[n + '_prop']['V_cm^3'].fillna(0.0)
+        Results_rho[n] = Results[n + '_prop']['rho_kg/m^3'].fillna(0.0)
 
     if Frac_solid is True or Frac_fluid is True:
         if Frac_solid is None:
-            Results_Mass['fluid1_cumsum'] = Results_Mass['fluid1'].cumsum()
+            Results_Mass['fluid1_cumsum'] = Results_Mass['fluid1'].fillna(0.0).cumsum()
         elif Frac_fluid is None:
             for n in SN:
                 if n != 'liquid1' and n!= 'fluid1' and n != 'liq1' and n != 'fl1':
-                    Results_Mass[n + '_cumsum'] = Results_Mass[n].cumsum()
+                    Results_Mass[n + '_cumsum'] = Results_Mass[n].fillna(0.0).cumsum()
         else:
             for n in SN:
                 if n != 'liquid1' and n != 'liq1':
-                    Results_Mass[n + '_cumsum'] = Results_Mass[n].cumsum()
+                    Results_Mass[n + '_cumsum'] = Results_Mass[n].fillna(0.0).cumsum()
 
     Results_All = Results['Conditions'].copy()
     for R in Results:
@@ -897,9 +1029,9 @@ def stich_work(Results = None, Order = None, Model = "MELTS", Frac_fluid = None,
 
     Results['PhaseList'] = Results['All'].apply(combine_headers, axis=1)
 
-    Results['mass_g'] = Results_Mass
-    Results['volume_cm3'] = Results_Volume
-    Results['rho_kg/m3'] = Results_rho
+    Results['mass_g'] = Results_Mass.fillna(0.0)
+    Results['volume_cm3'] = Results_Volume.fillna(0.0)
+    Results['rho_kg/m3'] = Results_rho.fillna(0.0)
 
     if Results['mass_g'].sum(axis = 1).iloc[-1] == 0.0:
         for R in Results:

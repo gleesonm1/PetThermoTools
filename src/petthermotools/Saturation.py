@@ -539,14 +539,17 @@ def saturation_pressure(Model = "MELTSv1.2.0", cores = multiprocessing.cpu_count
         L = np.sum(Group)
         if type(P_bar_init) == float or type(P_bar_init) == int:
             P_bar_init = np.zeros(int(L)) + P_bar_init
+
         if T_C_init is None:
             T_C_init = [None] * int(L)
         elif type(T_C_init) == float or type(T_C_init) == int:
             T_C_init = np.zeros(int(L)) + T_C_init
+
         if T_fixed_C is None:
             T_fixed_C = [None] * int(L)
         elif type(T_fixed_C) == float or type(T_fixed_C) == int:
             T_fixed_C = np.zeros(int(L)) + T_fixed_C
+
         if fO2_offset is None:
             fO2_offset = [None] * int(L)
         elif type(fO2_offset) == float or type(fO2_offset) == int:

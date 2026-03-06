@@ -239,7 +239,6 @@ def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar
         print('Attempt ' + str(j))
 
         qs = []
-        q = Queue()
         ps = []
         j = j + 1
 
@@ -271,6 +270,7 @@ def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar
                 T_path_C = np.flip(T_path_C)
                 P_path_bar = np.flip(P_path_bar)
 
+            q = Queue()
             p = Process(target = path, args = (q,i), kwargs = {'Model': Model, 'comp': comp, 
                                                                'T_path_C': T_path_C, 
                                                                'P_path_bar': P_path_bar, 
@@ -278,7 +278,7 @@ def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar
                                                                'fO2_offset': fO2_offset,
                                                                'Suppress': ['rutile', 'tridymite']})
 
-            ps.append(p)
+            ps.append([p,q, i])
             p.start()
 
         if "MELTS" in Model:
@@ -288,50 +288,93 @@ def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar
 
         start = time.time()
         first = True
-        for p in ps:
-            if time.time() - start < TIMEOUT - 10:
-                try:
-                    ret = q.get(timeout = TIMEOUT - (time.time()-start) + 10)
-                except:
-                    ret = []
-            else:
-                if first == True:
-                    print('Timeout Reached. Calculation will continue in a new process.')
-                    first = False
-                try:
-                    ret = q.get(timeout = 30)
-                except:
-                    ret = []
+        if "MELTS" not in Model:
+            for p, q, idx in ps:
+                if time.time() - start < TIMEOUT - 10:
+                    try:
+                        ret = q.get(timeout = TIMEOUT - (time.time()-start) + 10)
+                    except:
+                        ret = []
+                else:
+                    if first == True:
+                        print('Timeout Reached. Calculation will continue in a new process.')
+                        first = False
+                    try:
+                        ret = q.get(timeout = 30)
+                    except:
+                        ret = []
 
-            qs.append(ret)
+                qs.append(ret)
 
-        TIMEOUT = 5
-        start = time.time()
-        for p in ps:
-            if p.is_alive():
-                while time.time() - start <= TIMEOUT:
-                    if not p.is_alive():
-                        p.join()
+            TIMEOUT = 5
+            start = time.time()
+            for p, q, idx in ps:
+                if p.is_alive():
+                    while time.time() - start <= TIMEOUT:
+                        if not p.is_alive():
+                            p.join()
+                            p.terminate()
+                            break
+                        time.sleep(.1)
+                    else:
+                        p.terminate()
+                        p.join(5)
+                else:
+                    p.join()
+                    p.terminate()
+
+            for p, q, idx in ps:
+                p.kill()
+
+            Results = {}
+            for i in range(len(qs)):
+                if len(qs[i]) > 0:
+                    Res, index = qs[i]
+                    Results['index = ' + str(index)] = Res
+
+            Results = stich(Results, multi = True, Model = Model)
+        else:
+            Results = {}
+            for p, q, idx in ps:
+                results = {}
+                # drain queue while waiting for calculation to finish
+                while True:
+                    try:
+                        item = q.get(timeout=0.1)
+
+                        run_index, step_i, data = item
+                        results[step_i] = data
+
+                    except Empty:
+                        time.sleep(0.001)
+                        pass
+
+                    # Timeout condition
+                    if time.time() - start > TIMEOUT:
+                        print("Timeout — terminating process")
                         p.terminate()
                         break
-                    time.sleep(.1)
-                else:
-                    p.terminate()
-                    p.join(5)
-            else:
-                p.join()
-                p.terminate()
 
-        for p in ps:
-            p.kill()
+                # If process finished and queue empty → break
+                    if not p.is_alive():
+                        try:
+                            # Drain remaining items
+                            while True:
+                                item = q.get_nowait()
+                                run_index, step_i, data = item
+                                results[step_i] = data
+                        except Empty:
+                            time.sleep(0.001)
+                            pass
+                        break
+                Results[f"Run {idx}"] = results
+            
+            new_results = {}
+            for key in Results.keys():
+                if len(Results[key])>0:
+                    new_results[key] = compile_results(Results[key])
 
-        Results = {}
-        for i in range(len(qs)):
-            if len(qs[i]) > 0:
-                Res, index = qs[i]
-                Results['index = ' + str(index)] = Res
-
-        Results = stich(Results, multi = True, Model = Model)
+            Results = stich(new_results, multi=True, Model = Model)
 
         for i in Results.keys():
             if len(Results[i]['All']['T_C']) > 1:

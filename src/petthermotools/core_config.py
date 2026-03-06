@@ -31,7 +31,7 @@ _p_cores = max(1, get_performance_core_count())
 logger = logging.getLogger(__name__)
 
 if _p_cores > 32:
-    logger.warning("Greater than 32 performance cores identified. This may indicate you're using a shared environment and we've accidentally Defaulting to 8.")
+    logger.warning("Greater than 32 performance cores identified. This may indicate you're using a shared environment and we've accidentally identified the number of cores on the entire cluster! Defaulting to 8.")
     MAX_WORKERS = 8
 else:
     MAX_WORKERS = max(1, _p_cores)

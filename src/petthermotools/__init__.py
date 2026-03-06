@@ -59,6 +59,8 @@ from petthermotools.Saturation import *
 from petthermotools.MELTS import *
 # Compsitions saved for use in petthermotools
 from petthermotools.Compositions import *
+# Compsitions saved for use in petthermotools
+from petthermotools.Methods import *
 # This contains the functions used to perform calculations using the Holland et al. 2018 thermodynamic dataset - currently disabled
 # try:
 #     from petthermotools.Holland import *
