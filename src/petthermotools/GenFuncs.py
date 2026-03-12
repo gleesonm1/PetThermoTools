@@ -5,6 +5,7 @@ from pathlib import Path
 import psutil
 import multiprocessing
 import os
+import re
 import platform
 import subprocess
 # from petthermotools.Barom import *
@@ -23,7 +24,7 @@ Names = {'liquid1': '_Liq',
         'clinopyroxene1': '_Cpx',
         'garnet1': '_Grt',
         'spinel1': '_Sp',
-        'k-feldspar1': '_Kspar',
+        'alkali-feldspar1': '_Kspar',
         'quartz1': '_Qtz',
         'rhm-oxide1': '_Rhm',
         'apatite1': '_Apa',
@@ -32,7 +33,7 @@ Names = {'liquid1': '_Liq',
         'clinopyroxene2': '_Cpx2',
         'plagioclase2': '_Plag2',
         'spinel2': '_Sp2',
-        'k-feldspar2': '_Kspar2',
+        'alkali-feldspar2': '_Kspar2',
         'garnet2': '_Grt2',
         'rhm-oxide2': '_Rhm2',
         'quartz2': '_Qtz2',
@@ -41,9 +42,9 @@ Names = {'liquid1': '_Liq',
         'fluid1': '_Fl',
         'liquid2': '_Liq2',
         'liquid3': '_Liq3',
-        'liquid4': '_Liq4',
-        'feldspar1': '_Fsp',
-        'feldspar2': '_Fsp2'}
+        'liquid4': '_Liq4',}
+        # 'feldspar1': '_Fsp',
+        # 'feldspar2': '_Fsp2'}
 
 Names_MM = {'liq1': '_Liq',
             'ol1': '_Ol',
@@ -61,7 +62,11 @@ Names_MM = {'liq1': '_Liq',
             'fl1': '_Fl',
             'liq2': '_Liq2',
             'liq3': '_Liq3',
-            'liq4': '_Liq4'}
+            'liq4': '_Liq4',
+            'pl1': '_Plag',
+            'pl2': '_Plag2',
+            'afs1': '_Kspar',
+            'afs2': '_Kspar2'}
 
 Names_MM_replace = {'liq1': 'liquid1',
             'ol1': 'olivine1',
@@ -76,10 +81,16 @@ Names_MM_replace = {'liq1': 'liquid1',
             'g2': 'garnet2',
             'fsp2': 'feldspar2',
             'spl2': 'spinel2',
+            'ilm1': 'rhm-oxide1',
+            'ilm2': 'rhm-oxide2',
             'fl1': 'fluid1',
             'liq2': 'liquid2',
             'liq3': 'liquid3',
-            'liq4': 'liquid4'}
+            'liq4': 'liquid4',
+            'pl1': 'plagioclase1',
+            'pl2': 'plagioclase2',
+            'afs1': 'alkali-feldspar1',
+            'afs2': 'alkali-feldspar2'}
 
 # Molar masses
 molar_masses = {
@@ -107,6 +118,68 @@ cation_numbers = {
     "K2O_Liq": 2
 }
 
+def merge_sequential_phases(output_dict):
+    """
+    Identifies mineral phases of the same group and merges them into a single 
+    dataframe if they never coexist (mass_g > 0) in the same row.
+    """
+    # 1. Identify groups (e.g., 'cpx', 'spl', 'ilm')
+    groups = {}
+    for key in output_dict.keys():
+        if key in ["sys", "Conditions"] or key.endswith("_prop"):
+            continue
+        
+        match = re.match(r"([a-zA-Z\-]+)([0-9]+)", key)
+        if match:
+            prefix, _ = match.groups()
+            if prefix not in groups:
+                groups[prefix] = []
+            groups[prefix].append(key)
+
+    new_dict = {k: v for k, v in output_dict.items() if k in ["sys", "Conditions"]}
+    
+    for prefix, instances in groups.items():
+        # Sort instances to ensure deterministic merging (cpx1, cpx2...)
+        instances.sort(key=lambda x: int(re.search(r'\d+', x).group()))
+        
+        # We will keep a list of "active" merged bins for this mineral
+        # Each bin: {'data': df, 'prop': df, 'indices_with_mass': set}
+        bins = []
+
+        for inst in instances:
+            df_data = output_dict[inst]
+            df_prop = output_dict[f"{inst}_prop"]
+            
+            # Identify row indices where this phase exists (mass > 0)
+            current_active_rows = set(df_prop.index[df_prop['mass_g'] > 0].tolist())
+            
+            merged = False
+            for b in bins:
+                # Check for overlap: Is the intersection of active rows empty?
+                if not current_active_rows.intersection(b['active_rows']):
+                    # NO OVERLAP: Merge this instance into the existing bin
+                    # We combine data; assuming identical columns, we fill zeros/NaNs
+                    b['data'] = b['data'].add(df_data, fill_value=0)
+                    b['prop'] = b['prop'].add(df_prop, fill_value=0)
+                    b['active_rows'].update(current_active_rows)
+                    merged = True
+                    break
+            
+            if not merged:
+                # OVERLAP or FIRST INSTANCE: Create a new bin
+                bins.append({
+                    'data': df_data.copy(),
+                    'prop': df_prop.copy(),
+                    'active_rows': current_active_rows
+                })
+
+        # 2. Re-insert merged/separated bins back into the dictionary with new numbering
+        for i, b in enumerate(bins, 1):
+            new_label = f"{prefix}{i}"
+            new_dict[new_label] = b['data']
+            new_dict[f"{new_label}_prop"] = b['prop']
+
+    return new_dict
 
 def estimate_t(comp=None, P_bar=None):
     # Use eq22 from Putirka 2008 to estimate the liquidus temperate of a melt - provides a starting point for the liquidus search routine
@@ -348,7 +421,8 @@ def activate_petthermotools_env():
     from juliacall import Main as jl
     env_dir = Path.home() / ".petthermotools_julia_env"
     jl_env_path = env_dir.as_posix()
-    jl.seval(f'import Pkg; Pkg.activate("{jl_env_path}")')
+    jl.seval(f"""import Pkg
+             Pkg.activate(expanduser("{jl_env_path}"))""")
 
 def to_float(x):
     '''
@@ -1038,3 +1112,88 @@ def stich_work(Results = None, Order = None, Model = "MELTS", Frac_fluid = None,
             Results[R].drop(Results[R].tail(1).index,inplace=True)
 
     return Results
+
+def standardize_mineral_labels(output_dict):
+    # Phase list definitions
+    # Note: Using tuples for the abbreviations matrix for Pythonic structure
+    dict_ss = {
+        "sp": ("spinel", [("sp", "spinel"), ("mt", "magnetite")]),
+        "spl": ("spinel", [("spl", "spinel"), ("cm", "chromite"), ("usp", "uvospinel"), ("mgt", "magnetite")]),
+        "mu": ("muscovite", [("pat", "paragonite"), ("mu", "muscovite")]),
+        "amp": ("amphibole", [("gl", "glaucophane"), ("act", "actinolite"), ("cumm", "cummingtonite"), ("tr", "tremolite"), ("amp", "amphibole")]),
+        "ilm": ("ilmenite", [("hem", "hematite"), ("ilm", "ilmenite")]),
+        "ilmm": ("ilmenite", [("hemm", "hematite"), ("ilmm", "ilmenite")]),
+        "nph": ("nepheline", [("K-nph", "K-rich nepheline"), ("nph", "nepheline")]),
+        "cpx": ("clinopyroxene", [("pig", "pigeonite"), ("Na-cpx", "Na-rich clinopyroxene"), ("cpx", "clinopyroxene")]),
+        "dio": ("diopside", [("dio", "diopside"), ("omph", "omphacite"), ("jd", "jadeite")]),
+        "occm": ("carbonate", [("sid", "siderite"), ("ank", "ankerite"), ("mag", "magnesite"), ("cc", "calcite")]),
+        "oamp": ("orthoamhibole", [("anth", "anthophyllite"), ("ged", "gedrite")])
+    }
+
+    # 1. Define the Group Merges
+    group_merges = {
+        "sp": "spl",
+        "spl": "spl",
+        "cpx": "cpx",
+        "dio": "cpx",
+        "ilm": "ilm",
+        "ilmm": "ilm",
+        "amp": "amp",
+        "oamp": "amp"
+    }
+
+    # 2. Build a Reverse Lookup Map
+    reverse_lookup = {}
+    for group_key, (name, abbr_list) in dict_ss.items():
+        target_label = group_merges.get(group_key, group_key)
+        for abbr, full_name in abbr_list:
+            reverse_lookup[abbr] = target_label
+
+    # 3. Process the output_dict keys
+    new_dict = {}
+    rename_map = {}
+    group_counters = {}
+
+    # Identify unique base keys (e.g., "pl1", "mgt1")
+    all_keys = output_dict.keys()
+    base_instances = sorted(list(set(
+        k.replace("_prop", "") for k in all_keys 
+        if k not in ["sys", "Conditions"] and "_prop" in k or not k.endswith("_prop")
+    )))
+
+    # Narrow down to specific phase instances
+    for orig_instance in base_instances:
+        if orig_instance in ["sys", "Conditions"]:
+            continue
+            
+        # Extract prefix (letters) and suffix (numbers)
+        match = re.match(r"([a-zA-Z\-]+)([0-9]*)", orig_instance)
+        if match:
+            prefix, suffix = match.groups()
+            
+            if prefix in reverse_lookup:
+                target_group = reverse_lookup[prefix]
+                
+                # Increment counter
+                group_counters[target_group] = group_counters.get(target_group, 0) + 1
+                new_instance = f"{target_group}{group_counters[target_group]}"
+                rename_map[orig_instance] = new_instance
+            else:
+                rename_map[orig_instance] = orig_instance
+
+    # 4. Construct the final dictionary
+    for old_key, value in output_dict.items():
+        if old_key in ["sys", "Conditions"]:
+            new_dict[old_key] = value
+            continue
+
+        is_prop = "_prop" in old_key
+        base = old_key.replace("_prop", "")
+        
+        if base in rename_map:
+            new_key = f"{rename_map[base]}_prop" if is_prop else rename_map[base]
+            new_dict[new_key] = value
+        else:
+            new_dict[old_key] = value
+
+    return new_dict

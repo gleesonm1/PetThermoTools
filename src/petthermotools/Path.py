@@ -13,6 +13,7 @@ import sys
 from tqdm.notebook import tqdm, trange
 from pathlib import Path
 from queue import Empty
+import os
 
 try:
     shell = get_ipython().__class__.__name__
@@ -692,13 +693,14 @@ def path_multi(q, index, *, Model = None, comp = None, Frac_solid = None, Frac_f
         elif Model == "MELTSv1.2.0":
             melts = MELTSdynamic(4)
     else:
+        # os.environ["JULIA_PROJECT"] = os.path.expanduser("~/.petthermotools_julia_env")
         from juliacall import Main as jl
         env_dir = Path.home() / ".petthermotools_julia_env"
         jl_env_path = env_dir.as_posix()
 
         jl.seval(f"""
             import Pkg
-            Pkg.activate("{jl_env_path}")
+            Pkg.activate(expanduser("{jl_env_path}"))
             """)
 
         jl.seval("using MAGEMinCalc")

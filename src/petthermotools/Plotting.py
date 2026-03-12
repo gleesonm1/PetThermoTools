@@ -911,7 +911,7 @@ def plot_phaseDiagram_multi(Combined_data, P_units="bar", T_units="C", colormap=
             
             if active:
                 # 2. Standardize 'Plag' to 'Fsp'
-                active = ['Fsp' if x == 'Plag' else x for x in active]
+                active = ['Fsp' if x == 'Plag10' else x for x in active]
                 
                 # 3. Remove duplicates (in case both Plag and Fsp were recorded)
                 # and join to a string for sorting

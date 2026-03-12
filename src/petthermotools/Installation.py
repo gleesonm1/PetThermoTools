@@ -196,14 +196,14 @@ def install_MAGEMinCalc():
             
         # Install MAGEMinCalc and dependencies
         try
-            Pkg.add(url="https://github.com/gleesonm1/MAGEMinCalc.git", rev="v0.5.2")
+            Pkg.add(url="https://github.com/gleesonm1/MAGEMinCalc.git", rev="v0.5.4")
         catch e
             @warn "Failed to install MAGEMinCalc via HTTPS, retrying..." exception=e
             ENV["JULIA_SSL_CA_ROOTS_PATH"] = ""
-            Pkg.add(url="https://github.com/gleesonm1/MAGEMinCalc.git", rev="v0.5.2")
+            Pkg.add(url="https://github.com/gleesonm1/MAGEMinCalc.git", rev="v0.5.4")
         end
             
-        Pkg.add(name = "MAGEMin_C", version="2.1.0")
+        Pkg.add(name = "MAGEMin_C", version="2.1.5")
             
         Pkg.resolve()   
         Pkg.precompile()
@@ -273,14 +273,14 @@ def update_MAGEMinCalc():
 
         # Install MAGEMinCalc and dependencies
         try
-            Pkg.add(url="https://github.com/gleesonm1/MAGEMinCalc.git", rev="v0.5.2")
+            Pkg.add(url="https://github.com/gleesonm1/MAGEMinCalc.git", rev="v0.5.4")
         catch e
             @warn "Failed to install MAGEMinCalc via HTTPS, retrying..." exception=e
             ENV["JULIA_SSL_CA_ROOTS_PATH"] = ""
-            Pkg.add(url="https://github.com/gleesonm1/MAGEMinCalc.git", rev="v0.5.2")
+            Pkg.add(url="https://github.com/gleesonm1/MAGEMinCalc.git", rev="v0.5.4")
         end
              
-        Pkg.add(name = "MAGEMin_C", version="2.1.0")
+        Pkg.add(name = "MAGEMin_C", version="2.1.5")
              
         Pkg.resolve()   
         Pkg.precompile()

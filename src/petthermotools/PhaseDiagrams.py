@@ -332,7 +332,11 @@ def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar
                     Res, index = qs[i]
                     Results['index = ' + str(index)] = Res
 
-            Results = stich(Results, multi = True, Model = Model)
+            new_results = {}
+            for key in Results.keys():
+                new_results[key] = merge_sequential_phases(Results[key])
+
+            Results = stich(new_results, multi = True, Model = Model)
         else:
             Results = {}
             for p, q, idx in ps:
@@ -484,7 +488,7 @@ def phaseDiagram_refine(Data = None, Model = None, bulk = None, Fe3Fet_Liq = Non
 
     # extract the phase information from the current dataframe
     def combine_headers(row):
-        return ','.join([col[5:] for col in Combined.loc[:, Combined.columns.str.contains('mass_g')].columns if row[col] > 0.0 and not pd.isna(row[col])])
+        return ','.join([col[5:] for col in Combined.loc[:, Combined.columns.str.contains('mass_g_')].columns if row[col] > 0.0 and not pd.isna(row[col])])
 
     # Apply the function to each row
     Combined['PhaseResults'] = Combined.apply(combine_headers, axis=1).tolist()
@@ -603,6 +607,8 @@ def phaseDiagram_refine(Data = None, Model = None, bulk = None, Fe3Fet_Liq = Non
     T_C = np.array(T_C)
     P_bar = np.array(P_bar)
 
+    print(f"Performing another {len(T_C)} calculations with interpolation used to calculate {len(matching_df) - len(Data)} points.")
+
     if "MELTS" in Model:
         idx_add = np.where(matching_df['H_J'] == 0.0)[0]
 
@@ -613,7 +619,10 @@ def phaseDiagram_refine(Data = None, Model = None, bulk = None, Fe3Fet_Liq = Non
         matching_df = matching_df.reset_index(drop = True)
 
     New = phaseDiagram_calc(cores = cores,
-                            Model = Model, bulk = bulk, T_C = T_C, P_bar = P_bar, Fe3Fet_init = Fe3Fet_Liq, H2O_init = H2O_Liq, CO2_init = CO2_Liq, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, i_max = i_max, grid = False)
+                            Model = Model, bulk = bulk, T_C = T_C, P_bar = P_bar, 
+                            Fe3Fet_init = Fe3Fet_Liq, H2O_init = H2O_Liq, CO2_init = CO2_Liq, 
+                            fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, i_max = i_max, grid = False)
+    
 
     # A = New.values
     # B = matching_df.values

@@ -4,6 +4,11 @@ Change Log
 
 Version 0.3.22 (March 2026)
 ====================================
+Update to MAGEMinCalc. Please run ptt.update_MAGEMinCalc()
+Fix to minor bug with equilibrium crystallization calcs in MAGEMinCalc.
+
+Version 0.3.22 (March 2026)
+====================================
 Major update to the way path calculations are computed, allowing the results of partial calculations to be returned. Influences phase diagram and barometry calculations as well. 
 Should also lead to a small speed improvement due to a move away from Pandas
 Code compatible with Pandas v3.
