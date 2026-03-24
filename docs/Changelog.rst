@@ -2,6 +2,12 @@
 Change Log
 ================================================
 
+Version 0.4.0 (March 2026)
+====================================
+Major update to MAGEMinCalc. Please run ptt.update_MAGEMinCalc().
+Change to how calculations in MAGEMin are called. 
+Ability to specify a starting temperature (rather than a potential temperatue for melting calculations).
+
 Version 0.3.22 (March 2026)
 ====================================
 Update to MAGEMinCalc. Please run ptt.update_MAGEMinCalc()

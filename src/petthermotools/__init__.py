@@ -33,6 +33,8 @@ try:
 except (ImportError, ModuleNotFoundError) as e:
     warnings.warn(f"Failed to import MELTSdynamic: {e}. \nUse `import sys; sys.path.append(r'path_to_alphaMELTS_4_python')` to add the alphaMELTS for Python files to the Python path.")
 
+print("If using the Green et al. (2025) or Weller et al. (2024) thermodynamic models please run `ptt.activate_petthermotools_env()` prior to any calculations.")
+
 # test installation script
 from petthermotools.Installation import *
 # General functions that are used to assess core numbers

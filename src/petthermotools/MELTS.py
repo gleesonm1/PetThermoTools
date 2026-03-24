@@ -1737,17 +1737,18 @@ def findSatPressure_MELTS(Model = None, T_C_init = None, T_fixed_C = None, P_bar
     else:
         return out
 
-def AdiabaticDecompressionMelting_MELTS(Model = None, comp = None, Tp_C = None, Tp_Method = None,
+def AdiabaticDecompressionMelting_MELTS(Model = None, comp = None, Tp_C = None, Tp_Method = None, T_start_C = None,
                                         P_path_bar = None, P_start_bar = None, P_end_bar = None, dp_bar = None, 
                                         Frac = False, fO2_buffer = None, fO2_offset = None):
-    try:
-        import pyMelt as m     
-        Lithologies = {'KLB-1': m.lithologies.matthews.klb1(),
-                    'KG1': m.lithologies.matthews.kg1(),
-                    'G2': m.lithologies.matthews.eclogite(),
-                    'hz': m.lithologies.shorttle.harzburgite()}
-    except ImportError:
-        raise RuntimeError('You havent installed pyMelt or there is an error when importing pyMelt. pyMelt is currently required to estimate the starting point for the melting calculations.')
+    if T_start_C is None:
+        try:
+            import pyMelt as m     
+            Lithologies = {'KLB-1': m.lithologies.matthews.klb1(),
+                        'KG1': m.lithologies.matthews.kg1(),
+                        'G2': m.lithologies.matthews.eclogite(),
+                        'hz': m.lithologies.shorttle.harzburgite()}
+        except ImportError:
+            raise RuntimeError('You havent installed pyMelt or there is an error when importing pyMelt. pyMelt is currently required to estimate the starting point for the melting calculations.')
 
     Results = {}
 
@@ -1771,12 +1772,14 @@ def AdiabaticDecompressionMelting_MELTS(Model = None, comp = None, Tp_C = None, 
     melts.engine.setSystemProperties("Suppress", "rutile")
     melts.engine.setSystemProperties("Suppress", "tridymite")
     
-    lz = m.lithologies.matthews.klb1()
-    mantle = m.mantle([lz], [1], ['Lz'])
-    if P_start_bar is not None:
-        T_start_C = mantle.adiabat(P_start_bar/10000, Tp_C)
-    else:
-        T_start_C = mantle.adiabat(P_path_bar[0]/10000, Tp_C)
+    
+    if T_start_C is None:
+        lz = m.lithologies.matthews.klb1()
+        mantle = m.mantle([lz], [1], ['Lz'])
+        if P_start_bar is not None:
+            T_start_C = mantle.adiabat(P_start_bar/10000, Tp_C)
+        else:
+            T_start_C = mantle.adiabat(P_path_bar[0]/10000, Tp_C)
 
     bulk = [comp['SiO2_Liq'], comp['TiO2_Liq'], comp['Al2O3_Liq'], comp['Fe3Fet_Liq']*((159.59/2)/71.844)*comp['FeOt_Liq'], comp['Cr2O3_Liq'], (1- comp['Fe3Fet_Liq'])*comp['FeOt_Liq'], comp['MnO_Liq'], comp['MgO_Liq'], 0.0, 0.0, comp['CaO_Liq'], comp['Na2O_Liq'], comp['K2O_Liq'], comp['P2O5_Liq'], comp['H2O_Liq'], comp['CO2_Liq'], 0.0, 0.0, 0.0]
     bulk = list(100*np.array(bulk)/np.sum(bulk))

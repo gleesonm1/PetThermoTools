@@ -11,64 +11,6 @@ import platform
 from petthermotools.Path_wrappers import *
 from petthermotools.Compositions import *
 
-# def warn_if_incompatible_julia():
-#     import platform, subprocess, shutil, warnings
-
-#     def normalize_arch(arch):
-#         if arch in ("x86_64", "amd64"):
-#             return "x86_64"
-#         if arch in ("arm64", "aarch64"):
-#             return "arm64"
-#         return arch
-
-#     julia = shutil.which("julia")
-#     if julia is None:
-#         import juliapkg
-#         py_julia = juliapkg.executable()
-#         try:
-#             jl_arch = subprocess.check_output(
-#                 [py_julia, "-e", "print(Sys.ARCH)"],
-#                 text=True,
-#                 stderr=subprocess.DEVNULL,
-#             ).strip().lower().replace("-", "_")
-#         except Exception:
-#             return
-#         # No system Julia → juliacall will auto-install
-#         return
-#     else:
-#         try:
-#             jl_arch = subprocess.check_output(
-#                 [julia, "-e", "print(Sys.ARCH)"],
-#                 text=True,
-#                 stderr=subprocess.DEVNULL,
-#             ).strip().lower().replace("-","_")
-#         except Exception:
-#             return
-
-#     py_arch = platform.machine().lower()
-
-#     py_arch_n = normalize_arch(py_arch)
-#     jl_arch_n = normalize_arch(jl_arch)
-
-#     if py_arch_n != jl_arch_n:
-#         warnings.simplefilter(
-#             f"Incompatible Julia installation detected.\n"
-#             f" Python architecture: {py_arch} ({py_arch_n})\n"
-#             f" Julia architecture:  {jl_arch} ({jl_arch_n})\n\n"
-#             f"juliacall may crash with a bus error.\n"
-#             f"Consider uninstalling Julia or contact me (screenshot this message).\n"
-#             f"To fix this:\n"
-#             f"1. Install a compatible Julia version (1.10.x or 1.11.x) matching your Python architecture.\n"
-#             f"   - Recommended: Use the official Julia installer from https://julialang.org/downloads/\n"
-#             f"   - Or on macOS/Linux, use juliaup: https://github.com/JuliaLang/juliaup\n\n"
-#             f"2. Ensure this version is the primary Julia that juliacall will find:\n"
-#             f"   - Make sure `julia` is on your PATH points to the compatible installation.\n"
-#             f"   - On macOS/Linux, check with `which julia`.\n"
-#             f"   - On Windows, make sure the executable is in PATH or set the JULIA_EXE environment variable.\n\n"
-#             f"After installing a compatible Julia, restart your Python session and re-run install_MAGEMinCalc().",
-#             RuntimeWarning,
-#         )
-
 def install_MAGEMinCalc_VICTOR():
     '''
     Specialized installer for VICTOR. 
@@ -196,11 +138,11 @@ def install_MAGEMinCalc():
             
         # Install MAGEMinCalc and dependencies
         try
-            Pkg.add(url="https://github.com/gleesonm1/MAGEMinCalc.git", rev="v0.5.4")
+            Pkg.add(url="https://github.com/gleesonm1/MAGEMinCalc.git", rev="v0.6.0")
         catch e
             @warn "Failed to install MAGEMinCalc via HTTPS, retrying..." exception=e
             ENV["JULIA_SSL_CA_ROOTS_PATH"] = ""
-            Pkg.add(url="https://github.com/gleesonm1/MAGEMinCalc.git", rev="v0.5.4")
+            Pkg.add(url="https://github.com/gleesonm1/MAGEMinCalc.git", rev="v0.6.0")
         end
             
         Pkg.add(name = "MAGEMin_C", version="2.1.5")
@@ -210,49 +152,6 @@ def install_MAGEMinCalc():
             
         println("MAGEMin environment ready at {jl_env_path}")
         """)
-#     except:
-#         print("""Standard installation failed. 
-#               Now checking if you have a pre-existing Julia installation that is inconsistent with MAGEMinCalc through Python.""")
-        
-#         import subprocess
-
-#         system = platform.system()
-#         # platform.machine() tells us what Python is running as
-#         python_arch = platform.machine().lower() 
-#         is_python_arm = "arm" in python_arch or "aarch64" in python_arch
-
-#         if system == "Darwin":
-#             try:
-#                 # Find which julia the system is trying to use
-#                 julia_path = subprocess.check_output(["which", "julia"]).decode().strip()
-                
-#                 # Query that specific julia for its architecture
-#                 julia_arch = subprocess.check_output(
-#                     [julia_path, "-e", 'using Libc; println(Sys.ARCH)'],
-#                     env=os.environ
-#                 ).decode().strip().lower()
-
-#                 # Check for the fatal mismatch: Python is ARM, but Julia is Intel
-#                 if is_python_arm and ("x86_64" in julia_arch or "i386" in julia_arch):
-#                     print(f"""
-# [!] ARCHITECTURE MISMATCH DETECTED
-# Your Python is running natively on Apple Silicon ({python_arch}), 
-# but your Julia installation is the Intel version ({julia_arch}). 
-# These cannot communicate.
-
-# To fix this:
-# 1. Uninstall your current Julia.
-# 2. Install the native ARM version using JuliaUp:
-#    curl -fsSL https://install.julialang.org | sh
-# 3. Restart your terminal and run this installer again.
-#                     """)
-#                 else:
-#                     print(f"Detected {system} with {julia_arch} Julia. Mismatch does not appear to be the cause.")
-#                     print("Please check for internet connectivity or VPN issues affecting GitHub access.")
-
-#             except subprocess.CalledProcessError:
-#                 print("Could not find a working Julia executable in your PATH.")
-#                 print("Please test the `test_MAGEMinCalc()` function. If does doesn't return any results contact me (gleesonm@berkeley.edu).")
 
 def update_MAGEMinCalc():
     '''
@@ -273,11 +172,11 @@ def update_MAGEMinCalc():
 
         # Install MAGEMinCalc and dependencies
         try
-            Pkg.add(url="https://github.com/gleesonm1/MAGEMinCalc.git", rev="v0.5.4")
+            Pkg.add(url="https://github.com/gleesonm1/MAGEMinCalc.git", rev="v0.6.0")
         catch e
             @warn "Failed to install MAGEMinCalc via HTTPS, retrying..." exception=e
             ENV["JULIA_SSL_CA_ROOTS_PATH"] = ""
-            Pkg.add(url="https://github.com/gleesonm1/MAGEMinCalc.git", rev="v0.5.4")
+            Pkg.add(url="https://github.com/gleesonm1/MAGEMinCalc.git", rev="v0.6.0")
         end
              
         Pkg.add(name = "MAGEMin_C", version="2.1.5")
@@ -305,7 +204,7 @@ def test_MAGEMinCalc():
                     "FeOt_Liq" => 9.16, "K2O_Liq" => 0.329, "Na2O_Liq" => 2.25, "TiO2_Liq" => 2.29, 
                     "Fe3Fet_Liq" => 0.15, "Cr2O3_Liq" => 0.0, "H2O_Liq" => 0.68)
 
-        Results = MAGEMinCalc.path(comp = comp, T_end_C = 1100.0, dt_C = 2.0, 
+        Results = MAGEMinCalc.path(comp = comp, T_end_C = 1150.0, dt_C = 2.0, 
                     P_bar = 1000.0, frac_xtal = true, 
                     Model = "ig",
                     find_liquidus = true)
@@ -314,15 +213,16 @@ def test_MAGEMinCalc():
 
     """)
 
-def install_alphaMELTS(file_location=None, admin=True, version="2.3.1"):
+def install_alphaMELTS(file_location=None, admin=True, version="2.3.1", system = None):
     try:
         from meltsdynamic import meltsdynamic
         print(f'alphaMELTS already installed and available.')
         return
     except ImportError:
         pass
-
-    system = platform.system()
+    
+    if system is None:
+        system = platform.system()
     machine = platform.machine().lower()
     is_arm = any(arch in machine for arch in ["arm", "aarch"])
     
@@ -401,204 +301,6 @@ def install_alphaMELTS(file_location=None, admin=True, version="2.3.1"):
 
     return
 
-# def install_alphaMELTS(file_location = None, admin = True, version = "2.3.1"):
-#     '''
-#     Downloads, extracts, and optionally adds the platform-specific alphaMELTS for Python files
-#     (meltsdynamic.py) to the Python path.
-
-#     Args:
-#         file_location (str, optional): Directory to download and extract the files.
-#             If None (default), uses the current working directory.
-#         admin (bool, optional): If True (default), attempts to permanently add the files to the 
-#             Python path using a .pth file (requires admin/root privileges).
-#             If False, you must manually append the path in your code (at the start of each notebook using petthermotools).
-#         version (str, optional): The alphaMELTS version to download (e.g., "2.3.1").
-#             Default is "2.3.1".
-    
-#     Returns:
-#         None. Prints status messages regarding download, extraction, and path configuration.
-#     '''
-#     try:
-#         from meltsdynamic import meltsdynamic
-#         print('alphaMELTS already installed and added to Python path')
-#         return
-#     except:
-#         system = platform.system()
-#         machine = platform.machine().lower()
-#         # version = "2.3.1"
-
-#         if version == "2.3.2":
-#             base_url = f"https://github.com/magmasource/alphaMELTS/releases/download/v{version}-beta.0"
-#             # macOS
-#             if system == "Darwin":
-#                 if "arm" in machine:  # Apple Silicon
-#                     url = f"{base_url}/alphamelts-py-{version}-macosx_14_0-arm64.zip"
-#                 else:  # Intel Mac
-#                     url = f"{base_url}/alphamelts-py-{version}-macosx_14_0-x86_64.zip"
-#             elif system == "Windows":
-#                 if "aarch" in machine:
-#                     url = f"{base_url}/alphamelts-py-{version}-win64-aarch64.zip"
-#                 else:
-#                     url = f"{base_url}/alphamelts-py-{version}-win64-x86_64.zip"
-#             elif system == "Linux":
-#                 if "aarch" in machine:
-#                     url = f"{base_url}/alphamelts-py-{version}-ubuntu_22_04-aarch64.zip"
-#                 else:
-#                     url = f"{base_url}/alphamelts-py-{version}-ubuntu_22_04-x86_64.zip"
-#             else:
-#                 raise OSError(f"Unsupported system: {system}")
-#         else:
-#             base_url = f"https://github.com/magmasource/alphaMELTS/releases/download/v{version}"
-
-#             # macOS
-#             if system == "Darwin":
-#                 if "arm" in machine:  # Apple Silicon
-#                     url = f"{base_url}/alphamelts-py-{version}-macos-arm64.zip"
-#                 else:  # Intel Mac
-#                     url = f"{base_url}/alphamelts-py-{version}-macos-x86_64.zip"
-
-#             # Windows
-#             elif system == "Windows":
-#                 url = f"{base_url}/alphamelts-py-{version}-win64.zip"
-
-#             # Linux (default fallback)
-#             elif system == "Linux":
-#                 url = f"{base_url}/alphamelts-py-{version}-linux.zip"
-
-#             else:
-#                 raise OSError(f"Unsupported system: {system}")
-        
-#         # if chip == "Apple":
-#         #     url = "https://github.com/magmasource/alphaMELTS/releases/download/v2.3.1/alphamelts-py-2.3.1-macos-arm64.zip"
-#         # elif chip == "Intel4Mac":
-#         #     url = "https://github.com/magmasource/alphaMELTS/releases/download/v2.3.1/alphamelts-py-2.3.1-macos-x86_64.zip"
-#         # elif chip == "Windows":
-#         #     url = "https://github.com/magmasource/alphaMELTS/releases/download/v2.3.1/alphamelts-py-2.3.1-win64.zip"
-#         # else:
-#         #     url = "https://github.com/magmasource/alphaMELTS/releases/download/v2.3.1/alphamelts-py-2.3.1-linux.zip"
-
-#         # Path to save the file
-#         if file_location is None:
-#             if system == "Darwin":
-#                 if "arm" in machine:
-#                     zip_path = "alphamelts-py-2.3.1-macos-arm64.zip"
-#                 else:
-#                     zip_path = "alphamelts-py-2.3.1-macos-x86_64.zip"
-#             elif system == "Windows":
-#                 zip_path = "alphamelts-py-2.3.1-win64.zip"
-#             elif system == "Linux":
-#                 zip_path = "alphamelts-py-2.3.1-linux.zip"
-#             else:
-#                 raise OSError(f"Unsupporte system: {system}")
-#         else:
-#             if system == "Darwin":
-#                 if "arm" in machine:
-#                     zip_path = file_location + "alphamelts-py-2.3.1-macos-arm64.zip"
-#                 else:
-#                     zip_path = file_location + "alphamelts-py-2.3.1-macos-x86_64.zip"
-#             elif system == "Windows":
-#                 zip_path = file_location + "alphamelts-py-2.3.1-win64.zip"
-#             elif system == "Linux":
-#                 zip_path = file_location + "alphamelts-py-2.3.1-linux.zip"
-#             else:
-#                 raise OSError(f"Unsupported system: {system}")
-
-
-#         # Download the file with error handling
-#         try:
-#             urllib.request.urlretrieve(url, zip_path)
-#         except Exception as e:
-#             print(f"Error downloading file: {e}. Please contact Matt Gleeson (gleesonm@berkeley.edu) if this error persists.")
-#             sys.exit(1)
-#             return
-
-#         # Path to extract the contents
-#         if file_location is None:
-#             extract_path = "alphamelts_py"
-#         else:
-#             extract_path = file_location + "alphamelts_py"
-
-#         # Extract the zip file with error handling
-#         try:
-#             with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-#                 zip_ref.extractall(extract_path)
-#         except zipfile.BadZipFile as e:
-#             print(f"Error extracting zip file: {e}")
-#             sys.exit(1)
-#             return
-        
-#         if admin is True:
-#             # Add the extracted directory to the Python path
-#             if file_location is None:
-#                 sys.path.append(os.path.join(extract_path, zip_path[:-4]))
-#             else:
-#                 if system == "Darwin":
-#                     if "arm" in machine:
-#                         sys.path.append(os.path.join(extract_path,"alphamelts-py-2.3.1-macos-arm64"))
-#                     else:
-#                         sys.path.append(os.path.join(extract_path,"alphamelts-py-2.3.1-macos-x86_64"))
-#                 elif system == "Windows":
-#                     sys.path.append(os.path.join(extract_path,"alphamelts-py-2.3.1-win64"))
-#                 elif system == "Linux":
-#                     sys.path.append(os.path.join(extract_path,"alphamelts-py-2.3.1-linux"))
-#                 else:
-#                     raise OSError(f"Unsupported system: {system}")
-
-#             try:
-#                 import meltsdynamic
-#                 importlib.reload(meltsdynamic)
-#                 from meltsdynamic import MELTSdynamic
-#                 print('Download and Extraction of alphaMELTS for Python files is successful.')
-#             except:
-#                 print('Error: alphaMELTS for Python not installed correctly.')
-#                 return
-            
-#             # get current working directory
-#             cwd = os.getcwd()
-
-#             # Get site-packages path
-#             site_packages_path = sysconfig.get_paths()["purelib"]
-
-#             # Define pth file path and custom path
-#             pth_file_path = os.path.join(site_packages_path, "my_MELTS_path.pth")
-#             if file_location is None:
-#                 custom_path = os.path.join(cwd, extract_path, zip_path[:-4])
-#             else:
-#                 custom_path = os.path.join(zip_path[:-4])
-
-#             # Normalize paths before writing
-#             custom_path = os.path.normpath(custom_path)
-
-#             # Write to the .pth file with error handling
-#             try:
-#                 with open(pth_file_path, "w") as f:
-#                     f.write(custom_path)
-#             except Exception as e:
-#                 print(f"Error writing to .pth file: {e}")
-#                 if file_location is None:
-#                     custom_path = os.path.join(os.getcwd(), extract_path, zip_path[:-4])
-#                 else:
-#                     custom_path = os.path.join(zip_path[:-4])
-#                 print(f"""The download of the alphaMELTS for Python files was successful, but these were not added to the Python path (likely due to \n absence of administrator privaledges.
-#                     The alphaMELTS for Python files are located at 
-#                     {custom_path}.
-#                     At the start of each notebook using PetThermoTools please add the following lines of code to add these files to the Python path:
-#                     import sys
-#                     sys.path.append(r"{custom_path}") """)
-#                 sys.exit(1)
-#         else:
-#             if file_location is None:
-#                 custom_path = os.path.join(os.getcwd(), extract_path, zip_path[:-4])
-#             else:
-#                 custom_path = os.path.join(zip_path[:-4])
-#             print(f"""alphaMELTS for Python files have been downloaded and are located at 
-#                   {custom_path}.
-#                   At the start of each notebook using PetThermoTools please add the following lines of code to add these files to the Python path:
-#                   import sys
-#                   sys.path.append(r"{custom_path}") """)
-
-#         return
-
 
 def remove_alphaMELTS_path():
     '''
@@ -637,7 +339,7 @@ def remove_alphaMELTS_path():
     if fail:
         print(f"Unable to locate {pth_file_path}")
 
-def update_alphaMELTS_path(file_location = None, admin = True, version = "2.3.1"):
+def update_alphaMELTS_path(file_location = None, admin = True, version = "2.3.1", system = None):
     '''
     Updates the installed alphaMELTS for Python files by removing the old path configuration
     and installing a new version.
@@ -659,7 +361,7 @@ def update_alphaMELTS_path(file_location = None, admin = True, version = "2.3.1"
     if admin:
         remove_alphaMELTS_path()
 
-    install_alphaMELTS(file_location = file_location, admin = admin, version = version)
+    install_alphaMELTS(file_location = file_location, admin = admin, version = version, system = system)
 
 def test_alphaMELTS(path = None):
     '''

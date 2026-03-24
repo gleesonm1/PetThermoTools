@@ -14,6 +14,7 @@ from multiprocessing import Process
 from tqdm.notebook import tqdm, trange
 from pathlib import Path
 import time
+import warnings
 
 def supCalc(Model = "MELTSv1.0.2", bulk = None, phase = None, T_C = None, P_bar = None,
              Fe3Fet_Liq = None, H2O_Liq = None, CO2_Liq = None, fO2_buffer = None, fO2_offset = None, 
@@ -172,7 +173,7 @@ def equilibrate_multi(cores = multiprocessing.cpu_count(), Model = "MELTSv1.0.2"
 
     if type(comp) == dict:
         if comp['H2O_Liq'] == 0.0 and "MELTS" in Model:
-            raise Warning("Adding small amounts of H2O may improve the ability of MELTS to accurately reproduce the saturation of oxide minerals. Additionally, sufficient H2O is required in the model for MELTS to predict the crystallisation of apatite, rather than whitlockite.")
+            warnings.warn("If not performing subsolidus or melting calculations adding small amounts of H2O may improve the ability of MELTS to accurately reproduce the saturation of oxide minerals. Additionally, sufficient H2O is required in the model for MELTS to predict the crystallisation of apatite, rather than whitlockite.")
 
         if comp['Fe3Fet_Liq'] == 0.0 and "MELTS" in Model and fO2_buffer is None:
             raise Warning("MELTS often fails to produce any results when no ferric Fe is included in the starting composition and an fO2 buffer is not set.")
@@ -684,17 +685,17 @@ def equilibrate_multi(cores = multiprocessing.cpu_count(), Model = "MELTSv1.0.2"
         # Output['Affinity'] = Af_Combined
         # return Combined
     else:
-        _ensure_julia_ready()
+        # _ensure_julia_ready()
         from juliacall import Main as jl, convert as jlconvert
-        env_dir = Path.home() / ".petthermotools_julia_env"
-        jl_env_path = env_dir.as_posix()
+        # env_dir = Path.home() / ".petthermotools_julia_env"
+        # jl_env_path = env_dir.as_posix()
 
-        jl.seval(f"""
-            import Pkg
-            Pkg.activate("{jl_env_path}")
-            """)
+        # jl.seval(f"""
+        #     import Pkg
+        #     Pkg.activate("{jl_env_path}")
+        #     """)
 
-        jl.seval("using MAGEMinCalc")
+        # jl.seval("using MAGEMinCalc")
 
         comp['O'] = comp['Fe3Fet_Liq']*(((159.59/2)/71.844)*comp['FeOt_Liq'] - comp['FeOt_Liq'])
 

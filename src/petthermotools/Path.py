@@ -154,7 +154,12 @@ def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid 
     if len(l) > 1:
         if len(set(l))>1:
             raise ValueError("Error: non-identical length in provided conditions. \nPlease check lists or arrays are the same length and/or specify single values.")
-        
+    
+    if len(l) == 0:
+        ln = 1
+    else:
+        ln = l[0]
+
     # check label is allowed
     if label is not None:
         if label not in ["CO2", "CO2_init", "pressure", "P", "P_bar", "P_start_bar", "fO2", "fO2_offset", "H2O", "H2O_init", "Fe3Fet", "Fe3Fet_init"]:
@@ -227,317 +232,158 @@ def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid 
     if "MELTS" not in Model:
         cores = memory_limit(cores = cores)
 
-    # specify the number of calculations to be performed in each sequence
-    One = 0
-    if type(comp) == pd.core.frame.DataFrame: # simplest scenario - one calculation per bulk composition imported
-        A = len(comp['SiO2_Liq'])//cores
-        B = len(comp['SiO2_Liq'])%cores
-    else:
-        if P_bar is not None and type(P_bar) == np.ndarray: #one calculation per P loaded
-            A = len(P_bar)//cores
-            B = len(P_bar)%cores
-        elif T_C is not None and type(T_C) == np.ndarray: # one calculation per T loaded.
-            A = len(T_C)//cores
-            B = len(T_C)%cores
-        elif P_start_bar is not None and type(P_start_bar) == np.ndarray: # one calculation per starting P
-            A = len(P_start_bar)//cores
-            B = len(P_start_bar)%cores
-        elif T_start_C is not None and type(T_start_C) == np.ndarray: # one calculation per starting T
-            A = len(T_start_C)//cores
-            B = len(T_start_C)%cores
-        elif P_path_bar is not None and len(np.shape(P_path_bar)) > 1: # one calculation per P path
-            A = np.shape(P_path_bar)[0]//cores
-            B = np.shape(P_path_bar)[0]%cores
-        elif T_path_C is not None and len(np.shape(T_path_C)) > 1: # one calculation per T path
-            A = np.shape(T_path_C)[0]//cores
-            B = np.shape(T_path_C)[0]%cores
-        elif fO2_offset is not None and type(fO2_offset) == np.ndarray: # one calculation per offset
-            A = len(fO2_offset)//cores
-            B = len(fO2_offset)%cores
+    if "MELTS" not in Model:
+        if ln > 1:
+            P_bar, T_C, P_start_bar, T_start_C, P_end_bar, T_end_C, dp_bar, dt_C, P_path_bar, T_path_C, fO2_offset = control_path_parameters(ln, P_bar, T_C, P_start_bar, T_start_C, P_end_bar, T_end_C, dp_bar, dt_C, P_path_bar, T_path_C, fO2_offset)
 
-        else: # just one calculation
-            One = 1
-            A = 1
-            B = 0
+        from juliacall import Main as jl 
+        julia_Suppress = None                
+        if Suppress == ['rutile', 'tridymite']:
+            Suppress = None
+            julia_Suppress = None
 
-    Group = np.zeros(A) + cores
-    if B > 0:
-        Group = np.append(Group, B)
+        if Suppress is not None:
+            jl.Suppress = Suppress
+            jl.seval("Suppress = Vector{String}(Suppress)")
+            julia_Suppress = jl.Suppress
+        args = {
+            "Model": Model,
+            "comp": jl.seval("Dict")(comp),
+            "Frac_solid": Frac_solid,
+            "Frac_fluid": Frac_fluid,
 
-    qs = []
-    q = Queue()
-    
-    # perform calculation if only 1 calculation is specified
-    if One == 1:
-        Results = {}
-        if Print_suppress is None:
-            print("Running " + Model + " calculation...", end = "", flush = True)
-            s = time.time()
+            "T_C": T_C,
+            "T_path_C": T_path_C,
+            "T_start_C": T_start_C,
+            "T_end_C": T_end_C,
+            "dt_C": dt_C,
+            "find_liquidus": find_liquidus,
 
-        if multi_processing:
-            p = Process(target = path, args = (q, 1),
-                        kwargs = {'Model': Model, 'comp': comp, 'Frac_solid': Frac_solid, 'Frac_fluid': Frac_fluid,
-                                'T_C': T_C, 'T_path_C': T_path_C, 'T_start_C': T_start_C, 'T_end_C': T_end_C, 'dt_C': dt_C,
-                                'P_bar': P_bar, 'P_path_bar': P_path_bar, 'P_start_bar': P_start_bar, 'P_end_bar': P_end_bar, 'dp_bar': dp_bar,
-                                'isenthalpic': isenthalpic, 'isentropic': isentropic, 'isochoric': isochoric, 'find_liquidus': find_liquidus,
-                                'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset, 'fluid_sat': fluid_sat, 'Crystallinity_limit': Crystallinity_limit,
-                                'Suppress': Suppress, 'Suppress_except': Suppress_except})
+            "P_bar": P_bar,
+            "P_path_bar": P_path_bar,
+            "P_start_bar": P_start_bar,
+            "P_end_bar": P_end_bar,
+            "dp_bar": dp_bar,
 
-            p.start()
+            "fO2_buffer": fO2_buffer,
+            "fO2_offset": fO2_offset,
 
-            start = time.time()
-            if "MELTS" in Model:
-                # drain queue while waiting for calculation to finish
-                while True:
-                    try:
-                        item = q.get(timeout=0.1)
+            "isenthalpic": isenthalpic,
+            "isentropic": isentropic,
+            "isochoric": isochoric,
 
-                        run_index, step_i, data = item
-                        Results[step_i] = data
+            "fluid_sat": fluid_sat,
+            "Crystallinity_limit": Crystallinity_limit,
+            "length": ln,
 
-                    except Empty:
-                        time.sleep(0.001)
-                        pass
-
-                    # Timeout condition
-                    if time.time() - start > timeout_main:
-                        print("Timeout — terminating process")
-                        p.terminate()
-                        break
-
-                # If process finished and queue empty → break
-                    if not p.is_alive():
-                        try:
-                            # Drain remaining items
-                            while True:
-                                item = q.get_nowait()
-                                run_index, step_i, data = item
-                                Results[step_i] = data
-                        except Empty:
-                            time.sleep(0.001)
-                            pass
-                        break
-
-                p.join()
-
-                if Results:
-                    new_results = compile_results(Results)
-
-                    # stich and return results
-                    Results = stich(new_results, Model = Model, Frac_fluid = Frac_fluid, Frac_solid = Frac_solid)
-                    if Print_suppress is None:
-                        print(" Complete (time taken = " + str(round(time.time() - s,2)) + " seconds)", end = "", flush = True)
-                    return Results
-                else:
-                    print("No calculations returned")
-                    return Results
-
-            else:
-                try:
-                    ret = q.get(timeout=timeout_main)
-                except:
-                    ret = []
-
-                TIMEOUT = 5
-                start = time.time()
-                if p.is_alive():
-                    while time.time() - start <= TIMEOUT:
-                        if not p.is_alive():
-                            p.join()
-                            p.terminate()
-                            break
-                        time.sleep(.1)
-                    else:
-                        p.terminate()
-                        p.join(5)
-                else:
-                    p.join()
-                    p.terminate()
-
-                if len(ret) > 0:
-                    Results, index = ret
-                    if len(Results.keys())> 1:
-                        Results = stich(Results, Model = Model, Frac_fluid = Frac_fluid, Frac_solid = Frac_solid)
-                    return Results
-
-            if Print_suppress is None:
-                print(" Complete (time taken = " + str(round(time.time() - s,2)) + " seconds)", end = "", flush = True)
-
-            Results = stich(Results, Model = Model, Frac_fluid = Frac_fluid, Frac_solid = Frac_solid)
-
+            "timeout": timeout,
+            "suppress": julia_Suppress}
+        
+        args = jl.seval("Dict")(args)
+        Results = jl.MAGEMinCalc.multi_path_julia(args)
+        if ln == 1:
+            Results = stich(Res=Results, Model=Model, Frac_fluid = Frac_fluid, Frac_solid = Frac_solid)
             return Results
         else:
-            Results = path_MELTS(Model = Model, comp = comp, Frac_solid = Frac_solid, Frac_fluid = Frac_fluid, 
-                                     T_C = T_C, T_path_C = T_path_C, T_start_C = T_start_C, T_end_C = T_end_C, 
-                                     dt_C = dt_C, P_bar = P_bar, P_path_bar = P_path_bar, P_start_bar = P_start_bar, 
-                                     P_end_bar = P_end_bar, dp_bar = dp_bar, isenthalpic = isenthalpic, 
-                                     isentropic = isentropic, isochoric = isochoric, find_liquidus = find_liquidus, 
-                                     fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, fluid_sat = fluid_sat, 
-                                     Crystallinity_limit = Crystallinity_limit, Suppress = Suppress, Suppress_except = Suppress_except)
-            
-            if Results:
-                # identify all unique keys to set up output dataframes
-                unique_keys = set()
-                properties = {}
-
-                for step_data in Results.values():
-                    for key, value in step_data.items():
-                        if "_keys" not in key:
-                            unique_keys.add(key)
-                        else:
-                            base_key = key[:-5]
-                            if base_key not in properties:
-                                properties[base_key] = value
-                            # properties[base_key].update(value)
-
-                unique_keys = sorted(unique_keys)
-
-                sorted_steps = sorted(Results.keys())
-                n_steps = len(sorted_steps)
-
-                index_map = {step: i for i, step in enumerate(sorted_steps)}
-
-                # create new output to populate with results
-                new_results = {}
-
-                for key in unique_keys:
-                    if key == "Conditions":
-                        columns = ['temperature', 'pressure', 'h', 's', 'v', 'mass', 'dvdp', 'logfO2']
-                        new_results[key] = pd.DataFrame(index=range(n_steps), columns=columns, dtype=float)
-
-                    elif "_prop" not in key:
-                        columns = ['SiO2', 'TiO2', 'Al2O3', 'Fe2O3', 'Cr2O3', 'FeO',
-                                'MnO', 'MgO', 'CaO', 'Na2O', 'K2O',
-                                'P2O5', 'H2O', 'CO2']
-                        new_results[key] = pd.DataFrame(index=range(n_steps), columns=columns, dtype=float)
-
-                    elif "_key" not in key:
-                        columns = properties[key]
-                        new_results[key] = pd.DataFrame(index=range(n_steps), columns=columns, dtype=float)
-
-                # fill output
-                for step, step_data in Results.items():
-
-                    row_i = index_map[step]
-
-                    for key, value in step_data.items():
-
-                        if key.endswith("_keys"):
-                            continue
-
-                        if key not in new_results:
-                            continue
-                        
-                        if len(value) == len(new_results[key].iloc[row_i]):
-                            new_results[key].iloc[row_i] = value
-                        else:
-                            print(f"Size mismatch, potentially errored results on step {row_i}")
-                Results = stich(new_results, Model = Model, Frac_fluid = Frac_fluid, Frac_solid = Frac_solid)
-            return Results
-
-    else: # perform multiple crystallisation calculations
-        # first make sure everything is the right length
-        L = np.sum(Group)
-        if P_bar is None:
-            P_bar = [None] * int(L)
-        elif type(P_bar) == float or type(P_bar) == int:
-            P_bar = np.zeros(int(L)) + P_bar
-        if T_C is None:
-            T_C = [None] * int(L)
-        elif type(T_C) == float or type(T_C) == int:
-            T_C = np.zeros(int(L)) + T_C
-
-        if P_start_bar is None:
-            P_start_bar = [None] * int(L)
-        elif type(P_start_bar) == float or type(P_start_bar) == int:
-            P_start_bar = np.zeros(int(L)) + P_start_bar
-        if T_start_C is None:
-            T_start_C = [None] * int(L)
-        elif type(T_start_C) == float or type(T_start_C) == int:
-            T_start_C = np.zeros(int(L)) + T_start_C
-
-        if P_end_bar is None:
-            P_end_bar = [None] * int(L)
-        elif type(P_end_bar) == float or type(P_end_bar) == int:
-            P_end_bar = np.zeros(int(L)) + P_end_bar
-        if T_end_C is None:
-            T_end_C = [None] * int(L)
-        elif type(T_end_C) == float or type(T_end_C) == int:
-            T_end_C = np.zeros(int(L)) + T_end_C
-
-        if dp_bar is None:
-            dp_bar = [None] * int(L)
-        elif type(dp_bar) == float or type(dp_bar) == int:
-            dp_bar = np.zeros(int(L)) + dp_bar
-        if dt_C is None:
-            dt_C = [None] * int(L)
-        elif type(dt_C) == float or type(dt_C) == int:
-            dt_C = np.zeros(int(L)) + dt_C
-
-        if P_path_bar is None:
-            P_path_bar = [None] * int(L)
-        elif len(np.shape(P_path_bar))  == 1:
-            P_path_bar = np.vstack([P_path_bar] * int(L))
-        if T_path_C is None:
-            T_path_C = [None] * int(L)
-        elif len(np.shape(T_path_C))  == 1:
-            T_path_C = np.vstack([T_path_C] * int(L))
-
-        if fO2_offset is None:
-            fO2_offset = [None] * int(L)
-        elif type(fO2_offset) == float or type(fO2_offset) == int:
-            fO2_offset = np.zeros(int(L)) + fO2_offset
-
-        index_in = np.arange(int(L))
-        Results = {}
-        index_out = np.array([], dtype=int)
-
-        while len(index_out) < len(index_in):
-            index = np.setdiff1d(index_in, index_out)
-            groups = np.array_split(index, cores)
-            non_empty_groups = [g for g in groups if g.size > 0]
-            groups = non_empty_groups
-
-            if len(groups[-1])< 3:
-                timeout = len(groups[-1])*timeout_main
-            else:
-                timeout = 3*timeout_main
-                
-            processes = []
-            start = time.time()
-            for i in range(len(groups)):
-                q = Queue()
-                p = Process(target = path_multi, args = (q, groups[i]),
-                                kwargs = {'Model': Model, 'comp': comp, 'Frac_solid': Frac_solid, 'Frac_fluid': Frac_fluid,
-                                        'T_C': T_C, 'T_path_C': T_path_C, 'T_start_C': T_start_C, 'T_end_C': T_end_C, 'dt_C': dt_C,
-                                        'P_bar': P_bar, 'P_path_bar': P_path_bar, 'P_start_bar': P_start_bar, 'P_end_bar': P_end_bar, 'dp_bar': dp_bar,
+            Results = stich(Res=Results, multi=True, Model=Model, Frac_fluid = Frac_fluid, Frac_solid = Frac_solid)
+            for r in Results:
+                i = int(r.split(' ')[1].strip())
+                if type(comp) == dict:
+                    Results[r]['Input'] = {'Model': Model, 'comp': comp, 'Frac_solid': Frac_solid, 'Frac_fluid': Frac_fluid,
+                                        'T_C': T_C[i], 'T_path_C': T_path_C[i], 'T_start_C': T_start_C[i], 'T_end_C': T_end_C[i], 'dt_C': dt_C[i],
+                                        'P_bar': P_bar[i], 'P_path_bar': P_path_bar[i], 'P_start_bar': P_start_bar[i], 'P_end_bar': P_end_bar[i], 'dp_bar': dp_bar[i],
                                         'isenthalpic': isenthalpic, 'isentropic': isentropic, 'isochoric': isochoric, 'find_liquidus': find_liquidus,
-                                        'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset, 'fluid_sat': fluid_sat, 'Crystallinity_limit': Crystallinity_limit,
-                                        'Suppress': Suppress, 'Suppress_except': Suppress_except})
-                
+                                        'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset[i], 'fluid_sat': fluid_sat, 'Crystallinity_limit': Crystallinity_limit,
+                                        'Suppress': Suppress, 'Suppress_except': Suppress_except}
+                else:
+                    Results[r]['Input'] = {'Model': Model, 'comp': comp.loc[i].to_dict(), 'Frac_solid': Frac_solid, 'Frac_fluid': Frac_fluid,
+                                        'T_C': T_C[i], 'T_path_C': T_path_C[i], 'T_start_C': T_start_C[i], 'T_end_C': T_end_C[i], 'dt_C': dt_C[i],
+                                        'P_bar': P_bar[i], 'P_path_bar': P_path_bar[i], 'P_start_bar': P_start_bar[i], 'P_end_bar': P_end_bar[i], 'dp_bar': dp_bar[i],
+                                        'isenthalpic': isenthalpic, 'isentropic': isentropic, 'isochoric': isochoric, 'find_liquidus': find_liquidus,
+                                        'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset[i], 'fluid_sat': fluid_sat, 'Crystallinity_limit': Crystallinity_limit,
+                                        'Suppress': Suppress, 'Suppress_except': Suppress_except}
+            
+            if label is not None:
+                new_out = label_results(Results,label)
+                return new_out
+            else:
+                return Results
+            
+    else:
+        # specify the number of calculations to be performed in each sequence
+        One = 0
+        if type(comp) == pd.core.frame.DataFrame: # simplest scenario - one calculation per bulk composition imported
+            A = len(comp['SiO2_Liq'])//cores
+            B = len(comp['SiO2_Liq'])%cores
+        else:
+            if P_bar is not None and type(P_bar) == np.ndarray: #one calculation per P loaded
+                A = len(P_bar)//cores
+                B = len(P_bar)%cores
+            elif T_C is not None and type(T_C) == np.ndarray: # one calculation per T loaded.
+                A = len(T_C)//cores
+                B = len(T_C)%cores
+            elif P_start_bar is not None and type(P_start_bar) == np.ndarray: # one calculation per starting P
+                A = len(P_start_bar)//cores
+                B = len(P_start_bar)%cores
+            elif T_start_C is not None and type(T_start_C) == np.ndarray: # one calculation per starting T
+                A = len(T_start_C)//cores
+                B = len(T_start_C)%cores
+            elif P_path_bar is not None and len(np.shape(P_path_bar)) > 1: # one calculation per P path
+                A = np.shape(P_path_bar)[0]//cores
+                B = np.shape(P_path_bar)[0]%cores
+            elif T_path_C is not None and len(np.shape(T_path_C)) > 1: # one calculation per T path
+                A = np.shape(T_path_C)[0]//cores
+                B = np.shape(T_path_C)[0]%cores
+            elif fO2_offset is not None and type(fO2_offset) == np.ndarray: # one calculation per offset
+                A = len(fO2_offset)//cores
+                B = len(fO2_offset)%cores
+
+            else: # just one calculation
+                One = 1
+                A = 1
+                B = 0
+
+        Group = np.zeros(A) + cores
+        if B > 0:
+            Group = np.append(Group, B)
+
+        qs = []
+        q = Queue()
+        
+        # perform calculation if only 1 calculation is specified
+        if One == 1:
+            Results = {}
+            if Print_suppress is None:
+                print("Running " + Model + " calculation...", end = "", flush = True)
+                s = time.time()
+
+            if multi_processing:
+                p = Process(target = path, args = (q, 1),
+                            kwargs = {'Model': Model, 'comp': comp, 'Frac_solid': Frac_solid, 'Frac_fluid': Frac_fluid,
+                                    'T_C': T_C, 'T_path_C': T_path_C, 'T_start_C': T_start_C, 'T_end_C': T_end_C, 'dt_C': dt_C,
+                                    'P_bar': P_bar, 'P_path_bar': P_path_bar, 'P_start_bar': P_start_bar, 'P_end_bar': P_end_bar, 'dp_bar': dp_bar,
+                                    'isenthalpic': isenthalpic, 'isentropic': isentropic, 'isochoric': isochoric, 'find_liquidus': find_liquidus,
+                                    'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset, 'fluid_sat': fluid_sat, 'Crystallinity_limit': Crystallinity_limit,
+                                    'Suppress': Suppress, 'Suppress_except': Suppress_except})
+
                 p.start()
-                time.sleep(0.1)
-                
-                processes.append((p, q, groups[i]))
 
-                
-            # drain queue while waiting for calculation to finish
-            if "MELTS" in Model:
-                for p, q, group in processes:
-
+                start = time.time()
+                if "MELTS" in Model:
+                    # drain queue while waiting for calculation to finish
                     while True:
                         try:
                             item = q.get(timeout=0.1)
 
                             run_index, step_i, data = item
-                            Results.setdefault(run_index, {})[step_i] = data
+                            Results[step_i] = data
 
                         except Empty:
                             time.sleep(0.001)
                             pass
 
                         # Timeout condition
-                        if time.time() - start > timeout:
+                        if time.time() - start > timeout_main:
                             print("Timeout — terminating process")
                             p.terminate()
                             break
@@ -549,74 +395,312 @@ def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid 
                                 while True:
                                     item = q.get_nowait()
                                     run_index, step_i, data = item
-                                    Results.setdefault(run_index, {})[step_i] = data
+                                    Results[step_i] = data
                             except Empty:
                                 time.sleep(0.001)
                                 pass
                             break
 
-                index_out = np.array(list(Results.keys()))
-            
-            else:
-                idx_chunks = []
-                for p, q, group in processes:
-                    # We give each process the remaining time from the total timeout
-                    remaining = max(0, timeout - (time.time() - start))
-                    try:
-                        ret = q.get(timeout=remaining)
-                        idx, results = ret
-                        Results.update(results)
-                        # idx_chunks.append(idx)
-                    except Exception as e:
-                        print(f"Failure on data extraction, likely due to an incomplete calculation: {e}")
-                        ret = []
-                        idx = np.array([group[0]],dtype = int)
-
-                    index_out = np.hstack((index_out, idx))
-
-                for p, q, group in processes:
-                    p.terminate()
                     p.join()
 
-            print(f"Completed {100*len(index_out)/len(index_in)} %")
+                    if Results:
+                        new_results = compile_results(Results)
 
-        if "MELTS" in Model:
-            full_results = {}
-            for run in Results:
-                if Results[run]:
-                    del Results[run][-1]
-                    if Results[run]:
-                        results = Results[run]
-                        new_results = compile_results(results)
+                        # stich and return results
+                        Results = stich(new_results, Model = Model, Frac_fluid = Frac_fluid, Frac_solid = Frac_solid)
+                        if Print_suppress is None:
+                            print(" Complete (time taken = " + str(round(time.time() - s,2)) + " seconds)", end = "", flush = True)
+                        return Results
+                    else:
+                        print("No calculations returned")
+                        return Results
 
-                        full_results[f"Run {run}"] = new_results
+                else:
+                    try:
+                        ret = q.get(timeout=timeout_main)
+                    except:
+                        ret = []
 
-            Results = stich(Res=full_results, multi=True, Model=Model, Frac_fluid = Frac_fluid, Frac_solid = Frac_solid)
-        else:
-            Results = stich(Res=Results, multi=True, Model=Model, Frac_fluid = Frac_fluid, Frac_solid = Frac_solid)
-        
-        for r in Results:
-            i = int(r.split(' ')[1].strip())
-            if type(comp) == dict:
-                Results[r]['Input'] = {'Model': Model, 'comp': comp, 'Frac_solid': Frac_solid, 'Frac_fluid': Frac_fluid,
-                                    'T_C': T_C[i], 'T_path_C': T_path_C[i], 'T_start_C': T_start_C[i], 'T_end_C': T_end_C[i], 'dt_C': dt_C[i],
-                                    'P_bar': P_bar[i], 'P_path_bar': P_path_bar[i], 'P_start_bar': P_start_bar[i], 'P_end_bar': P_end_bar[i], 'dp_bar': dp_bar[i],
-                                    'isenthalpic': isenthalpic, 'isentropic': isentropic, 'isochoric': isochoric, 'find_liquidus': find_liquidus,
-                                    'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset[i], 'fluid_sat': fluid_sat, 'Crystallinity_limit': Crystallinity_limit,
-                                    'Suppress': Suppress, 'Suppress_except': Suppress_except}
+                    TIMEOUT = 5
+                    start = time.time()
+                    if p.is_alive():
+                        while time.time() - start <= TIMEOUT:
+                            if not p.is_alive():
+                                p.join()
+                                p.terminate()
+                                break
+                            time.sleep(.1)
+                        else:
+                            p.terminate()
+                            p.join(5)
+                    else:
+                        p.join()
+                        p.terminate()
+
+                    if len(ret) > 0:
+                        Results, index = ret
+                        if len(Results.keys())> 1:
+                            Results = stich(Results, Model = Model, Frac_fluid = Frac_fluid, Frac_solid = Frac_solid)
+                        return Results
+
+                if Print_suppress is None:
+                    print(" Complete (time taken = " + str(round(time.time() - s,2)) + " seconds)", end = "", flush = True)
+
+                Results = stich(Results, Model = Model, Frac_fluid = Frac_fluid, Frac_solid = Frac_solid)
+
+                return Results
             else:
-                Results[r]['Input'] = {'Model': Model, 'comp': comp.loc[i].to_dict(), 'Frac_solid': Frac_solid, 'Frac_fluid': Frac_fluid,
-                                    'T_C': T_C[i], 'T_path_C': T_path_C[i], 'T_start_C': T_start_C[i], 'T_end_C': T_end_C[i], 'dt_C': dt_C[i],
-                                    'P_bar': P_bar[i], 'P_path_bar': P_path_bar[i], 'P_start_bar': P_start_bar[i], 'P_end_bar': P_end_bar[i], 'dp_bar': dp_bar[i],
-                                    'isenthalpic': isenthalpic, 'isentropic': isentropic, 'isochoric': isochoric, 'find_liquidus': find_liquidus,
-                                    'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset[i], 'fluid_sat': fluid_sat, 'Crystallinity_limit': Crystallinity_limit,
-                                    'Suppress': Suppress, 'Suppress_except': Suppress_except}
+                Results = path_MELTS(Model = Model, comp = comp, Frac_solid = Frac_solid, Frac_fluid = Frac_fluid, 
+                                        T_C = T_C, T_path_C = T_path_C, T_start_C = T_start_C, T_end_C = T_end_C, 
+                                        dt_C = dt_C, P_bar = P_bar, P_path_bar = P_path_bar, P_start_bar = P_start_bar, 
+                                        P_end_bar = P_end_bar, dp_bar = dp_bar, isenthalpic = isenthalpic, 
+                                        isentropic = isentropic, isochoric = isochoric, find_liquidus = find_liquidus, 
+                                        fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, fluid_sat = fluid_sat, 
+                                        Crystallinity_limit = Crystallinity_limit, Suppress = Suppress, Suppress_except = Suppress_except)
+                
+                if Results:
+                    # identify all unique keys to set up output dataframes
+                    unique_keys = set()
+                    properties = {}
+
+                    for step_data in Results.values():
+                        for key, value in step_data.items():
+                            if "_keys" not in key:
+                                unique_keys.add(key)
+                            else:
+                                base_key = key[:-5]
+                                if base_key not in properties:
+                                    properties[base_key] = value
+                                # properties[base_key].update(value)
+
+                    unique_keys = sorted(unique_keys)
+
+                    sorted_steps = sorted(Results.keys())
+                    n_steps = len(sorted_steps)
+
+                    index_map = {step: i for i, step in enumerate(sorted_steps)}
+
+                    # create new output to populate with results
+                    new_results = {}
+
+                    for key in unique_keys:
+                        if key == "Conditions":
+                            columns = ['temperature', 'pressure', 'h', 's', 'v', 'mass', 'dvdp', 'logfO2']
+                            new_results[key] = pd.DataFrame(index=range(n_steps), columns=columns, dtype=float)
+
+                        elif "_prop" not in key:
+                            columns = ['SiO2', 'TiO2', 'Al2O3', 'Fe2O3', 'Cr2O3', 'FeO',
+                                    'MnO', 'MgO', 'CaO', 'Na2O', 'K2O',
+                                    'P2O5', 'H2O', 'CO2']
+                            new_results[key] = pd.DataFrame(index=range(n_steps), columns=columns, dtype=float)
+
+                        elif "_key" not in key:
+                            columns = properties[key]
+                            new_results[key] = pd.DataFrame(index=range(n_steps), columns=columns, dtype=float)
+
+                    # fill output
+                    for step, step_data in Results.items():
+
+                        row_i = index_map[step]
+
+                        for key, value in step_data.items():
+
+                            if key.endswith("_keys"):
+                                continue
+
+                            if key not in new_results:
+                                continue
+                            
+                            if len(value) == len(new_results[key].iloc[row_i]):
+                                new_results[key].iloc[row_i] = value
+                            else:
+                                print(f"Size mismatch, potentially errored results on step {row_i}")
+                    Results = stich(new_results, Model = Model, Frac_fluid = Frac_fluid, Frac_solid = Frac_solid)
+                return Results
+
+        else: # perform multiple crystallisation calculations
+            # first make sure everything is the right length
+            L = np.sum(Group)
+            P_bar, T_C, P_start_bar, T_start_C, P_end_bar, T_end_C, dp_bar, dt_C, P_path_bar, T_path_C, fO2_offset = control_path_parameters(L, P_bar, T_C, P_start_bar, T_start_C, P_end_bar, T_end_C, dp_bar, dt_C, P_path_bar, T_path_C, fO2_offset)
+            # if P_bar is None:
+            #     P_bar = [None] * int(L)
+            # elif type(P_bar) == float or type(P_bar) == int:
+            #     P_bar = np.zeros(int(L)) + P_bar
+            # if T_C is None:
+            #     T_C = [None] * int(L)
+            # elif type(T_C) == float or type(T_C) == int:
+            #     T_C = np.zeros(int(L)) + T_C
+
+            # if P_start_bar is None:
+            #     P_start_bar = [None] * int(L)
+            # elif type(P_start_bar) == float or type(P_start_bar) == int:
+            #     P_start_bar = np.zeros(int(L)) + P_start_bar
+            # if T_start_C is None:
+            #     T_start_C = [None] * int(L)
+            # elif type(T_start_C) == float or type(T_start_C) == int:
+            #     T_start_C = np.zeros(int(L)) + T_start_C
+
+            # if P_end_bar is None:
+            #     P_end_bar = [None] * int(L)
+            # elif type(P_end_bar) == float or type(P_end_bar) == int:
+            #     P_end_bar = np.zeros(int(L)) + P_end_bar
+            # if T_end_C is None:
+            #     T_end_C = [None] * int(L)
+            # elif type(T_end_C) == float or type(T_end_C) == int:
+            #     T_end_C = np.zeros(int(L)) + T_end_C
+
+            # if dp_bar is None:
+            #     dp_bar = [None] * int(L)
+            # elif type(dp_bar) == float or type(dp_bar) == int:
+            #     dp_bar = np.zeros(int(L)) + dp_bar
+            # if dt_C is None:
+            #     dt_C = [None] * int(L)
+            # elif type(dt_C) == float or type(dt_C) == int:
+            #     dt_C = np.zeros(int(L)) + dt_C
+
+            # if P_path_bar is None:
+            #     P_path_bar = [None] * int(L)
+            # elif len(np.shape(P_path_bar))  == 1:
+            #     P_path_bar = np.vstack([P_path_bar] * int(L))
+            # if T_path_C is None:
+            #     T_path_C = [None] * int(L)
+            # elif len(np.shape(T_path_C))  == 1:
+            #     T_path_C = np.vstack([T_path_C] * int(L))
+
+            # if fO2_offset is None:
+            #     fO2_offset = [None] * int(L)
+            # elif type(fO2_offset) == float or type(fO2_offset) == int:
+            #     fO2_offset = np.zeros(int(L)) + fO2_offset
+
+            index_in = np.arange(int(L))
+            Results = {}
+            index_out = np.array([], dtype=int)
+
+            while len(index_out) < len(index_in):
+                index = np.setdiff1d(index_in, index_out)
+                groups = np.array_split(index, cores)
+                non_empty_groups = [g for g in groups if g.size > 0]
+                groups = non_empty_groups
+
+                if len(groups[-1])< 3:
+                    timeout = len(groups[-1])*timeout_main
+                else:
+                    timeout = 3*timeout_main
+                    
+                processes = []
+                start = time.time()
+                for i in range(len(groups)):
+                    q = Queue()
+                    p = Process(target = path_multi, args = (q, groups[i]),
+                                    kwargs = {'Model': Model, 'comp': comp, 'Frac_solid': Frac_solid, 'Frac_fluid': Frac_fluid,
+                                            'T_C': T_C, 'T_path_C': T_path_C, 'T_start_C': T_start_C, 'T_end_C': T_end_C, 'dt_C': dt_C,
+                                            'P_bar': P_bar, 'P_path_bar': P_path_bar, 'P_start_bar': P_start_bar, 'P_end_bar': P_end_bar, 'dp_bar': dp_bar,
+                                            'isenthalpic': isenthalpic, 'isentropic': isentropic, 'isochoric': isochoric, 'find_liquidus': find_liquidus,
+                                            'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset, 'fluid_sat': fluid_sat, 'Crystallinity_limit': Crystallinity_limit,
+                                            'Suppress': Suppress, 'Suppress_except': Suppress_except})
+                    
+                    p.start()
+                    time.sleep(0.1)
+                    
+                    processes.append((p, q, groups[i]))
+
+                    
+                # drain queue while waiting for calculation to finish
+                if "MELTS" in Model:
+                    for p, q, group in processes:
+
+                        while True:
+                            try:
+                                item = q.get(timeout=0.1)
+
+                                run_index, step_i, data = item
+                                Results.setdefault(run_index, {})[step_i] = data
+
+                            except Empty:
+                                time.sleep(0.001)
+                                pass
+
+                            # Timeout condition
+                            if time.time() - start > timeout:
+                                print("Timeout — terminating process")
+                                p.terminate()
+                                break
+
+                        # If process finished and queue empty → break
+                            if not p.is_alive():
+                                try:
+                                    # Drain remaining items
+                                    while True:
+                                        item = q.get_nowait()
+                                        run_index, step_i, data = item
+                                        Results.setdefault(run_index, {})[step_i] = data
+                                except Empty:
+                                    time.sleep(0.001)
+                                    pass
+                                break
+
+                    index_out = np.array(list(Results.keys()))
+                
+                else:
+                    idx_chunks = []
+                    for p, q, group in processes:
+                        # We give each process the remaining time from the total timeout
+                        remaining = max(0, timeout - (time.time() - start))
+                        try:
+                            ret = q.get(timeout=remaining)
+                            idx, results = ret
+                            Results.update(results)
+                            # idx_chunks.append(idx)
+                        except Exception as e:
+                            print(f"Failure on data extraction, likely due to an incomplete calculation: {e}")
+                            ret = []
+                            idx = np.array([group[0]],dtype = int)
+
+                        index_out = np.hstack((index_out, idx))
+
+                    for p, q, group in processes:
+                        p.terminate()
+                        p.join()
+
+                print(f"Completed {100*len(index_out)/len(index_in)} %")
+
+            if "MELTS" in Model:
+                full_results = {}
+                for run in Results:
+                    if Results[run]:
+                        del Results[run][-1]
+                        if Results[run]:
+                            results = Results[run]
+                            new_results = compile_results(results)
+
+                            full_results[f"Run {run}"] = new_results
+
+                Results = stich(Res=full_results, multi=True, Model=Model, Frac_fluid = Frac_fluid, Frac_solid = Frac_solid)
+            else:
+                Results = stich(Res=Results, multi=True, Model=Model, Frac_fluid = Frac_fluid, Frac_solid = Frac_solid)
         
-        if label is not None:
-            new_out = label_results(Results,label)
-            return new_out
-        else:
-            return Results
+            for r in Results:
+                i = int(r.split(' ')[1].strip())
+                if type(comp) == dict:
+                    Results[r]['Input'] = {'Model': Model, 'comp': comp, 'Frac_solid': Frac_solid, 'Frac_fluid': Frac_fluid,
+                                        'T_C': T_C[i], 'T_path_C': T_path_C[i], 'T_start_C': T_start_C[i], 'T_end_C': T_end_C[i], 'dt_C': dt_C[i],
+                                        'P_bar': P_bar[i], 'P_path_bar': P_path_bar[i], 'P_start_bar': P_start_bar[i], 'P_end_bar': P_end_bar[i], 'dp_bar': dp_bar[i],
+                                        'isenthalpic': isenthalpic, 'isentropic': isentropic, 'isochoric': isochoric, 'find_liquidus': find_liquidus,
+                                        'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset[i], 'fluid_sat': fluid_sat, 'Crystallinity_limit': Crystallinity_limit,
+                                        'Suppress': Suppress, 'Suppress_except': Suppress_except}
+                else:
+                    Results[r]['Input'] = {'Model': Model, 'comp': comp.loc[i].to_dict(), 'Frac_solid': Frac_solid, 'Frac_fluid': Frac_fluid,
+                                        'T_C': T_C[i], 'T_path_C': T_path_C[i], 'T_start_C': T_start_C[i], 'T_end_C': T_end_C[i], 'dt_C': dt_C[i],
+                                        'P_bar': P_bar[i], 'P_path_bar': P_path_bar[i], 'P_start_bar': P_start_bar[i], 'P_end_bar': P_end_bar[i], 'dp_bar': dp_bar[i],
+                                        'isenthalpic': isenthalpic, 'isentropic': isentropic, 'isochoric': isochoric, 'find_liquidus': find_liquidus,
+                                        'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset[i], 'fluid_sat': fluid_sat, 'Crystallinity_limit': Crystallinity_limit,
+                                        'Suppress': Suppress, 'Suppress_except': Suppress_except}
+            
+            if label is not None:
+                new_out = label_results(Results,label)
+                return new_out
+            else:
+                return Results
 
 def path_multi(q, index, *, Model = None, comp = None, Frac_solid = None, Frac_fluid = None,
             T_C = None, T_path_C = None, T_start_C = None, T_end_C = None, dt_C = None,

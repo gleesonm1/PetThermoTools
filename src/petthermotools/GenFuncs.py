@@ -13,6 +13,7 @@ import subprocess
 # from petthermotools.Crystallise import *
 # from petthermotools.MELTS import *
 from petthermotools.Compositions import *
+from petthermotools.core_config import MAX_WORKERS
 # try:
 #     from petthermotools.Holland import *
 # except:
@@ -117,6 +118,60 @@ cation_numbers = {
     "Na2O_Liq": 2,
     "K2O_Liq": 2
 }
+
+def control_path_parameters(L, P_bar, T_C, P_start_bar, T_start_C, P_end_bar, T_end_C,
+                            dp_bar, dt_C, P_path_bar, T_path_C, fO2_offset):
+    if P_bar is None:
+        P_bar = [None] * int(L)
+    elif type(P_bar) == float or type(P_bar) == int:
+        P_bar = np.zeros(int(L)) + P_bar
+    if T_C is None:
+        T_C = [None] * int(L)
+    elif type(T_C) == float or type(T_C) == int:
+        T_C = np.zeros(int(L)) + T_C
+
+    if P_start_bar is None:
+        P_start_bar = [None] * int(L)
+    elif type(P_start_bar) == float or type(P_start_bar) == int:
+        P_start_bar = np.zeros(int(L)) + P_start_bar
+    if T_start_C is None:
+        T_start_C = [None] * int(L)
+    elif type(T_start_C) == float or type(T_start_C) == int:
+        T_start_C = np.zeros(int(L)) + T_start_C
+
+    if P_end_bar is None:
+        P_end_bar = [None] * int(L)
+    elif type(P_end_bar) == float or type(P_end_bar) == int:
+        P_end_bar = np.zeros(int(L)) + P_end_bar
+    if T_end_C is None:
+        T_end_C = [None] * int(L)
+    elif type(T_end_C) == float or type(T_end_C) == int:
+        T_end_C = np.zeros(int(L)) + T_end_C
+
+    if dp_bar is None:
+        dp_bar = [None] * int(L)
+    elif type(dp_bar) == float or type(dp_bar) == int:
+        dp_bar = np.zeros(int(L)) + dp_bar
+    if dt_C is None:
+        dt_C = [None] * int(L)
+    elif type(dt_C) == float or type(dt_C) == int:
+        dt_C = np.zeros(int(L)) + dt_C
+
+    if P_path_bar is None:
+        P_path_bar = [None] * int(L)
+    elif len(np.shape(P_path_bar))  == 1:
+        P_path_bar = np.vstack([P_path_bar] * int(L))
+    if T_path_C is None:
+        T_path_C = [None] * int(L)
+    elif len(np.shape(T_path_C))  == 1:
+        T_path_C = np.vstack([T_path_C] * int(L))
+
+    if fO2_offset is None:
+        fO2_offset = [None] * int(L)
+    elif type(fO2_offset) == float or type(fO2_offset) == int:
+        fO2_offset = np.zeros(int(L)) + fO2_offset
+
+    return P_bar, T_C, P_start_bar, T_start_C, P_end_bar, T_end_C, dp_bar, dt_C, P_path_bar, T_path_C, fO2_offset
 
 def merge_sequential_phases(output_dict):
     """
@@ -418,11 +473,24 @@ def activate_petthermotools_env():
     ----------
     None. Activates the environment using `Pkg.activate`.
     '''
+    _ensure_julia_ready()
     from juliacall import Main as jl
     env_dir = Path.home() / ".petthermotools_julia_env"
     jl_env_path = env_dir.as_posix()
     jl.seval(f"""import Pkg
-             Pkg.activate(expanduser("{jl_env_path}"))""")
+             Pkg.activate(expanduser("{jl_env_path}"))
+             Pkg.precompile()""")
+    jl.seval("using Distributed")
+    jl.Distributed.addprocs(memory_limit(cores = get_performance_core_count()))
+    jl.seval("@everywhere using MAGEMinCalc")
+    jl.seval(f"""
+        if pkgversion(MAGEMinCalc) != v"0.6.0"
+            error("Incorrect version! Expected v0.6.0. Please run ptt.update_MAGEMinCalc()")
+        else
+             println("Julia Environment Ready. MAGEMinCalc v0.6.0 detected")
+        end"""
+    )
+    
 
 def to_float(x):
     '''

@@ -63,7 +63,8 @@ def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar
                       P_min_bar = None, P_max_bar = None, P_num = None, 
                       Fe3Fet_Liq = None, H2O_Liq = None, CO2_Liq = None,
                       Fe3Fet_init = None, H2O_init = None, CO2_init = None,
-                      fO2_buffer = None, fO2_offset = None, i_max = 15, grid = True, refine = None):
+                      fO2_buffer = None, fO2_offset = None, i_max = 15, grid = True, refine = None,
+                      Suppress = ['rutile', 'tridymite']):
     """
     Calculates a Phase Diagram (P-T grid) for a given bulk composition using MELTS or MAGEMinCalc 
     via parallel processing.
@@ -207,179 +208,50 @@ def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar
     else:
         P, T = P_bar, T_C
 
-    T_flat = np.round(T.flatten(),2)
-    P_flat = np.round(P.flatten(),2)
+    T_flat = np.round(T.T.flatten(),2)
+    P_flat = np.round(P.T.flatten(),2)
 
     T_flat = np.flip(T_flat)
     P_flat = np.flip(P_flat)
 
-    flat = np.array([T_flat, P_flat]).T
+    if "MELTS" not in Model:
+        flat = np.array([T_flat, P_flat]).T
+        # flat = np.array([T_flat, P_flat]).T
+        # T_flat = flat[0]
+        # P_flat = flat[1]
+        from juliacall import Main as jl 
+        julia_Suppress = None                
+        if Suppress == ['rutile', 'tridymite']:
+            Suppress = None
+            julia_Suppress = None
 
-    A = len(P_flat)//cores + 1
+        if Suppress is not None:
+            jl.Suppress = Suppress
+            jl.seval("Suppress = Vector{String}(Suppress)")
+            julia_Suppress = jl.Suppress
+        
+        args = {
+            "Model": Model,
+            "comp": jl.seval("Dict")(comp),
+            "cores": cores,
 
-    c = 0
-    j = 0
+            "T_C": T_flat,
 
-    while len(T_flat)>1:
-        if j > i_max:
-            break
+            "P_bar": P_flat,
 
-        # Initialize an empty list to store subarrays
-        subarrays_T = []
-        subarrays_P = []
+            "fO2_buffer": fO2_buffer,
+            "fO2_offset": fO2_offset,
+            "suppress": julia_Suppress}
+        args = jl.seval("Dict")(args)
+        Results = jl.MAGEMinCalc.phaseDiagram_calc(args)
 
-        # Loop through the indices and create subarrays
-        for i in range(cores):
-            subarray_T = T_flat[i::cores]
-            subarrays_T.append(subarray_T)
-            
-            subarray_P = P_flat[i::cores]
-            subarrays_P.append(subarray_P)
+        new_results = {}
+        for key in Results.keys():
+            new_results[key] = merge_sequential_phases(Results[key])
 
-        print('Attempt ' + str(j))
+        Results = stich(new_results, multi = True, Model = Model)
 
-        qs = []
-        ps = []
-        j = j + 1
-
-        for i in range(cores):
-            if "MELTS" in Model:
-                T_path_C = T_flat[i*A:(i+1)*A]
-                P_path_bar = P_flat[i*A:(i+1)*A]
-            else:
-                T_path_C = np.array(subarrays_T[i])
-                P_path_bar = np.array(subarrays_P[i])
-
-
-            if "MELTS" in Model:
-                if len(T_path_C) > 150:
-                    T_path_C = T_path_C[:99]
-                    P_path_bar = P_path_bar[:99]
-            else:
-                if len(T_path_C) > 500:
-                    T_path_C = T_path_C[:499]
-                    P_path_bar = P_path_bar[:499]
-
-            if "MELTS" in Model:
-                if j % 3 == 0:
-                    ed = (5*np.random.random())
-                    T_path_C = T_path_C[round(len(T_path_C)/ed):]
-                    P_path_bar = P_path_bar[round(len(P_path_bar)/ed):]
-
-            if j % 2 > 0:
-                T_path_C = np.flip(T_path_C)
-                P_path_bar = np.flip(P_path_bar)
-
-            q = Queue()
-            p = Process(target = path, args = (q,i), kwargs = {'Model': Model, 'comp': comp, 
-                                                               'T_path_C': T_path_C, 
-                                                               'P_path_bar': P_path_bar, 
-                                                               'fO2_buffer': fO2_buffer, 
-                                                               'fO2_offset': fO2_offset,
-                                                               'Suppress': ['rutile', 'tridymite']})
-
-            ps.append([p,q, i])
-            p.start()
-
-        if "MELTS" in Model:
-            TIMEOUT = 240
-        else:
-            TIMEOUT = 1200
-
-        start = time.time()
-        first = True
-        if "MELTS" not in Model:
-            for p, q, idx in ps:
-                if time.time() - start < TIMEOUT - 10:
-                    try:
-                        ret = q.get(timeout = TIMEOUT - (time.time()-start) + 10)
-                    except:
-                        ret = []
-                else:
-                    if first == True:
-                        print('Timeout Reached. Calculation will continue in a new process.')
-                        first = False
-                    try:
-                        ret = q.get(timeout = 30)
-                    except:
-                        ret = []
-
-                qs.append(ret)
-
-            TIMEOUT = 5
-            start = time.time()
-            for p, q, idx in ps:
-                if p.is_alive():
-                    while time.time() - start <= TIMEOUT:
-                        if not p.is_alive():
-                            p.join()
-                            p.terminate()
-                            break
-                        time.sleep(.1)
-                    else:
-                        p.terminate()
-                        p.join(5)
-                else:
-                    p.join()
-                    p.terminate()
-
-            for p, q, idx in ps:
-                p.kill()
-
-            Results = {}
-            for i in range(len(qs)):
-                if len(qs[i]) > 0:
-                    Res, index = qs[i]
-                    Results['index = ' + str(index)] = Res
-
-            new_results = {}
-            for key in Results.keys():
-                new_results[key] = merge_sequential_phases(Results[key])
-
-            Results = stich(new_results, multi = True, Model = Model)
-        else:
-            Results = {}
-            for p, q, idx in ps:
-                results = {}
-                # drain queue while waiting for calculation to finish
-                while True:
-                    try:
-                        item = q.get(timeout=0.1)
-
-                        run_index, step_i, data = item
-                        results[step_i] = data
-
-                    except Empty:
-                        time.sleep(0.001)
-                        pass
-
-                    # Timeout condition
-                    if time.time() - start > TIMEOUT:
-                        print("Timeout — terminating process")
-                        p.terminate()
-                        break
-
-                # If process finished and queue empty → break
-                    if not p.is_alive():
-                        try:
-                            # Drain remaining items
-                            while True:
-                                item = q.get_nowait()
-                                run_index, step_i, data = item
-                                results[step_i] = data
-                        except Empty:
-                            time.sleep(0.001)
-                            pass
-                        break
-                Results[f"Run {idx}"] = results
-            
-            new_results = {}
-            for key in Results.keys():
-                if len(Results[key])>0:
-                    new_results[key] = compile_results(Results[key])
-
-            Results = stich(new_results, multi=True, Model = Model)
-
+        c = 0
         for i in Results.keys():
             if len(Results[i]['All']['T_C']) > 1:
                 if c == 0:
@@ -406,8 +278,204 @@ def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar
                 P_flat = np.flip(P_flat)
 
             A = len(P_flat)//cores + 1
-        else:
-            break
+        
+        # return Results
+    else:
+        flat = np.array([T_flat, P_flat]).T
+
+        A = len(P_flat)//cores + 1
+
+        c = 0
+        j = 0
+
+        while len(T_flat)>1:
+            if j > i_max:
+                break
+
+            # Initialize an empty list to store subarrays
+            subarrays_T = []
+            subarrays_P = []
+
+            # Loop through the indices and create subarrays
+            for i in range(cores):
+                subarray_T = T_flat[i::cores]
+                subarrays_T.append(subarray_T)
+                
+                subarray_P = P_flat[i::cores]
+                subarrays_P.append(subarray_P)
+
+            print('Attempt ' + str(j))
+
+            qs = []
+            ps = []
+            j = j + 1
+
+            for i in range(cores):
+                if "MELTS" in Model:
+                    T_path_C = T_flat[i*A:(i+1)*A]
+                    P_path_bar = P_flat[i*A:(i+1)*A]
+                else:
+                    T_path_C = np.array(subarrays_T[i])
+                    P_path_bar = np.array(subarrays_P[i])
+
+
+                if "MELTS" in Model:
+                    if len(T_path_C) > 150:
+                        T_path_C = T_path_C[:99]
+                        P_path_bar = P_path_bar[:99]
+                else:
+                    if len(T_path_C) > 500:
+                        T_path_C = T_path_C[:499]
+                        P_path_bar = P_path_bar[:499]
+
+                if "MELTS" in Model:
+                    if j % 3 == 0:
+                        ed = (5*np.random.random())
+                        T_path_C = T_path_C[round(len(T_path_C)/ed):]
+                        P_path_bar = P_path_bar[round(len(P_path_bar)/ed):]
+
+                if j % 2 > 0:
+                    T_path_C = np.flip(T_path_C)
+                    P_path_bar = np.flip(P_path_bar)
+
+                q = Queue()
+                p = Process(target = path, args = (q,i), kwargs = {'Model': Model, 'comp': comp, 
+                                                                'T_path_C': T_path_C, 
+                                                                'P_path_bar': P_path_bar, 
+                                                                'fO2_buffer': fO2_buffer, 
+                                                                'fO2_offset': fO2_offset,
+                                                                'Suppress': ['rutile', 'tridymite']})
+
+                ps.append([p,q, i])
+                p.start()
+
+            if "MELTS" in Model:
+                TIMEOUT = 240
+            else:
+                TIMEOUT = 1200
+
+            start = time.time()
+            first = True
+            if "MELTS" not in Model:
+                for p, q, idx in ps:
+                    if time.time() - start < TIMEOUT - 10:
+                        try:
+                            ret = q.get(timeout = TIMEOUT - (time.time()-start) + 10)
+                        except:
+                            ret = []
+                    else:
+                        if first == True:
+                            print('Timeout Reached. Calculation will continue in a new process.')
+                            first = False
+                        try:
+                            ret = q.get(timeout = 30)
+                        except:
+                            ret = []
+
+                    qs.append(ret)
+
+                TIMEOUT = 5
+                start = time.time()
+                for p, q, idx in ps:
+                    if p.is_alive():
+                        while time.time() - start <= TIMEOUT:
+                            if not p.is_alive():
+                                p.join()
+                                p.terminate()
+                                break
+                            time.sleep(.1)
+                        else:
+                            p.terminate()
+                            p.join(5)
+                    else:
+                        p.join()
+                        p.terminate()
+
+                for p, q, idx in ps:
+                    p.kill()
+
+                Results = {}
+                for i in range(len(qs)):
+                    if len(qs[i]) > 0:
+                        Res, index = qs[i]
+                        Results['index = ' + str(index)] = Res
+
+                new_results = {}
+                for key in Results.keys():
+                    new_results[key] = merge_sequential_phases(Results[key])
+
+                Results = stich(new_results, multi = True, Model = Model)
+            else:
+                Results = {}
+                for p, q, idx in ps:
+                    results = {}
+                    # drain queue while waiting for calculation to finish
+                    while True:
+                        try:
+                            item = q.get(timeout=0.1)
+
+                            run_index, step_i, data = item
+                            results[step_i] = data
+
+                        except Empty:
+                            time.sleep(0.001)
+                            pass
+
+                        # Timeout condition
+                        if time.time() - start > TIMEOUT:
+                            print("Timeout — terminating process")
+                            p.terminate()
+                            break
+
+                    # If process finished and queue empty → break
+                        if not p.is_alive():
+                            try:
+                                # Drain remaining items
+                                while True:
+                                    item = q.get_nowait()
+                                    run_index, step_i, data = item
+                                    results[step_i] = data
+                            except Empty:
+                                time.sleep(0.001)
+                                pass
+                            break
+                    Results[f"Run {idx}"] = results
+                
+                new_results = {}
+                for key in Results.keys():
+                    if len(Results[key])>0:
+                        new_results[key] = compile_results(Results[key])
+
+                Results = stich(new_results, multi=True, Model = Model)
+
+            for i in Results.keys():
+                if len(Results[i]['All']['T_C']) > 1:
+                    if c == 0:
+                        Combined = Results[i]['All'].copy()
+                        c = 1
+                    else:
+                        Combined = pd.concat([Combined, Results[i]['All']], axis = 0, ignore_index = True)
+
+                    Combined['T_C'] = np.round(Combined['T_C'], 2)
+                    Combined['P_bar'] = np.round(Combined['P_bar'], 2)
+                    Combined = Combined.sort_values(['T_C', 'P_bar'])
+                    Combined = Combined.reset_index(drop = True)
+                    if "MELTS" in Model:
+                        Combined = Combined.dropna(subset = ['H_J'])
+
+            Res_flat = np.array([Combined['T_C'], Combined['P_bar']]).T
+            new_flat = flat[np.where((flat[:, None] == Res_flat).all(-1).any(-1) == False)]
+
+            if len(new_flat.T[0]) > 1:
+                T_flat = new_flat.T[0][:]
+                P_flat = new_flat.T[1][:]
+                if (j % 2) != 0:
+                    T_flat = np.flip(T_flat)
+                    P_flat = np.flip(P_flat)
+
+                A = len(P_flat)//cores + 1
+            else:
+                break
 
     flat = np.round(np.array([T.flatten(), P.flatten()]).T,2)
     Res_flat = np.round(np.array([Combined['T_C'].values, Combined['P_bar'].values]).T,2)
@@ -433,7 +501,7 @@ def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar
     if refine is not None:
         for i in range(refine):
             Combined = phaseDiagram_refine(Data = Combined, Model = Model, bulk = bulk, Fe3Fet_Liq=Fe3Fet_init, cores = cores,
-                                           H2O_Liq=H2O_init, CO2_Liq=CO2_init, fO2_buffer=fO2_buffer, fO2_offset=fO2_offset, i_max = i_max)
+                                        H2O_Liq=H2O_init, CO2_Liq=CO2_init, fO2_buffer=fO2_buffer, fO2_offset=fO2_offset, i_max = i_max)
 
     return Combined
 

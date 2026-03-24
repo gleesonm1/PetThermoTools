@@ -15,7 +15,7 @@ from pathlib import Path
 
 def AdiabaticDecompressionMelting(cores = multiprocessing.cpu_count(), 
                                   Model = "pMELTS", bulk = "KLB-1", comp_lith_1 = None, 
-                                  comp_lith_2 = None, comp_lith_3 = None, Tp_C = 1350, Tp_Method = None,
+                                  comp_lith_2 = None, comp_lith_3 = None, T_start_C = None, Tp_C = 1350, Tp_Method = None,
                                   P_start_bar = 30000, P_end_bar = 2000, dp_bar = 200, 
                                   P_path_bar = None, Frac = False, prop = None, 
                                   fO2_buffer = None, fO2_offset = None, Fe3Fet = None, MELTS_filter = True):
@@ -89,6 +89,8 @@ def AdiabaticDecompressionMelting(cores = multiprocessing.cpu_count(),
     
     Tp_C        = to_float(Tp_C)
     Tp_C        = check_array(Tp_C)
+    T_start_C        = to_float(T_start_C)
+    T_start_C        = check_array(T_start_C)
 
     P_path_bar = to_float(P_path_bar)
     P_start_bar= to_float(P_start_bar)
@@ -119,6 +121,9 @@ def AdiabaticDecompressionMelting(cores = multiprocessing.cpu_count(),
 
     if bulk is not None and comp_lith_1 is None:
         comp_lith_1 = bulk
+
+    if T_start_C is not None:
+        Tp_C = None
 
     comp_1 = comp_check(comp_lith_1, Model, MELTS_filter, Fe3Fet)
 
@@ -181,7 +186,7 @@ def AdiabaticDecompressionMelting(cores = multiprocessing.cpu_count(),
             
             p = Process(target = AdiabaticMelt, args = (q, 1),
                         kwargs = {'Model': Model, 'comp_1': comp_1, 'comp_2': comp_2, 'comp_3': comp_3,
-                                'Tp_C': Tp_C, 'Tp_Method': Tp_Method, 'P_path_bar': P_path_bar, 
+                                'T_start_C': T_start_C, 'Tp_C': Tp_C, 'Tp_Method': Tp_Method, 'P_path_bar': P_path_bar, 
                                 'P_start_bar': P_start_bar, 'P_end_bar': P_end_bar, 'dp_bar': dp_bar,
                                 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset, 'Frac': Frac, 'prop': prop})
 
@@ -221,34 +226,24 @@ def AdiabaticDecompressionMelting(cores = multiprocessing.cpu_count(),
                 Results = {}
                 return Results
         else:
-            if Tp_Method == "pyMelt":
-                try:
-                    import pyMelt as m
-                    Lithologies = {'KLB-1': m.lithologies.matthews.klb1(),
-                                'KG1': m.lithologies.matthews.kg1(),
-                                'G2': m.lithologies.matthews.eclogite(),
-                                'hz': m.lithologies.shorttle.harzburgite()}
-                except ImportError:
-                    raise RuntimeError('You havent installed pyMelt or there is an error when importing pyMelt. pyMelt is currently required to estimate the starting point for the melting calculations.')
+            if T_start_C is None:
+                if Tp_Method == "pyMelt":
+                    try:
+                        import pyMelt as m
+                        Lithologies = {'KLB-1': m.lithologies.matthews.klb1(),
+                                    'KG1': m.lithologies.matthews.kg1(),
+                                    'G2': m.lithologies.matthews.eclogite(),
+                                    'hz': m.lithologies.shorttle.harzburgite()}
+                    except ImportError:
+                        raise RuntimeError('You havent installed pyMelt or there is an error when importing pyMelt. pyMelt is currently required to estimate the starting point for the melting calculations.')
 
-                lz = m.lithologies.matthews.klb1()
-                mantle = m.mantle([lz], [1], ['Lz'])
-                T_start_C = mantle.adiabat(P_start_bar/10000.0, Tp_C)
-            else:
-                T_start_C = None
-            
-            _ensure_julia_ready()
-            from juliacall import Main as jl, convert as jlconvert
-            env_dir = Path.home() / ".petthermotools_julia_env"
-            jl_env_path = env_dir.as_posix()
-
-            jl.seval(f"""
-                import Pkg
-                Pkg.activate("{jl_env_path}")
-                """)
-
-            if not jl.seval("isdefined(Main, :MAGEMinCalc)"):
-                jl.seval("using MAGEMinCalc")
+                    lz = m.lithologies.matthews.klb1()
+                    mantle = m.mantle([lz], [1], ['Lz'])
+                    T_start_C = mantle.adiabat(P_start_bar/10000.0, Tp_C)
+                else:
+                    T_start_C = None
+        
+            from juliacall import Main as jl
             
 
             comp_1['O'] = comp_1['Fe3Fet_Liq']*(((159.59/2)/71.844)*comp_1['FeOt_Liq'] - comp_1['FeOt_Liq'])
@@ -275,7 +270,7 @@ def AdiabaticDecompressionMelting(cores = multiprocessing.cpu_count(),
     return Results
 
 def AdiabaticMelt(q, index, *, Model = None, comp_1 = None, comp_2 = None, comp_3 = None, Tp_Method = "pyMelt",
-                  Tp_C = None, P_start_bar = None, P_end_bar = None, dp_bar = None, P_path_bar = None, 
+                  Tp_C = None, T_start_C = None, P_start_bar = None, P_end_bar = None, dp_bar = None, P_path_bar = None, 
                   Frac = None, fO2_buffer = None, fO2_offset = None, prop = None):
     '''
     Worker function to perform a single Adiabatic Decompression Melting (ADM) simulation.
@@ -321,7 +316,7 @@ def AdiabaticMelt(q, index, *, Model = None, comp_1 = None, comp_2 = None, comp_
     Results = {}
     if "MELTS" in Model:
         try:
-            Results = AdiabaticDecompressionMelting_MELTS(Model = Model, comp = comp_1, Tp_C = Tp_C, Tp_Method = "pyMelt",
+            Results = AdiabaticDecompressionMelting_MELTS(Model = Model, comp = comp_1, T_start_C = T_start_C, Tp_C = Tp_C, Tp_Method = "pyMelt",
                                                           P_path_bar = P_path_bar, P_start_bar = P_start_bar, P_end_bar = P_end_bar, dp_bar = dp_bar, 
                                                           fO2_buffer = fO2_buffer, fO2_offset = fO2_offset)
             q.put([Results, index])
@@ -412,15 +407,15 @@ def AdiabaticMelt(q, index, *, Model = None, comp_1 = None, comp_2 = None, comp_
             T_start_C = None
 
         from juliacall import Main as jl, convert as jlconvert
-        env_dir = Path.home() / ".petthermotools_julia_env"
-        jl_env_path = env_dir.as_posix()
+        # env_dir = Path.home() / ".petthermotools_julia_env"
+        # jl_env_path = env_dir.as_posix()
 
-        jl.seval(f"""
-            import Pkg
-            Pkg.activate("{jl_env_path}")
-            """)
+        # jl.seval(f"""
+        #     import Pkg
+        #     Pkg.activate("{jl_env_path}")
+        #     """)
 
-        jl.seval("using MAGEMinCalc")
+        # jl.seval("using MAGEMinCalc")
 
         comp_1['O'] = comp_1['Fe3Fet_Liq']*(((159.59/2)/71.844)*comp_1['FeOt_Liq'] - comp_1['FeOt_Liq'])
 

@@ -7,13 +7,14 @@ Welcome to PetThermoTools's documentation!
 =================================================
 
 .. toctree::
-   :maxdepth: 4
+   :maxdepth: 5
    :caption: Getting Started:
 
    introduction
    Installation/InstallationScript
    Installation/MAGEMin_PythonCall
    available_functions_pdf
+   Examples/Intro_Tutorial/Using_ptt_tutorial
    
 
 .. toctree::
