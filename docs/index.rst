@@ -50,7 +50,7 @@ Welcome to PetThermoTools's documentation!
    :maxdepth: 2
    :caption: Exporting calculation results
 
-   SavingCalculations
+   Examples/CrystallisationTests/SavingCalculations
 
 .. toctree::
    :maxdepth: 2
