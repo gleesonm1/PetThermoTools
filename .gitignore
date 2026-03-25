@@ -21,6 +21,7 @@ ipynb_checkpoints
 /docs/_build/
 ~$*
 /build/
+/Examples/
 *.orig
 *.ini
 MELTS/
