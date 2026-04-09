@@ -991,11 +991,11 @@ def path_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid = None, 
         for p in PL:
             if p != "fluid":
                 if p != "water":
-                    if type(Suppress) == list:
-                        if p not in Suppress:
+                    if type(Suppress_except) == list:
+                        if p not in Suppress_except:
                             melts.engine.setSystemProperties("Suppress", p)
                     else:
-                        if p != Suppress:
+                        if p != Suppress_except:
                             melts.engine.setSystemProperties("Suppress", p)
 
     if find_liquidus:
