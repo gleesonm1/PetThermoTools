@@ -179,10 +179,11 @@ def AdiabaticDecompressionMelting(cores = multiprocessing.cpu_count(),
     # perform calculation if only 1 calculation is specified
     if One == 1:
         if "MELTS" in Model or "pyMelt" in Model:
-            try:
-                import pyMelt as m 
-            except ImportError:
-                raise RuntimeError('You havent installed pyMelt or there is an error when importing pyMelt. pyMelt is currently required to estimate the starting point for the melting calculations. Try running %pip install pyMelt')
+            if Tp_Method == "pyMelt":
+                try:
+                    import pyMelt as m 
+                except ImportError:
+                    raise RuntimeError('You havent installed pyMelt or there is an error when importing pyMelt. pyMelt is currently required to estimate the starting point for the melting calculations. Try running %pip install pyMelt')
             
             p = Process(target = AdiabaticMelt, args = (q, 1),
                         kwargs = {'Model': Model, 'comp_1': comp_1, 'comp_2': comp_2, 'comp_3': comp_3,
@@ -316,7 +317,7 @@ def AdiabaticMelt(q, index, *, Model = None, comp_1 = None, comp_2 = None, comp_
     Results = {}
     if "MELTS" in Model:
         try:
-            Results = AdiabaticDecompressionMelting_MELTS(Model = Model, comp = comp_1, T_start_C = T_start_C, Tp_C = Tp_C, Tp_Method = "pyMelt",
+            Results = AdiabaticDecompressionMelting_MELTS(Model = Model, comp = comp_1, T_start_C = T_start_C, Tp_C = Tp_C, Tp_Method = Tp_Method,
                                                           P_path_bar = P_path_bar, P_start_bar = P_start_bar, P_end_bar = P_end_bar, dp_bar = dp_bar, 
                                                           fO2_buffer = fO2_buffer, fO2_offset = fO2_offset)
             q.put([Results, index])

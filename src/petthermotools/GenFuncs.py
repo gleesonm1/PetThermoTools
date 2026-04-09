@@ -484,10 +484,10 @@ def activate_petthermotools_env():
     jl.Distributed.addprocs(memory_limit(cores = get_performance_core_count()))
     jl.seval("@everywhere using MAGEMinCalc")
     jl.seval(f"""
-        if pkgversion(MAGEMinCalc) != v"0.6.0"
-            error("Incorrect version! Expected v0.6.0. Please run ptt.update_MAGEMinCalc()")
+        if pkgversion(MAGEMinCalc) != v"0.6.1"
+            error("Incorrect version! Expected v0.6.1. Please run ptt.update_MAGEMinCalc()")
         else
-             println("Julia Environment Ready. MAGEMinCalc v0.6.0 detected")
+             println("Julia Environment Ready. MAGEMinCalc v0.6.1 detected")
         end"""
     )
     
