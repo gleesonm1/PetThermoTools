@@ -1069,7 +1069,7 @@ def path_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid = None, 
         if len(T) != len(P):
             raise Exception("Length of P and T vectors are not the same. Check input parameters")
 
-    if find_liquidus is None:
+    if find_liquidus is False:
         if type(T) != np.ndarray:
             melts.engine.temperature = T
         else:
@@ -1080,7 +1080,7 @@ def path_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid = None, 
         else:
             melts.engine.pressure = P[0]
 
-    if find_liquidus is not None:
+    else:
         melts.engine.temperature = T_start_C
 
         if P_path_bar is not None or T_path_C is not None:
