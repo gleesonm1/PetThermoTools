@@ -148,7 +148,8 @@ def equilibrate_multi(cores = multiprocessing.cpu_count(), Model = "MELTSv1.0.2"
     if fO2_buffer is not None:
         if fO2_buffer != "NNO":
             if fO2_buffer != "FMQ":
-                raise Warning("fO2 buffer specified is not an allowed input. This argument can only be 'FMQ' or 'NNO' \n if you want to offset from these buffers use the 'fO2_offset' argument.")
+                if fO2_buffer != "IW":
+                    raise Warning("fO2 buffer specified is not an allowed input. This argument can only be 'FMQ' or 'NNO' \n if you want to offset from these buffers use the 'fO2_offset' argument.")
 
     if "MELTS" not in Model:
         if fO2_buffer == "FMQ":
@@ -930,7 +931,8 @@ def findCO2_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P
     if fO2_buffer is not None:
         if fO2_buffer != "NNO":
             if fO2_buffer != "FMQ":
-                raise Warning("fO2 buffer specified is not an allowed input. This argument can only be 'FMQ' or 'NNO' \n if you want to offset from these buffers use the 'fO2_offset' argument.")
+                if fO2_buffer != "IW":
+                    raise Warning("fO2 buffer specified is not an allowed input. This argument can only be 'FMQ' or 'NNO' \n if you want to offset from these buffers use the 'fO2_offset' argument.")
 
     if "MELTS" not in Model:
         if fO2_buffer == "FMQ":
@@ -1122,7 +1124,8 @@ def findLiq_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P
     if fO2_buffer is not None:
         if fO2_buffer != "NNO":
             if fO2_buffer != "FMQ":
-                raise Warning("fO2 buffer specified is not an allowed input. This argument can only be 'FMQ' or 'NNO' \n if you want to offset from these buffers use the 'fO2_offset' argument.")
+                if fO2_buffer != "IW":
+                    raise Warning("fO2 buffer specified is not an allowed input. This argument can only be 'FMQ' or 'NNO' \n if you want to offset from these buffers use the 'fO2_offset' argument.")
 
     if "MELTS" not in Model:
         if fO2_buffer == "FMQ":

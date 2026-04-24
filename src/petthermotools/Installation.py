@@ -229,7 +229,7 @@ def install_alphaMELTS(file_location=None, admin=True, version="2.3.1", system =
     # 1. Construct the download URL
     if version == "2.3.2":
         # Note: Using the specific naming convention for 2.3.2 assets
-        base_url = f"https://github.com/magmasource/alphaMELTS/releases/download/v{version}-beta.0"
+        base_url = f"https://github.com/magmasource/alphaMELTS/releases/download/v{version}-beta.1"
         if system == "Darwin":
             tag = "macosx_14_0-arm64" if is_arm else "macosx_14_0-x86_64"
         elif system == "Windows":
