@@ -345,7 +345,8 @@ def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar
                                                                 'P_path_bar': P_path_bar, 
                                                                 'fO2_buffer': fO2_buffer, 
                                                                 'fO2_offset': fO2_offset,
-                                                                'Suppress': ['rutile', 'tridymite']})
+                                                                'Suppress': ['rutile', 'tridymite'],
+                                                                'find_liquidus': False})
 
                 ps.append([p,q, i])
                 p.start()
