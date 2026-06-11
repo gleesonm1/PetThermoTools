@@ -966,6 +966,7 @@ def stich(Res, multi = None, Model = None, Frac_fluid = None, Frac_solid = None)
         else:
             for Ind in Res:
                 Result = Res[Ind].copy()
+                # if "Conditions" in Result.keys():
                 Result = stich_work(Results = Result, Order = Order, Model = "MELTS", Frac_fluid = Frac_fluid, Frac_solid = Frac_solid)
                 Results[Ind] = Result.copy()
     else:
