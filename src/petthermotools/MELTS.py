@@ -998,7 +998,7 @@ def path_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid = None, 
                         if p != Suppress_except:
                             melts.engine.setSystemProperties("Suppress", p)
 
-    if find_liquidus:
+    if find_liquidus and find_liquidus is not None:
         if P_path_bar is not None:
             try:
                 if type(P_path_bar) == np.ndarray:
@@ -1063,13 +1063,12 @@ def path_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid = None, 
         P = np.linspace(P_start_bar, P_end_bar, len(T))
     elif type(P) == np.ndarray and T_end_C is None and dt_C is not None:
         T = np.linspace(T_start_C, T_start_C - dt_C*(len(P)-1), len(P))
-   
 
     if type(T) == np.ndarray and type(P) == np.ndarray:
         if len(T) != len(P):
             raise Exception("Length of P and T vectors are not the same. Check input parameters")
 
-    if find_liquidus is False:
+    if find_liquidus is False or find_liquidus is None:
         if type(T) != np.ndarray:
             melts.engine.temperature = T
         else:
@@ -1130,7 +1129,7 @@ def path_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid = None, 
         if isenthalpic is not None:
             if i == 0:
                 try:
-                    melts.engine.setSystemProperties("Mode", "Isenthalpic")
+                    # melts.engine.setSystemProperties("Mode", "Isenthalpic")
                     melts.engine.calcEquilibriumState(1,0)
                     melts.engine.setSystemProperties("Mode", "Isenthalpic")
                 except:
@@ -1139,7 +1138,7 @@ def path_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid = None, 
         if isentropic is not None:
             if i == 0:
                 try:
-                    melts.engine.setSystemProperties("Mode", "Isentropic")
+                    # melts.engine.setSystemProperties("Mode", "Isentropic")
                     melts.engine.calcEquilibriumState(1,0)
                     melts.engine.setSystemProperties("Mode", "Isentropic")
                 except:
@@ -1148,7 +1147,7 @@ def path_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid = None, 
         if isochoric is not None:
             if i == 0:
                 try:
-                    melts.engine.setSystemProperties("Mode", "Isochoric")
+                    # melts.engine.setSystemProperties("Mode", "Isochoric")
                     melts.engine.calcEquilibriumState(1,0)
                     melts.engine.setSystemProperties("Mode", "Isochoric")
                 except:
@@ -1270,17 +1269,33 @@ def path_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid = None, 
             break
 
         
-
         if Crystallinity_limit is not None:
             Volume = 0
             Fluid_List = ['liquid1', 'water1', 'fluid1']
+            
+            # 1. Isolate the data for the current step
+            current_step = Results[i]
+            
+            # 2. Sum the solid volumes
             for phase in PhaseList:
                 if phase not in Fluid_List:
-                    Volume = Volume + float(Results[phase + '_prop']['v'].loc[i])
+                    if phase + '_prop_keys' in current_step:
+                        # Find the index position of 'v'
+                        v_idx = current_step[phase + '_prop_keys'].index('v')
+                        # Extract the volume from the numpy array
+                        Volume += float(current_step[phase + '_prop'][v_idx])
 
-            Total_volume = Volume + float(Results['liquid1_prop']['v'].loc[i])
+            # 3. Get the liquid volume (with a safety check in case it crystallized completely)
+            if 'liquid1_prop_keys' in current_step:
+                v_idx_liq = current_step['liquid1_prop_keys'].index('v')
+                liq_vol = float(current_step['liquid1_prop'][v_idx_liq])
+            else:
+                liq_vol = 0.0
 
-            if Volume/Total_volume > Crystallinity_limit:
+            Total_volume = Volume + liq_vol
+
+            # 4. Check the limit (and protect against division by zero)
+            if Total_volume > 0 and (Volume / Total_volume) > Crystallinity_limit:
                 break
 
         if phases is not None:
@@ -1608,6 +1623,7 @@ def findSatPressure_MELTS(Model = None, T_C_init = None, T_fixed_C = None, P_bar
         if Liq_Results['fluid_saturated'] == "Yes":
             while Liq_Results['fluid_saturated'] == "Yes":
                 P_low = P_bar
+                Liq_low = Liq_Results.copy()
                 if P_bar > 5000:
                     P_bar = P_bar*1.2
                 else:
@@ -1661,9 +1677,10 @@ def findSatPressure_MELTS(Model = None, T_C_init = None, T_fixed_C = None, P_bar
                 
                 if Liq_Results['fluid_saturated'] == "Yes":
                     P_low = P_bar
+                    Liq_low = Liq_Results.copy()
                     break
 
-        for jj in range(5):
+        for jj in range(8):
             P_new = P_low + (P_high - P_low)/2
 
             try:
@@ -1687,49 +1704,50 @@ def findSatPressure_MELTS(Model = None, T_C_init = None, T_fixed_C = None, P_bar
 
             if Liq_Results['fluid_saturated'] == "Yes":
                 P_low = P_new
+                Liq_low = Liq_Results.copy()
             else:
                 P_high = P_new
 
             if P_high/P_low < 1.01:
                 break
 
-        P_bar = round((P_high+P_low)/2)
-        try:
-            Liq_Results = findLiq_MELTS(Model = Model, P_bar = P_bar, comp = bulk, melts = melts, 
-                                            fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, 
-                                            T_C_init = Liq_Results['T_Liq_C'], Step = np.array([1]))
-        except:
-            out = {'SiO2_Liq': Liq_Results['SiO2'], 
-            'TiO2_Liq': Liq_Results['TiO2'],
-            'Al2O3_Liq': Liq_Results['Al2O3'], 
-            'FeOt_Liq': Liq_Results['FeO'] + 71.844/(159.69/2)*Liq_Results['Fe2O3'], 
-            'MnO_Liq': Liq_Results['MnO'], 
-            'MgO_Liq': Liq_Results['MgO'], 
-            'CaO_Liq': Liq_Results['CaO'],
-            'Na2O_Liq': Liq_Results['Na2O'], 
-            'K2O_Liq': Liq_Results['K2O'], 
-            'P2O5_Liq': Liq_Results['P2O5'], 
-            'H2O_Liq': Liq_Results['H2O'], 
-            'CO2_Liq': Liq_Results['CO2'], 
-            'Fe3Fet_Liq': (71.844/(159.69/2)*Liq_Results['Fe2O3'])/(Liq_Results['FeO'] + 71.844/(159.69/2)*Liq_Results['Fe2O3']), 
-            'P_bar': P_bar, 
-            'T_Liq_C': Liq_Results['T_Liq_C']}
+        # P_bar = round((P_high+P_low)/2)
+        # try:
+        #     Liq_Results = findLiq_MELTS(Model = Model, P_bar = P_low, comp = bulk, melts = melts, 
+        #                                     fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, 
+        #                                     T_C_init = Liq_Results['T_Liq_C'], Step = np.array([1]))
+        # except:
+        #     out = {'SiO2_Liq': Liq_Results['SiO2'], 
+        #     'TiO2_Liq': Liq_Results['TiO2'],
+        #     'Al2O3_Liq': Liq_Results['Al2O3'], 
+        #     'FeOt_Liq': Liq_Results['FeO'] + 71.844/(159.69/2)*Liq_Results['Fe2O3'], 
+        #     'MnO_Liq': Liq_Results['MnO'], 
+        #     'MgO_Liq': Liq_Results['MgO'], 
+        #     'CaO_Liq': Liq_Results['CaO'],
+        #     'Na2O_Liq': Liq_Results['Na2O'], 
+        #     'K2O_Liq': Liq_Results['K2O'], 
+        #     'P2O5_Liq': Liq_Results['P2O5'], 
+        #     'H2O_Liq': Liq_Results['H2O'], 
+        #     'CO2_Liq': Liq_Results['CO2'], 
+        #     'Fe3Fet_Liq': (71.844/(159.69/2)*Liq_Results['Fe2O3'])/(Liq_Results['FeO'] + 71.844/(159.69/2)*Liq_Results['Fe2O3']), 
+        #     'P_bar': P_bar, 
+        #     'T_Liq_C': Liq_Results['T_Liq_C']}
               
-        out = {'SiO2_Liq': Liq_Results['SiO2'], 
-            'TiO2_Liq': Liq_Results['TiO2'],
-            'Al2O3_Liq': Liq_Results['Al2O3'], 
-            'FeOt_Liq': Liq_Results['FeO'] + 71.844/(159.69/2)*Liq_Results['Fe2O3'], 
-            'MnO_Liq': Liq_Results['MnO'], 
-            'MgO_Liq': Liq_Results['MgO'], 
-            'CaO_Liq': Liq_Results['CaO'],
-            'Na2O_Liq': Liq_Results['Na2O'], 
-            'K2O_Liq': Liq_Results['K2O'], 
-            'P2O5_Liq': Liq_Results['P2O5'], 
-            'H2O_Liq': Liq_Results['H2O'], 
-            'CO2_Liq': Liq_Results['CO2'], 
-            'Fe3Fet_Liq': (71.844/(159.69/2)*Liq_Results['Fe2O3'])/(Liq_Results['FeO'] + 71.844/(159.69/2)*Liq_Results['Fe2O3']), 
-            'P_bar': P_bar, 
-            'T_Liq_C': Liq_Results['T_Liq_C']}
+        out = {'SiO2_Liq': Liq_low['SiO2'], 
+            'TiO2_Liq': Liq_low['TiO2'],
+            'Al2O3_Liq': Liq_low['Al2O3'], 
+            'FeOt_Liq': Liq_low['FeO'] + 71.844/(159.69/2)*Liq_low['Fe2O3'], 
+            'MnO_Liq': Liq_low['MnO'], 
+            'MgO_Liq': Liq_low['MgO'], 
+            'CaO_Liq': Liq_low['CaO'],
+            'Na2O_Liq': Liq_low['Na2O'], 
+            'K2O_Liq': Liq_low['K2O'], 
+            'P2O5_Liq': Liq_low['P2O5'], 
+            'H2O_Liq': Liq_low['H2O'], 
+            'CO2_Liq': Liq_low['CO2'], 
+            'Fe3Fet_Liq': (71.844/(159.69/2)*Liq_low['Fe2O3'])/(Liq_low['FeO'] + 71.844/(159.69/2)*Liq_low['Fe2O3']), 
+            'P_bar': P_low, 
+            'T_Liq_C': Liq_low['T_Liq_C']}
 
     if trial is not None:
         trial = True
@@ -1739,8 +1757,8 @@ def findSatPressure_MELTS(Model = None, T_C_init = None, T_fixed_C = None, P_bar
 
 def AdiabaticDecompressionMelting_MELTS(Model = None, comp = None, Tp_C = None, Tp_Method = None, T_start_C = None,
                                         P_path_bar = None, P_start_bar = None, P_end_bar = None, dp_bar = None, 
-                                        Frac = False, fO2_buffer = None, fO2_offset = None):
-    if T_start_C is None:
+                                        Frac = False, fO2_buffer = None, fO2_offset = None, s = None):
+    if T_start_C is None and Tp_Method == "pyMelt":
         try:
             import pyMelt as m     
             Lithologies = {'KLB-1': m.lithologies.matthews.klb1(),
@@ -1771,26 +1789,52 @@ def AdiabaticDecompressionMelting_MELTS(Model = None, comp = None, Tp_C = None, 
 
     melts.engine.setSystemProperties("Suppress", "rutile")
     melts.engine.setSystemProperties("Suppress", "tridymite")
-    
-    
-    if T_start_C is None:
-        lz = m.lithologies.matthews.klb1()
-        mantle = m.mantle([lz], [1], ['Lz'])
-        if P_start_bar is not None:
-            T_start_C = mantle.adiabat(P_start_bar/10000, Tp_C)
+
+    if fO2_buffer is not None:
+        if fO2_offset is None:
+            melts.engine.setSystemProperties(["Log fO2 Path: " + fO2_buffer])
         else:
-            T_start_C = mantle.adiabat(P_path_bar[0]/10000, Tp_C)
+            melts.engine.setSystemProperties(["Log fO2 Path: " + fO2_buffer, "Log fO2 Offset: " + str(fO2_offset)])
 
     bulk = [comp['SiO2_Liq'], comp['TiO2_Liq'], comp['Al2O3_Liq'], comp['Fe3Fet_Liq']*((159.59/2)/71.844)*comp['FeOt_Liq'], comp['Cr2O3_Liq'], (1- comp['Fe3Fet_Liq'])*comp['FeOt_Liq'], comp['MnO_Liq'], comp['MgO_Liq'], 0.0, 0.0, comp['CaO_Liq'], comp['Na2O_Liq'], comp['K2O_Liq'], comp['P2O5_Liq'], comp['H2O_Liq'], comp['CO2_Liq'], 0.0, 0.0, 0.0]
     bulk = list(100*np.array(bulk)/np.sum(bulk))
 
     melts.engine.setBulkComposition(bulk)
-    melts.engine.temperature = T_start_C
 
     if P_path_bar is not None:
         P = P_path_bar
     else:
         P = np.linspace(P_start_bar, P_end_bar, 1+int(round((P_start_bar - P_end_bar)/dp_bar)))
+    
+    melts.engine.pressure = P[0]
+
+    if T_start_C is None:
+        if Tp_Method == "pyMelt":
+            lz = m.lithologies.matthews.klb1()
+            mantle = m.mantle([lz], [1], ['Lz'])
+            if P_start_bar is not None:
+                T_start_C = mantle.adiabat(P_start_bar/10000, Tp_C)
+            else:
+                T_start_C = mantle.adiabat(P_path_bar[0]/10000, Tp_C)
+        else:
+            try:
+                T = Tp_C + 0.8*(P[0]*(100)/(3300*9.81))
+                T_search = np.linspace(Tp_C, T, 10)
+                s_search = np.zeros(len(T_search))
+                for idx, t in enumerate(T_search):
+                    melts = melts.addNodeAfter()
+                    melts.engine.temperature = t
+                    melts.engine.calcEquilibriumState(1,0)
+                    s_search[idx] = melts.engine.getProperty('s', 'bulk')
+
+                if s_search[0] > s_search[1]:
+                    T_start_C = np.interp(s, s_search[::-1], T_search[::-1])
+                else:
+                    T_start_C = np.interp(s, s_search, T_search)
+            except:
+                raise Exception("Unable to find suitable starting temperature.")
+
+    melts.engine.temperature = T_start_C
 
     # Results['Conditions'] = pd.DataFrame(data = np.zeros((len(P), 7)), columns = ['temperature', 'pressure', 'h', 's', 'v', 'dvdp', 'logfO2'])
     Results['Conditions'] = pd.DataFrame(data = np.zeros((len(P), 8)), columns = ['temperature', 'pressure', 'h', 's', 'v', 'mass', 'dvdp', 'logfO2'])
@@ -1889,6 +1933,64 @@ def AdiabaticDecompressionMelting_MELTS(Model = None, comp = None, Tp_C = None, 
         #     s = melts.engine.getProperty('s','bulk')
 
     return Results
+
+def s_search(q, *, Model = "pMELTS", comp = None, Tp_C = 1350):
+    if comp is None:
+        raise Exception("No composition specified")
+    else:
+        if type(comp) == list:
+            bulk = comp.copy()
+        else:
+            bulk = [comp['SiO2_Liq'], comp['TiO2_Liq'], comp['Al2O3_Liq'], comp['Fe3Fet_Liq']*((159.59/2)/71.844)*comp['FeOt_Liq'], comp['Cr2O3_Liq'], (1 - comp['Fe3Fet_Liq'])*comp['FeOt_Liq'], comp['MnO_Liq'], comp['MgO_Liq'], 0.0, 0.0, comp['CaO_Liq'], comp['Na2O_Liq'], comp['K2O_Liq'], comp['P2O5_Liq'], comp['H2O_Liq'], comp['CO2_Liq'], 0.0, 0.0, 0.0]
+
+    bulk = list(100*np.array(bulk)/np.sum(bulk))
+
+    from meltsdynamic import MELTSdynamic
+    if Model is None or Model == "MELTSv1.0.2":
+        melts = MELTSdynamic(1)
+    elif Model == "pMELTS":
+        melts = MELTSdynamic(2)
+    elif Model == "MELTSv1.1.0":
+        melts = MELTSdynamic(3)
+    elif Model == "MELTSv1.2.0":
+        melts = MELTSdynamic(4)
+
+    try:
+        melts.engine.setBulkComposition(bulk)
+        melts.engine.pressure = 1
+        melts.engine.temperature = Tp_C
+
+        melts.engine.setSystemProperties("Suppress", "rutile")
+        melts.engine.setSystemProperties("Suppress", "tridymite")
+
+        melts.engine.calcEquilibriumState(1,0)
+
+        melts.engine.setSystemProperties("Suppress", "liquid")
+        T_search = [1100,1000,950,900,850,800,750,700,650,600]
+
+        for T in T_search:
+            melts = melts.addNodeAfter()
+            melts.engine.temperature = T
+            melts.engine.calcEquilibriumState(1,0)
+            if melts.engine.getProperty('mass', "liquid") > 0.0:
+                a = 0
+                continue
+            else:
+                a = 1
+                break
+        if a == 0:
+            raise Exception("Subsolidus assemblage not found so potential temperature cannot be determined. Use T_start_C instead.")
+        
+        melts = melts.addNodeAfter()
+
+        melts.engine.temperature = Tp_C
+        melts.engine.calcEquilibriumState(1,0)
+
+        s = melts.engine.getProperty('s', 'bulk')
+
+        q.put(s)
+    except:
+        raise Exception("Potential Temperature search failed. Try using T_start_C instead.")
 
 
 

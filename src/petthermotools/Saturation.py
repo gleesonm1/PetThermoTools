@@ -3,12 +3,14 @@ import pandas as pd
 from petthermotools.GenFuncs import *
 from petthermotools.Plotting import *
 from petthermotools.MELTS import *
+from petthermotools.core_config import MAX_WORKERS
 import multiprocessing
 from multiprocessing import Queue
 from multiprocessing import Process
 import time
-import sys
+import sys, os
 from tqdm.notebook import tqdm, trange
+import tempfile # use to create unique temp directories for each specific process
 
 def findSatPressure_multi(cores = multiprocessing.cpu_count(), Model = "MELTSv1.2.0", bulk = None, T_fixed_C = None, 
                           P_bar_init = None, Fe3Fet_Liq = None, H2O_Liq = None, CO2_Liq = None, 
@@ -344,7 +346,7 @@ def findSatPressure(cores = None, Model = None, bulk = None, T_C_init = None, T_
         return Res
 
 
-def saturation_pressure(Model = "MELTSv1.2.0", cores = multiprocessing.cpu_count(),
+def saturation_pressure(Model = "MELTSv1.2.0", cores = MAX_WORKERS,
                         bulk = None, T_init_C = None, T_fixed_C = None, P_init_bar = 5000,
                         Fe3Fet_Liq = None, Fe3Fet_init = None, H2O_Liq = None, H2O_init = None,
                         CO2_Liq = None, CO2_init = None, fO2_buffer = None, fO2_offset = None, 
@@ -364,7 +366,7 @@ def saturation_pressure(Model = "MELTSv1.2.0", cores = multiprocessing.cpu_count
                 "MELTSv1.1.0"
                 "MELTSv1.0.2" - only H2O
                 "pMELTS" - only H2O
-    cores : int, default multiprocessing.cpu_count()
+    cores : int, default petthermotools.core_config.MAX_WORKERS
         Number of parallel processes to use.
     bulk : dict, pandas.Series, or pandas.DataFrame
         Bulk melt composition(s). If a Series or single dict is passed, a single calculation is run.
@@ -434,17 +436,17 @@ def saturation_pressure(Model = "MELTSv1.2.0", cores = multiprocessing.cpu_count
         comp = bulk.copy()
 
     if H2O_Liq is not None:
-        print('Warning - the kwarg "H2O_Liq" will be removed from v1.0.0 onwards. Please use "H2O_init" instead.')
+        print('Warning - the kwarg "H2O_Liq" will be removed from v1.1.0 onwards. Please use "H2O_init" instead.')
         if H2O_init is None:
             H2O_init = H2O_Liq
 
     if CO2_Liq is not None:
-        print('Warning - the kwarg "CO2_Liq" will be removed from v1.0.0 onwards. Please use "CO2_init" instead.')
+        print('Warning - the kwarg "CO2_Liq" will be removed from v1.1.0 onwards. Please use "CO2_init" instead.')
         if CO2_init is None:
             CO2_init = CO2_Liq
 
     if Fe3Fet_Liq is not None:
-        print('Warning - the kwarg "Fe3Fet_Liq" will be removed from v1.0.0 onwards. Please use "Fe3Fet_init" instead.')
+        print('Warning - the kwarg "Fe3Fet_Liq" will be removed from v1.1.0 onwards. Please use "Fe3Fet_init" instead.')
         if Fe3Fet_init is None:
             Fe3Fet_init = Fe3Fet_Liq
 
@@ -567,10 +569,12 @@ def saturation_pressure(Model = "MELTSv1.2.0", cores = multiprocessing.cpu_count
             non_empty_groups = [g for g in groups if g.size > 0]
             groups = non_empty_groups
 
-            if len(groups[0])< 15:
+            if len(groups[0])< 10:
                 timeout = len(groups[0])*timeout_main
             else:
-                timeout = 15*timeout_main
+                timeout = 10*timeout_main
+                for g in range(len(groups)):
+                    groups[g] = groups[g][:10]
             
             processes = []
             Start = time.time()
@@ -587,14 +591,14 @@ def saturation_pressure(Model = "MELTSv1.2.0", cores = multiprocessing.cpu_count
             for p, q, group in processes:
                 try:
                     if time.time() - Start < timeout + 5:
-                        res = q.get(timeout = timeout)
+                        res = q.get(timeout = (timeout - (time.time()-Start) + 5))
                     else:
-                        res = q.get(timeout=10)
+                        res = q.get(timeout=1)
                 except:
                     res = []
                     idx_chunks = np.array([group[0]], dtype = int)
 
-                p.join(timeout=2)
+                p.join(timeout=1)
                 p.terminate()
 
                 if len(res) > 0.0:
@@ -713,6 +717,14 @@ def saturation_pressure(Model = "MELTSv1.2.0", cores = multiprocessing.cpu_count
 
 def saturationP_multi(q, index, *, Model = None, comp = None, T_C_init = None, T_fixed_C = None,
                P_bar_init = None, fO2_buffer = None, fO2_offset = None):
+    f = open(os.devnull, 'w')
+    sys.stdout = f
+
+    # with tempfile.TemporaryDirectory() as tempdir:
+    #     original_dir = os.getcwd()
+    #     os.chdir(tempdir)
+    
+    #     try:
     results = {}
     idx = []
     if "MELTS" in Model:
@@ -783,6 +795,10 @@ def saturationP_multi(q, index, *, Model = None, comp = None, T_C_init = None, T
             break
 
     q.put([idx, results])
+
+        # finally:# Always return to the original directory before the process exits
+        #     os.chdir(original_dir)
+        #     q.put([idx, results])
 
 def satP(q, index, *, Model = None, comp = None, T_C_init = None, T_fixed_C = None, 
          P_bar_init = None, fO2_buffer = None, fO2_offset = None):

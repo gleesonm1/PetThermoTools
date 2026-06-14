@@ -108,6 +108,8 @@ def AdiabaticDecompressionMelting(cores = multiprocessing.cpu_count(),
     Fe3Fet = check_array(Fe3Fet)
     fO2_offset = check_array(fO2_offset)
 
+    s = None # placeholder for Tp calculation
+
     if fO2_buffer is not None:
         if fO2_buffer != "NNO":
             if fO2_buffer != "FMQ":
@@ -185,12 +187,21 @@ def AdiabaticDecompressionMelting(cores = multiprocessing.cpu_count(),
                     import pyMelt as m 
                 except ImportError:
                     raise RuntimeError('You havent installed pyMelt or there is an error when importing pyMelt. pyMelt is currently required to estimate the starting point for the melting calculations. Try running %pip install pyMelt')
+            else:
+                p = Process(target = s_search, args = (q,),
+                            kwargs = {'Model': Model, 'comp': comp_1, 'Tp_C': Tp_C})
+                p.start()
+
+                try:
+                    s = q.get(timeout=30)
+                except:
+                    raise Exception("Tp search failed. Use T_start_C instead.")
             
             p = Process(target = AdiabaticMelt, args = (q, 1),
                         kwargs = {'Model': Model, 'comp_1': comp_1, 'comp_2': comp_2, 'comp_3': comp_3,
                                 'T_start_C': T_start_C, 'Tp_C': Tp_C, 'Tp_Method': Tp_Method, 'P_path_bar': P_path_bar, 
                                 'P_start_bar': P_start_bar, 'P_end_bar': P_end_bar, 'dp_bar': dp_bar,
-                                'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset, 'Frac': Frac, 'prop': prop})
+                                'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset, 'Frac': Frac, 'prop': prop, 's': s})
 
             p.start()
             try:
@@ -273,7 +284,7 @@ def AdiabaticDecompressionMelting(cores = multiprocessing.cpu_count(),
 
 def AdiabaticMelt(q, index, *, Model = None, comp_1 = None, comp_2 = None, comp_3 = None, Tp_Method = "pyMelt",
                   Tp_C = None, T_start_C = None, P_start_bar = None, P_end_bar = None, dp_bar = None, P_path_bar = None, 
-                  Frac = None, fO2_buffer = None, fO2_offset = None, prop = None):
+                  Frac = None, fO2_buffer = None, fO2_offset = None, prop = None, s = None):
     '''
     Worker function to perform a single Adiabatic Decompression Melting (ADM) simulation.
 
@@ -320,7 +331,7 @@ def AdiabaticMelt(q, index, *, Model = None, comp_1 = None, comp_2 = None, comp_
         try:
             Results = AdiabaticDecompressionMelting_MELTS(Model = Model, comp = comp_1, T_start_C = T_start_C, Tp_C = Tp_C, Tp_Method = Tp_Method,
                                                           P_path_bar = P_path_bar, P_start_bar = P_start_bar, P_end_bar = P_end_bar, dp_bar = dp_bar, 
-                                                          fO2_buffer = fO2_buffer, fO2_offset = fO2_offset)
+                                                          fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, s = s)
             q.put([Results, index])
         except:
             q.put([])
