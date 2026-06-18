@@ -6,7 +6,7 @@ def isobaric_crystallisation(Model = None, bulk = None, Frac_solid = None, Frac_
                              T_path_C = None, T_start_C = None, T_end_C = None, dt_C = None, 
                              P_bar = None, Fe3Fet_init = None, Fe3Fet_Liq = None, 
                              H2O_init = None, CO2_init = None, H2O_Liq = None, CO2_Liq = None, 
-                             find_liquidus = None, fO2_buffer = None, fO2_offset = None, 
+                             find_liquidus = False, fO2_buffer = None, fO2_offset = None, 
                              label = None, Crystallinity_limit = None, fluid_sat = False, timeout = None,
                              Suppress = ['rutile', 'tridymite'], Suppress_except=False,
                              multi_processing = True):
@@ -97,7 +97,7 @@ def isochoric_crystallisation(Model = None, bulk = None, Frac_solid = None, Frac
                               T_path_C = None, T_start_C = None, T_end_C = None, dt_C = None, 
                               P_bar = None, Fe3Fet_init = None, Fe3Fet_Liq = None, 
                               H2O_init = None, H2O_Liq = None, CO2_init = None, CO2_Liq = None, 
-                              find_liquidus = None, fO2_buffer = None, fO2_offset = None, 
+                              find_liquidus = False, fO2_buffer = None, fO2_offset = None, 
                               label = None, Crystallinity_limit = None, fluid_sat = False, 
                               timeout = None, Suppress = ['rutile', 'tridymite'], Suppress_except=False,
                               multi_processing = True):
@@ -154,17 +154,17 @@ def isochoric_crystallisation(Model = None, bulk = None, Frac_solid = None, Frac
         A dictionary of results with DataFrames for each phase.
     """
     if H2O_Liq is not None:
-        print('Warning - the kwarg "H2O_Liq" will be removed from v1.0.0 onwards. Please use "H2O_init" instead.')
+        print('Warning - the kwarg "H2O_Liq" will be removed from v1.1.0 onwards. Please use "H2O_init" instead.')
         if H2O_init is None:
             H2O_init = H2O_Liq
 
     if CO2_Liq is not None:
-        print('Warning - the kwarg "CO2_Liq" will be removed from v1.0.0 onwards. Please use "CO2_init" instead.')
+        print('Warning - the kwarg "CO2_Liq" will be removed from v1.1.0 onwards. Please use "CO2_init" instead.')
         if CO2_init is None:
             CO2_init = CO2_Liq
 
     if Fe3Fet_Liq is not None:
-        print('Warning - the kwarg "Fe3Fet_Liq" will be removed from v1.0.0 onwards. Please use "Fe3Fet_init" instead.')
+        print('Warning - the kwarg "Fe3Fet_Liq" will be removed from v1.1.0 onwards. Please use "Fe3Fet_init" instead.')
         if Fe3Fet_init is None:
             Fe3Fet_init = Fe3Fet_Liq
 
@@ -184,7 +184,7 @@ def polybaric_crystallisation_path(Model = None, bulk = None, Frac_solid = None,
                                    T_path_C = None, T_start_C = None, T_end_C = None, dt_C = None, 
                                    P_path_bar = None, P_start_bar = None, P_end_bar = None, dp_bar = None, 
                                    Fe3Fet_init = None, Fe3Fet_Liq = None, H2O_init = None, H2O_Liq = None, 
-                                   CO2_init = None, CO2_Liq = None, find_liquidus = None, fO2_buffer = None, 
+                                   CO2_init = None, CO2_Liq = None, find_liquidus = False, fO2_buffer = None, 
                                    fO2_offset = None, label = None, timeout = None, multi_processing=True, fluid_sat = False,
                                    Suppress = ['rutile', 'tridymite'], Suppress_except=False):
     """
@@ -275,7 +275,7 @@ def polybaric_crystallisation_onestep(Model = None, bulk = None, Frac_solid = No
                                       T_start_C = None, T_end_C = None, dt_C = None, T_step_C = None, 
                                       P_start_bar = None, P_end_bar = None, Fe3Fet_Liq = None, Fe3Fet_init = None,
                                       H2O_Liq = None, H2O_init = None, CO2_Liq = None, CO2_init = None, 
-                                      find_liquidus = None, fO2_buffer = None, fO2_offset = None, label = None, 
+                                      find_liquidus = False, fO2_buffer = None, fO2_offset = None, label = None, 
                                       timeout = None, multi_processing = True, Suppress = ['rutile', 'tridymite'], 
                                       Suppress_except=False, fluid_sat = False):
     """
@@ -478,7 +478,7 @@ def polybaric_crystallisation_multistep(Model = None, bulk = None, Frac_solid = 
 def isothermal_decompression(Model = None, bulk = None, Frac_solid = None, Frac_fluid = None, 
                              T_C = None, P_start_bar = None, P_end_bar = None, dp_bar = None, 
                              Fe3Fet_Liq = None, Fe3Fet_init = None, H2O_Liq = None, H2O_init = None,
-                             CO2_Liq = None, CO2_init = None, find_liquidus = None, fO2_buffer = None, 
+                             CO2_Liq = None, CO2_init = None, find_liquidus = False, fO2_buffer = None, 
                              fO2_offset = None, label = None, timeout = None, fluid_sat = False, 
                              Suppress = ['rutile', 'tridymite'], Suppress_except=False, multi_processing = True):
     """
@@ -560,7 +560,7 @@ def isothermal_decompression(Model = None, bulk = None, Frac_solid = None, Frac_
 def isentropic_decompression(Model = None, bulk = None, Frac_solid = None, Frac_fluid = None, 
                              T_C = None, P_start_bar = None, P_end_bar = None, dp_bar = None, 
                              Fe3Fet_Liq = None, Fe3Fet_init = None, H2O_Liq = None, H2O_init = None,
-                             CO2_Liq = None, CO2_init = None, find_liquidus = None, fO2_buffer = None, 
+                             CO2_Liq = None, CO2_init = None, find_liquidus = False, fO2_buffer = None, 
                              fO2_offset = None, label = None, timeout = None, fluid_sat = False, 
                              Suppress = ['rutile', 'tridymite'], Suppress_except=False, multi_processing = True):
     """

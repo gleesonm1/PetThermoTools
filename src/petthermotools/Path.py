@@ -559,7 +559,7 @@ def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid 
                     timeout = len(groups[-1])*timeout_main
                 else:
                     timeout = 3*timeout_main
-                    
+                
                 processes = []
                 start = time.time()
                 for i in range(len(groups)):
@@ -581,36 +581,67 @@ def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid 
                 # drain queue while waiting for calculation to finish
                 if "MELTS" in Model:
                     for p, q, group in processes:
-
                         while True:
                             try:
+                                # 1. Prioritize pulling data. This blocks for 0.1s if empty.
                                 item = q.get(timeout=0.1)
-
+                                
                                 run_index, step_i, data = item
                                 Results.setdefault(run_index, {})[step_i] = data
 
                             except Empty:
-                                time.sleep(0.001)
-                                pass
+                                # 2. We only check exit conditions when the queue is dry.
+                                
+                                # Condition A: Process finished naturally
+                                if not p.is_alive():
+                                    break  
+                                
+                                # Condition B: Global timeout exceeded
+                                if time.time() - start > timeout:
+                                    print("Timeout — terminating process")
+                                    p.terminate()
+                                    p.join()  # Best practice: clean up zombie processes
+                                    
+                                    # Final sweep: Catch anything that slipped in right at termination
+                                    while not q.empty():
+                                        try:
+                                            item = q.get_nowait()
+                                            run_index, step_i, data = item
+                                            Results.setdefault(run_index, {})[step_i] = data
+                                        except Empty:
+                                            break
+                                    break
+                    # for p, q, group in processes:
 
-                            # Timeout condition
-                            if time.time() - start > timeout:
-                                print("Timeout — terminating process")
-                                p.terminate()
-                                break
+                    #     while True:
+                    #         try:
+                    #             item = q.get(timeout=0.1)
 
-                        # If process finished and queue empty → break
-                            if not p.is_alive():
-                                try:
-                                    # Drain remaining items
-                                    while True:
-                                        item = q.get_nowait()
-                                        run_index, step_i, data = item
-                                        Results.setdefault(run_index, {})[step_i] = data
-                                except Empty:
-                                    time.sleep(0.001)
-                                    pass
-                                break
+                    #             run_index, step_i, data = item
+                    #             Results.setdefault(run_index, {})[step_i] = data
+
+                    #         except Empty:
+                    #             time.sleep(0.001)
+                    #             pass
+
+                    #     # If process finished and queue empty → break
+                    #         if not p.is_alive():
+                    #             try:
+                    #                 # Drain remaining items
+                    #                 while True:
+                    #                     item = q.get_nowait()
+                    #                     run_index, step_i, data = item
+                    #                     Results.setdefault(run_index, {})[step_i] = data
+                    #             except Empty:
+                    #                 time.sleep(0.001)
+                    #                 pass
+                    #             break
+
+                    #         # Timeout condition
+                    #         if time.time() - start > timeout:
+                    #             print("Timeout — terminating process")
+                    #             p.terminate()
+                    #             break
 
                     index_out = np.array(list(Results.keys()))
                 

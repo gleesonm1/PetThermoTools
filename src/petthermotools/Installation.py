@@ -145,7 +145,7 @@ def install_MAGEMinCalc():
             Pkg.add(url="https://github.com/gleesonm1/MAGEMinCalc.git", rev="v0.6.1")
         end
             
-        Pkg.add(name = "MAGEMin_C", version="2.1.5")
+        Pkg.add(name = "MAGEMin_C", version="2.2.6")
             
         Pkg.resolve()   
         Pkg.precompile()
@@ -179,7 +179,7 @@ def update_MAGEMinCalc():
             Pkg.add(url="https://github.com/gleesonm1/MAGEMinCalc.git", rev="v0.6.1")
         end
              
-        Pkg.add(name = "MAGEMin_C", version="2.1.5")
+        Pkg.add(name = "MAGEMin_C", version="2.2.6")
              
         Pkg.resolve()   
         Pkg.precompile()

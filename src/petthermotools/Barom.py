@@ -419,10 +419,17 @@ def mineral_cosaturation(Model="MELTSv1.0.2", cores=int(np.floor(multiprocessing
             if results[run]:
                 if results[run][-1]:
                     del results[run][-1]
-                res = results[run]
-                new_results = compile_results(res)
+                if results[run]:
+                    Results = results[run]
+                    new_results = compile_results(Results)
 
-                full_results[f"Run {run}"] = new_results
+                    full_results[f"Run {run}"] = new_results
+                # if results[run][-1]:
+                #     del results[run][-1]
+                # res = results[run]
+                # new_results = compile_results(res)
+
+                # full_results[f"Run {run}"] = new_results
 
         Results = stich(Res=full_results, multi=True, Model=Model)
     else:
