@@ -69,6 +69,19 @@ from petthermotools.Methods import *
 # except:
 #     print('Warning: MAGEMin calculations cannot be performed')
 
+# ── nGibbs neural-network emulator registry ──────────────────────────────────
+# Instantiated once in nGibbs_bridge.py and imported here so users can
+# inspect or extend the registry via `ptt._nGibbs_models`.
+# Path.py also imports from nGibbs_bridge, so there is no duplication.
+try:
+    from petthermotools.nGibbs_bridge import _nGibbs_models
+except ImportError:
+    _nGibbs_models = {}
+    print(
+        "nGibbs not found — nGibbs emulators are unavailable. "
+        "Install it with `ptt.install_nGibbs()` (~300 MB storage required)."
+    )
+
 # version
 from ._version import __version__
 

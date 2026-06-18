@@ -598,6 +598,7 @@ def findLiq_MELTS(P_bar = None, Model = None, T_C_init = None, comp = None, melt
             return Results, melts
         else:
             return Results
+
         
 def supCalc_MELTS(Model = "MELTSv1.0.2", comp = None, phase = None, T_C = None, P_bar = None,
              fO2_buffer = None, fO2_offset = None, 
@@ -1891,8 +1892,559 @@ def AdiabaticDecompressionMelting_MELTS(Model = None, comp = None, Tp_C = None, 
     return Results
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Worker-process globals (one MELTS instance per worker, initialised once)
+# ─────────────────────────────────────────────────────────────────────────────
+_PARALLEL_MELTS = None
+
+# Property fields returned by calcPhaseProperties in this order (from MELTSstatus.fields)
+_MELTS_FIELDS = (
+    'g', 'h', 's', 'v', 'cp', 'dcpdt',
+    'dvdt', 'dvdp', 'd2vdt2', 'd2vdtdp', 'd2vdp2',
+    'molwt', 'rho', 'mass',
+)
+
+_MODEL_CODES = {
+    "MELTSv1.0.2":  1,
+    "pMELTS":       2,
+    "MELTSv1.1.0":  3,
+    "MELTSv1.2.0":  4,
+}
 
 
+def _init_melts_worker(model_code: int, extra_paths: list):
+    """ProcessPoolExecutor initializer – run once per worker process."""
+    global _PARALLEL_MELTS
+    import warnings
+    for p in extra_paths:
+        if p not in sys.path:
+            sys.path.insert(0, p)
+    from meltsdynamic import MELTSdynamic
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        _PARALLEL_MELTS = MELTSdynamic(model_code)
 
+
+def _worker_phase_props(phase_name: str,
+                        T_arr,     # ndarray (n,)
+                        P_arr,     # ndarray (n,)
+                        bulk_mat,  # ndarray (n, 19)
+                        ):
+    """Evaluate MELTS supplemental calculator for a batch of rows.
+
+    Returns ndarray shape (n, 14) in _MELTS_FIELDS order. NaN on failure.
+    """
+    global _PARALLEL_MELTS
+    melts = _PARALLEL_MELTS
+    n = len(T_arr)
+    out = np.full((n, 14), np.nan, dtype=np.float64)
+
+    for i in range(n):
+        try:
+            melts.engine.temperature = float(T_arr[i])
+            melts.engine.pressure = float(P_arr[i])
+            melts.engine.calcPhaseProperties(phase_name, bulk_mat[i].tolist())
+            if not melts.engine.status.failed:
+                for j, field in enumerate(_MELTS_FIELDS):
+                    d = melts.engine.__dict__.get(field)
+                    if isinstance(d, dict):
+                        val = d.get(phase_name)
+                        if val is not None:
+                            try:
+                                out[i, j] = float(val)
+                            except (TypeError, ValueError):
+                                pass
+        except Exception:
+            pass
+    return out
+
+
+def _build_bulk_matrix(comp_liq: pd.DataFrame) -> np.ndarray:
+    """Convert a comp_liq DataFrame to an (n, 19) MELTS-order oxide mass matrix.
+
+    MELTS oxide order for MELTSv1.0.2:
+    0:SiO2  1:TiO2  2:Al2O3  3:Fe2O3  4:Cr2O3  5:FeO  6:MnO  7:MgO
+    8:NiO(0)  9:CoO(0)  10:CaO  11:Na2O  12:K2O  13:P2O5  14:H2O  15:CO2
+    16:SO3(0)  17:Cl2O-1(0)  18:F2O-1(0)
+    """
+    n = len(comp_liq)
+    mat = np.zeros((n, 19), dtype=np.float64)
+    _LIQ_TO_IDX = {
+        'SiO2_Liq': 0, 'TiO2_Liq': 1, 'Al2O3_Liq': 2, 'Cr2O3_Liq': 4,
+        'MnO_Liq':  6, 'MgO_Liq':  7, 'CaO_Liq':   10, 'Na2O_Liq': 11,
+        'K2O_Liq': 12, 'P2O5_Liq': 13, 'H2O_Liq':   14, 'CO2_Liq':  15,
+    }
+    for col, idx in _LIQ_TO_IDX.items():
+        if col in comp_liq.columns:
+            mat[:, idx] = comp_liq[col].values
+
+    fe3fet = comp_liq['Fe3Fet_Liq'].values if 'Fe3Fet_Liq' in comp_liq.columns else np.zeros(n)
+    feot   = comp_liq['FeOt_Liq'].values   if 'FeOt_Liq'   in comp_liq.columns else np.zeros(n)
+    mat[:, 3] = fe3fet * (159.59 / 2.0 / 71.844) * feot   # Fe2O3
+    mat[:, 5] = (1.0 - fe3fet) * feot                       # FeO
+    return mat
+
+def calc_phase_props_MELTS(Results, Model="MELTSv1.0.2", fO2_buffer=None, fO2_offset=None, melts=None):
+    """
+    Calculates per-phase thermodynamic properties for all phases in a PTT/nGibbs
+    output dictionary using supCalc_MELTS, and computes bulk thermodynamic properties.
+
+    Parameters
+    ----------
+    Results : dict
+        PTT/nGibbs-format dict containing at minimum:
+        - 'Conditions': DataFrame with 'T_C' and 'P_bar' columns
+        - '<phase>': DataFrames with phase oxide compositions
+          (columns like 'SiO2_<suffix>', 'FeOt_<suffix>', 'Fe3Fet_<suffix>')
+        - 'mass_g': DataFrame with phase masses (g per 100 g total system mass)
+    Model : str
+        MELTS model: "MELTSv1.0.2", "MELTSv1.1.0", "MELTSv1.2.0", or "pMELTS".
+    fO2_buffer : str, optional
+    fO2_offset : float, optional
+    melts : MELTSdynamic, optional
+        Pre-initialised MELTS instance; one will be created if not provided.
+
+    Returns
+    -------
+    Results : dict
+        Input dict with the following additions/modifications:
+        - '<phase>_prop' DataFrames with columns:
+            mass_g, rho_kg/m^3, V_cm^3, G_J, H_J, S_J/K, Cp_J/(kg.K^2),
+            dCpdT_J/(kg.K^2), dVdT_cm^3/K, dPdT_bar/K, d2VdT2_cm^3/K^2,
+            d2VdTdP_cm^3/(bar.K), d2VdP2_cm^3/bar^2, molwt
+          NaN where the phase has zero mass. Extensive properties (V, G, H, S,
+          Cp, etc.) are scaled to actual phase mass (nGibbs_mass / 100 * supCalc
+          value) so that Conditions bulk sums are straightforward. Intensive
+          properties (rho, molwt, dPdT) are stored unscaled.
+        - Updated 'Conditions' DataFrame with columns:
+            T_C, P_bar, mass_g, H_J, S_J/K, V_cm^3, rho_kg/m^3, log10(fO2),
+            dVdP_cm^3/bar (NaN: dvdp is not available per-phase from supCalc_MELTS)
+    """
+    if melts is None:
+        from meltsdynamic import MELTSdynamic
+        if Model is None or Model == "MELTSv1.0.2":
+            melts = MELTSdynamic(1)
+        elif Model == "pMELTS":
+            melts = MELTSdynamic(2)
+        elif Model == "MELTSv1.1.0":
+            melts = MELTSdynamic(3)
+        elif Model == "MELTSv1.2.0":
+            melts = MELTSdynamic(4)
+
+    T_C = Results['Conditions']['T_C'].values
+    P_bar_vals = Results['Conditions']['P_bar'].values
+    n = len(T_C)
+
+    _SKIP_KEYS = {'Conditions', 'mass_g', 'All'}
+    phases = [k for k in Results if k not in _SKIP_KEYS and not k.endswith('_prop')]
+
+    prop_col_names = [
+        'mass_g', 'rho_kg/m^3', 'V_cm^3', 'G_J', 'H_J', 'S_J/K',
+        'Cp_J/(kg.K^2)', 'dCpdT_J/(kg.K^2)', 'dVdT_cm^3/K', 'dPdT_bar/K',
+        'd2VdT2_cm^3/K^2', 'd2VdTdP_cm^3/(bar.K)', 'd2VdP2_cm^3/bar^2', 'molwt',
+    ]
+    melts_prop_names = [
+        'mass', 'rho', 'v', 'g', 'h', 's',
+        'cp', 'dcpdt', 'dvdt', 'dpdt',
+        'd2vdt2', 'd2vdtdp', 'd2vdp2', 'molwt',
+    ]
+    # Intensive properties are stored as-is; all others are scaled by phase mass fraction
+    _INTENSIVE = {'rho', 'molwt', 'dpdt'}
+
+    _BASE_OXIDES = ['SiO2', 'TiO2', 'Al2O3', 'Cr2O3', 'MnO', 'MgO',
+                    'CaO', 'Na2O', 'K2O', 'P2O5', 'H2O', 'CO2']
+
+    has_mass_table = 'mass_g' in Results
+
+    for phase in phases:
+        # reset_index so active_idx (0-based positions from np.where) matches labels.
+        # divide_ptt_tables preserves original row labels, so sub-tables may start at
+        # non-zero values (e.g. 16, 32, ...) causing .loc[active_idx] to fail.
+        phase_df = Results[phase].reset_index(drop=True)
+
+        sio2_cols = [c for c in phase_df.columns if c.startswith('SiO2_')]
+        if not sio2_cols:
+            continue
+        suffix = sio2_cols[0].split('SiO2_', 1)[1]
+
+        if has_mass_table and phase in Results['mass_g'].columns:
+            active = Results['mass_g'][phase].values > 0
+        else:
+            active = np.ones(n, dtype=bool)
+        active_idx = np.where(active)[0]
+
+        prop_df = pd.DataFrame(np.nan, index=range(n), columns=prop_col_names)
+
+        if len(active_idx) == 0:
+            Results[phase + '_prop'] = prop_df
+            continue
+
+        # Build comp DataFrame in _Liq format expected by supCalc_MELTS
+        na = len(active_idx)
+        comp_liq = pd.DataFrame(index=range(na), dtype=float)
+
+        for ox in _BASE_OXIDES:
+            src = f'{ox}_{suffix}'
+            comp_liq[f'{ox}_Liq'] = (
+                phase_df.loc[active_idx, src].fillna(0).values
+                if src in phase_df.columns else np.zeros(na)
+            )
+
+        feot_src = f'FeOt_{suffix}'
+        fe3_src = f'Fe3Fet_{suffix}'
+
+        if feot_src in phase_df.columns:
+            comp_liq['FeOt_Liq'] = phase_df.loc[active_idx, feot_src].fillna(0).values
+        else:
+            feo = (phase_df.loc[active_idx, f'FeO_{suffix}'].fillna(0).values
+                   if f'FeO_{suffix}' in phase_df.columns else np.zeros(na))
+            fe2o3 = (phase_df.loc[active_idx, f'Fe2O3_{suffix}'].fillna(0).values
+                     if f'Fe2O3_{suffix}' in phase_df.columns else np.zeros(na))
+            comp_liq['FeOt_Liq'] = feo + (71.844 / (159.69 / 2)) * fe2o3
+
+        if fe3_src in phase_df.columns:
+            comp_liq['Fe3Fet_Liq'] = phase_df.loc[active_idx, fe3_src].fillna(0).values
+        else:
+            fe2o3 = (phase_df.loc[active_idx, f'Fe2O3_{suffix}'].fillna(0).values
+                     if f'Fe2O3_{suffix}' in phase_df.columns else np.zeros(na))
+            feot = comp_liq['FeOt_Liq'].values
+            comp_liq['Fe3Fet_Liq'] = np.where(feot > 0, (71.844 / (159.69 / 2)) * fe2o3 / feot, 0.0)
+
+        if has_mass_table and phase in Results['mass_g'].columns:
+            phase_mass = Results['mass_g'][phase].values[active_idx]
+        else:
+            phase_mass = np.full(na, 100.0)
+        scale = phase_mass / 100.0
+
+        bulk_mat = _build_bulk_matrix(comp_liq)
+
+        for ii, row_idx in enumerate(active_idx):
+            try:
+                melts.engine.temperature = float(T_C[row_idx])
+                melts.engine.pressure = float(P_bar_vals[row_idx])
+                melts.engine.calcPhaseProperties(phase, bulk_mat[ii].tolist())
+                if melts.engine.status.failed:
+                    continue
+                prop_df.loc[row_idx, 'mass_g'] = phase_mass[ii]
+                for melts_field, user_col in zip(melts_prop_names, prop_col_names):
+                    if user_col == 'mass_g':
+                        continue
+                    d = melts.engine.__dict__.get(melts_field)
+                    val = d.get(phase) if isinstance(d, dict) else None
+                    if val is not None:
+                        try:
+                            v = float(val)
+                            prop_df.loc[row_idx, user_col] = (
+                                v if melts_field in _INTENSIVE else v * scale[ii]
+                            )
+                        except (TypeError, ValueError):
+                            pass
+            except Exception:
+                pass
+
+        Results[phase + '_prop'] = prop_df
+
+    # ---- Bulk Conditions (simple sums of already-scaled extensive properties) ----
+    total_mass = np.zeros(n)
+    total_H = np.zeros(n)
+    total_S = np.zeros(n)
+    total_V = np.zeros(n)
+
+    for phase in phases:
+        prop_key = phase + '_prop'
+        if prop_key not in Results:
+            continue
+        prop_df = Results[prop_key]
+        total_mass += np.nan_to_num(prop_df['mass_g'].values)
+        total_H += np.nan_to_num(prop_df['H_J'].values)
+        total_S += np.nan_to_num(prop_df['S_J/K'].values)
+        total_V += np.nan_to_num(prop_df['V_cm^3'].values)
+
+    with np.errstate(divide='ignore', invalid='ignore'):
+        rho_bulk = np.where(total_V > 0, (total_mass / total_V) * 1000.0, np.nan)
+
+    existing_cond = Results['Conditions']
+    if 'log10(fO2)' in existing_cond.columns:
+        fO2_vals = existing_cond['log10(fO2)'].values
+    elif 'logfO2' in existing_cond.columns:
+        fO2_vals = existing_cond['logfO2'].values
+    else:
+        fO2_vals = np.full(n, np.nan)
+
+    Results['Conditions'] = pd.DataFrame({
+        'T_C': T_C,
+        'P_bar': P_bar_vals,
+        'mass_g': total_mass,
+        'H_J': total_H,
+        'S_J/K': total_S,
+        'V_cm^3': total_V,
+        'rho_kg/m^3': rho_bulk,
+        'log10(fO2)': fO2_vals,
+        'dVdP_cm^3/bar': np.full(n, np.nan),
+    })
+
+    return Results
+
+
+def calc_phase_props_MELTS_parallel(
+    Results,
+    Model="MELTSv1.0.2",
+    fO2_buffer=None,
+    fO2_offset=None,
+    n_workers=None,
+    _extra_sys_paths=None,
+):
+    """Parallel version of calc_phase_props_MELTS using ProcessPoolExecutor.
+
+    Spawns n_workers subprocesses each with their own MELTS library instance,
+    distributing the row-wise property evaluations across them.  Because the
+    alphaMELTS C library uses process-global state, multiple threads inside
+    one process cannot safely share an instance; separate processes are
+    required.
+
+    The supplemental-calculator calls (getMeltsPhaseProperties) are pure
+    analytic EOS evaluations with no iterative minimisation, so they are
+    embarrassingly parallel and scale linearly with worker count.
+
+    Parameters
+    ----------
+    Results : dict
+        nGibbs-style PTT dict.  Must contain 'Conditions' (with 'T_C' and
+        'P_bar'), one DataFrame per phase, and optionally 'mass_g'.
+    Model : str
+        MELTS model string: "MELTSv1.0.2", "pMELTS", "MELTSv1.1.0", or
+        "MELTSv1.2.0".
+    fO2_buffer : str, optional
+        fO2 buffer name (passed to setSystemProperties).  Currently not
+        forwarded to workers; if supplied a ValueError is raised.
+    n_workers : int or None
+        Number of worker processes.  None → core_config.MAX_WORKERS.
+        Pass 1 to disable parallelism (useful for profiling comparisons).
+    _extra_sys_paths : list or None
+        Extra sys.path entries to propagate to workers so they can import
+        meltsdynamic.  Defaults to the current sys.path.
+
+    Returns
+    -------
+    Results : dict
+        Input dict augmented with '<phase>_prop' DataFrames and an updated
+        'Conditions' DataFrame.  Column layout matches calc_phase_props_MELTS,
+        with the following differences:
+          - 'dVdP_cm^3/bar' is now populated (was NaN in serial version).
+          - 'dPdT_bar/K' is derived as -dVdT / dVdP (= 0 when dVdP == 0).
+    """
+    if fO2_buffer is not None:
+        raise ValueError(
+            "fO2_buffer is not yet supported in calc_phase_props_MELTS_parallel. "
+            "Use calc_phase_props_MELTS for fO2-buffered calculations."
+        )
+
+    import concurrent.futures as _cf
+    import warnings
+
+    if n_workers is None:
+        from petthermotools.core_config import MAX_WORKERS
+        n_workers = MAX_WORKERS
+
+    if n_workers < 1:
+        n_workers = 1
+
+    model_code = _MODEL_CODES.get(Model, 1)
+
+    if _extra_sys_paths is None:
+        _extra_sys_paths = [p for p in sys.path if p]
+
+    T_C_all   = Results['Conditions']['T_C'].values
+    P_bar_all = Results['Conditions']['P_bar'].values
+    n = len(T_C_all)
+
+    _SKIP_KEYS = {'Conditions', 'mass_g', 'All'}
+    phases = [k for k in Results if k not in _SKIP_KEYS and not k.endswith('_prop')]
+
+    # Output column names (must match existing calc_phase_props_MELTS layout)
+    prop_col_names = [
+        'mass_g', 'rho_kg/m^3', 'V_cm^3', 'G_J', 'H_J', 'S_J/K',
+        'Cp_J/(kg.K^2)', 'dCpdT_J/(kg.K^2)', 'dVdT_cm^3/K', 'dPdT_bar/K',
+        'dVdP_cm^3/bar', 'd2VdT2_cm^3/K^2', 'd2VdTdP_cm^3/(bar.K)',
+        'd2VdP2_cm^3/bar^2', 'molwt',
+    ]
+    # Map each output column to the index in _MELTS_FIELDS
+    # _MELTS_FIELDS = g(0) h(1) s(2) v(3) cp(4) dcpdt(5) dvdt(6) dvdp(7)
+    #                 d2vdt2(8) d2vdtdp(9) d2vdp2(10) molwt(11) rho(12) mass(13)
+    _PROP_FIELD_IDX = {
+        'mass_g':                13,   # mass
+        'rho_kg/m^3':            12,   # rho  (intensive)
+        'V_cm^3':                 3,   # v
+        'G_J':                    0,   # g
+        'H_J':                    1,   # h
+        'S_J/K':                  2,   # s
+        'Cp_J/(kg.K^2)':          4,   # cp
+        'dCpdT_J/(kg.K^2)':       5,   # dcpdt
+        'dVdT_cm^3/K':            6,   # dvdt
+        # dPdT_bar/K is derived: -dvdt / dvdp
+        'dVdP_cm^3/bar':          7,   # dvdp
+        'd2VdT2_cm^3/K^2':        8,   # d2vdt2
+        'd2VdTdP_cm^3/(bar.K)':   9,   # d2vdtdp
+        'd2VdP2_cm^3/bar^2':     10,   # d2vdp2
+        'molwt':                 11,   # molwt (intensive)
+    }
+    # Intensive properties are stored unscaled (no × phase_mass/100)
+    _INTENSIVE = {'rho_kg/m^3', 'molwt'}
+
+    _BASE_OXIDES = ['SiO2', 'TiO2', 'Al2O3', 'Cr2O3', 'MnO', 'MgO',
+                    'CaO', 'Na2O', 'K2O', 'P2O5', 'H2O', 'CO2']
+    has_mass_table = 'mass_g' in Results
+
+    with _cf.ProcessPoolExecutor(
+        max_workers=n_workers,
+        initializer=_init_melts_worker,
+        initargs=(model_code, _extra_sys_paths),
+    ) as executor:
+
+        for phase in phases:
+            phase_df = Results[phase].reset_index(drop=True)
+            sio2_cols = [c for c in phase_df.columns if c.startswith('SiO2_')]
+            if not sio2_cols:
+                continue
+            suffix = sio2_cols[0].split('SiO2_', 1)[1]
+
+            if has_mass_table and phase in Results['mass_g'].columns:
+                active = Results['mass_g'][phase].values > 0
+            else:
+                active = np.ones(n, dtype=bool)
+            active_idx = np.where(active)[0]
+
+            prop_df = pd.DataFrame(np.nan, index=range(n), columns=prop_col_names)
+
+            if len(active_idx) == 0:
+                Results[phase + '_prop'] = prop_df
+                continue
+
+            na = len(active_idx)
+
+            # ---- Build comp_liq DataFrame (same logic as calc_phase_props_MELTS) ----
+            comp_liq = pd.DataFrame(index=range(na), dtype=float)
+            for ox in _BASE_OXIDES:
+                src = f'{ox}_{suffix}'
+                comp_liq[f'{ox}_Liq'] = (
+                    phase_df.loc[active_idx, src].fillna(0).values
+                    if src in phase_df.columns else np.zeros(na)
+                )
+            feot_src = f'FeOt_{suffix}'
+            fe3_src  = f'Fe3Fet_{suffix}'
+            if feot_src in phase_df.columns:
+                comp_liq['FeOt_Liq'] = phase_df.loc[active_idx, feot_src].fillna(0).values
+            else:
+                feo   = phase_df.loc[active_idx, f'FeO_{suffix}'].fillna(0).values   if f'FeO_{suffix}'   in phase_df.columns else np.zeros(na)
+                fe2o3 = phase_df.loc[active_idx, f'Fe2O3_{suffix}'].fillna(0).values if f'Fe2O3_{suffix}' in phase_df.columns else np.zeros(na)
+                comp_liq['FeOt_Liq'] = feo + (71.844 / (159.69 / 2)) * fe2o3
+            if fe3_src in phase_df.columns:
+                comp_liq['Fe3Fet_Liq'] = phase_df.loc[active_idx, fe3_src].fillna(0).values
+            else:
+                fe2o3    = phase_df.loc[active_idx, f'Fe2O3_{suffix}'].fillna(0).values if f'Fe2O3_{suffix}' in phase_df.columns else np.zeros(na)
+                feot_v   = comp_liq['FeOt_Liq'].values
+                comp_liq['Fe3Fet_Liq'] = np.where(feot_v > 0, (71.844 / (159.69 / 2)) * fe2o3 / feot_v, 0.0)
+
+            if has_mass_table and phase in Results['mass_g'].columns:
+                phase_mass = Results['mass_g'][phase].values[active_idx]
+            else:
+                phase_mass = np.full(na, 100.0)
+            scale = phase_mass / 100.0
+
+            # ---- Build MELTS oxide matrix (vectorised) ----
+            bulk_mat  = _build_bulk_matrix(comp_liq)
+            T_active  = T_C_all[active_idx]
+            P_active  = P_bar_all[active_idx]
+
+            # ---- Dispatch to workers ----
+            chunk_size  = max(1, (na + n_workers - 1) // n_workers)
+            chunk_starts = list(range(0, na, chunk_size))
+            futures = []
+            for start in chunk_starts:
+                end = min(start + chunk_size, na)
+                fut = executor.submit(
+                    _worker_phase_props,
+                    phase,
+                    T_active[start:end],
+                    P_active[start:end],
+                    bulk_mat[start:end],
+                )
+                futures.append((start, end, fut))
+
+            # ---- Collect results ----
+            try:
+                raw = np.full((na, 14), np.nan)
+                for start, end, fut in futures:
+                    raw[start:end] = fut.result()
+
+                # dPdT (thermal pressure coefficient) derived from dvdt and dvdp
+                dvdt_col = raw[:, 6]
+                dvdp_col = raw[:, 7]
+                with np.errstate(divide='ignore', invalid='ignore'):
+                    dpdt_derived = np.where(dvdp_col != 0.0, -dvdt_col / dvdp_col, 0.0)
+
+                prop_df.loc[active_idx, 'mass_g'] = phase_mass
+
+                for col_name in prop_col_names:
+                    if col_name == 'mass_g':
+                        continue
+                    elif col_name == 'dPdT_bar/K':
+                        # Intensive derived property: -dVdT/dVdP  (stored unscaled)
+                        prop_df.loc[active_idx, col_name] = dpdt_derived
+                    elif col_name in _PROP_FIELD_IDX:
+                        vals = raw[:, _PROP_FIELD_IDX[col_name]]
+                        if col_name in _INTENSIVE:
+                            prop_df.loc[active_idx, col_name] = vals
+                        else:
+                            prop_df.loc[active_idx, col_name] = vals * scale
+
+            except Exception:
+                pass
+
+            Results[phase + '_prop'] = prop_df
+
+    # ---- Bulk Conditions (sum of scaled extensive properties) ----
+    total_mass = np.zeros(n)
+    total_H    = np.zeros(n)
+    total_S    = np.zeros(n)
+    total_V    = np.zeros(n)
+    total_dVdP = np.zeros(n)
+
+    for phase in phases:
+        prop_key = phase + '_prop'
+        if prop_key not in Results:
+            continue
+        pdf = Results[prop_key]
+        total_mass += np.nan_to_num(pdf['mass_g'].values)
+        total_H    += np.nan_to_num(pdf['H_J'].values)
+        total_S    += np.nan_to_num(pdf['S_J/K'].values)
+        total_V    += np.nan_to_num(pdf['V_cm^3'].values)
+        if 'dVdP_cm^3/bar' in pdf.columns:
+            total_dVdP += np.nan_to_num(pdf['dVdP_cm^3/bar'].values)
+
+    with np.errstate(divide='ignore', invalid='ignore'):
+        rho_bulk = np.where(total_V > 0, (total_mass / total_V) * 1000.0, np.nan)
+
+    existing_cond = Results['Conditions']
+    if 'log10(fO2)' in existing_cond.columns:
+        fO2_vals = existing_cond['log10(fO2)'].values
+    elif 'logfO2' in existing_cond.columns:
+        fO2_vals = existing_cond['logfO2'].values
+    else:
+        fO2_vals = np.full(n, np.nan)
+
+    Results['Conditions'] = pd.DataFrame({
+        'T_C':           T_C_all,
+        'P_bar':         P_bar_all,
+        'mass_g':        total_mass,
+        'H_J':           total_H,
+        'S_J/K':         total_S,
+        'V_cm^3':        total_V,
+        'rho_kg/m^3':    rho_bulk,
+        'log10(fO2)':    fO2_vals,
+        'dVdP_cm^3/bar': total_dVdP,
+    })
+
+    return Results
 
 

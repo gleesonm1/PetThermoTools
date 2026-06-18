@@ -15,6 +15,7 @@ from tqdm.notebook import tqdm, trange
 from pathlib import Path
 import time
 import warnings
+from petthermotools.nGibbs_bridge import nGibbsAPI, _nGibbs_models
 
 def supCalc(Model = "MELTSv1.0.2", bulk = None, phase = None, T_C = None, P_bar = None,
              Fe3Fet_Liq = None, H2O_Liq = None, CO2_Liq = None, fO2_buffer = None, fO2_offset = None, 
@@ -144,6 +145,20 @@ def equilibrate_multi(cores = multiprocessing.cpu_count(), Model = "MELTSv1.0.2"
         print('Warning - the kwarg "Fe3Fet_Liq" will be removed from v1.0.0 onwards. Please use "Fe3Fet_init" instead.')
         if Fe3Fet_init is None:
             Fe3Fet_init = Fe3Fet_Liq
+
+    ### NGIBBS BRANCH ###
+    _ng_base = Model[:-6] if Model.endswith('NoProp') else Model
+    if Model.startswith('n') and _ng_base in _nGibbs_models:
+        output = nGibbsAPI(Model = Model, bulk = bulk, T_C = T_C, P_bar = P_bar, 
+                      Fe3Fet_init = Fe3Fet_init, H2O_init = H2O_init, CO2_init = CO2_init, 
+                      Fe3Fet_Liq = Fe3Fet_Liq, H2O_Liq = H2O_Liq, CO2_Liq = CO2_Liq, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset,
+                      Suppress = None, Suppress_except = None)
+        if copy_columns is not None: # Copy Columns as requested
+            for df_name, df in output.items():
+                for i, col in enumerate(copy_columns):
+                    if col in bulk.columns:
+                        df.insert(i, col, bulk[col].values)
+        return output
 
     if fO2_buffer is not None:
         if fO2_buffer != "NNO":

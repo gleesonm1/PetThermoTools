@@ -15,17 +15,21 @@ from pathlib import Path
 from queue import Empty
 import os
 
+# nGibbs registry and input builder live in nGibbs_bridge.py (single
+# instantiation point, shared with __init__.py without circular imports).
+from petthermotools.nGibbs_bridge import _nGibbs_models, _build_ngibbs_input, nGibbsAPI
+
+
 try:
-    shell = get_ipython().__class__.__name__
-    # print(shell)
+    shell = get_ipython().__class__.__name__  # noqa: F821
     if shell == 'ZMQInteractiveShell':
-        from wurlitzer import sys_pipes as pipes # Jupyter notebook or qtconsole
+        from wurlitzer import sys_pipes as pipes  # Jupyter notebook or qtconsole
     elif shell == 'TerminalInteractiveShell':
         pipes = None  # Terminal running IPython
     else:
         pipes = None  # Other type (?)
-except:
-    pipes = None     # Probably standard Python interpreter (or wurlitzer not available)
+except Exception:
+    pipes = None  # Standard Python interpreter (or wurlitzer not available)
 
 def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid = None, Frac_fluid = None, 
                T_C = None, T_path_C = None, T_start_C = None, T_end_C = None, dt_C = None, 
@@ -200,6 +204,23 @@ def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid 
         if Fe3Fet_init is None:
             Fe3Fet_init = Fe3Fet_Liq
 
+     # ── nGibbs neural-network emulator branch ───────────────────────────────
+    # Model strings for nGibbs emulators start with lowercase 'n' followed by
+    # the name of the model they emulate (e.g. "nMELTSv1.0.2" → "MELTSv1.0.2").
+    # Appending "NoProp" skips the calc_phase_props_MELTS call after ForwardMB
+    # (e.g. Model="nMELTSv1.0.2NoProp").
+    
+    _ng_base = Model[:-6] if Model.endswith('NoProp') else Model
+    if Model.startswith('n') and _ng_base in _nGibbs_models:
+        return nGibbsAPI(Model = Model, comp = comp, Frac_solid = Frac_solid, Frac_fluid = Frac_fluid, 
+               T_C = T_C, T_path_C = T_path_C, T_start_C = T_start_C, T_end_C = T_end_C, dt_C = dt_C, 
+               P_bar = P_bar, P_path_bar = P_path_bar, P_start_bar = P_start_bar, P_end_bar = P_end_bar, dp_bar = dp_bar, 
+               Fe3Fet_init = Fe3Fet_init, Fe3Fet_Liq = Fe3Fet_Liq, H2O_init = H2O_init, H2O_Liq = H2O_Liq, CO2_init = CO2_init, CO2_Liq = CO2_Liq, 
+               isenthalpic = isenthalpic, isentropic = isentropic, isochoric = isochoric, find_liquidus = find_liquidus, 
+               fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, 
+               Print_suppress = Print_suppress, fluid_sat = fluid_sat, Crystallinity_limit = Crystallinity_limit, Combined = Combined,
+               label = label, Suppress = Suppress, Suppress_except=Suppress_except)
+
     # if comp is entered as a pandas series, it must first be converted to a dict
     if type(comp) == pd.core.series.Series:
         comp = comp.to_dict()
@@ -219,7 +240,7 @@ def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid 
 
     # ensure the bulk composition has the correct headers etc.
     comp = comp_fix(Model = Model, comp = comp, Fe3Fet_Liq = Fe3Fet_init, H2O_Liq = H2O_init, CO2_Liq = CO2_init)
-    
+
     if type(comp) == dict:
         if comp['H2O_Liq'] == 0.0 and "MELTS" in Model:
             raise Warning("Adding small amounts of H2O may improve the ability of MELTS to accurately reproduce the saturation of oxide minerals. Additionally, sufficient H2O is required in the model for MELTS to predict the crystallisation of apatite, rather than whitlockite.")
