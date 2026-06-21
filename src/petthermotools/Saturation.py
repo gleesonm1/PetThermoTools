@@ -371,11 +371,11 @@ def saturation_pressure(Model = "MELTSv1.2.0", cores = MAX_WORKERS,
     bulk : dict, pandas.Series, or pandas.DataFrame
         Bulk melt composition(s). If a Series or single dict is passed, a single calculation is run.
         If a DataFrame is passed, a calculation is performed for each row.
-    T_C_init : float or np.ndarray, optional
+    T_init_C : float or np.ndarray, optional
         Initial temperature(s) in degrees Celsius. System will co-solve the liquidus temperature and pressure of volatile saturation. Used if not specifying `T_fixed_C`.
     T_fixed_C : float or np.ndarray, optional
         Fixed temperature(s) for the saturation pressure calculation. Solid phases are disabled in all calculations.
-    P_bar_init : float or np.ndarray, default 5000
+    P_init_bar : float or np.ndarray, default 5000
         Initial pressure guess(es) in bars.
     Fe3Fet_Liq : float or np.ndarray, optional [DEPRECATED]
         Legacy alias for initial Fe³⁺/∑Fe ratio. Prefer `Fe3Fet_init`.

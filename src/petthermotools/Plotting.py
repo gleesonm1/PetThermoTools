@@ -892,7 +892,7 @@ def plot_phaseDiagram_multi(Combined_data, P_units="bar", T_units="C", colormap=
         def sort_key(phase):
             if phase in priority_order:
                 return (0, priority_order.index(phase))
-            return (1, phase)
+            return (1, phase) # Unlisted phases go to the end alphabetically
         return " ".join(sorted(parts, key=sort_key))
 
     # Standardize input
@@ -906,19 +906,12 @@ def plot_phaseDiagram_multi(Combined_data, P_units="bar", T_units="C", colormap=
         assemblages = []
         
         for _, row in temp_df.iterrows():
-            # 1. Identify active phases
             active = [p[7:] for p in phase_cols if not np.isnan(row[p]) and row[p] > 0.0]
             
             if active:
-                # 2. Standardize 'Plag' to 'Fsp'
                 active = ['Fsp' if x == 'Plag10' else x for x in active]
-                
-                # 3. Remove duplicates (in case both Plag and Fsp were recorded)
-                # and join to a string for sorting
                 unique_active = list(set(active))
                 raw_str = " ".join(unique_active)
-                
-                # 4. Sort based on priority_order
                 assemblages.append(sort_assemblage(raw_str))
             else:
                 assemblages.append("None")
@@ -927,20 +920,35 @@ def plot_phaseDiagram_multi(Combined_data, P_units="bar", T_units="C", colormap=
         all_unique_assemblages.update([a for a in assemblages if a != "None"])
         processed_dfs[name] = temp_df
 
-    # Master mapping
-    master_phases = sorted(list(all_unique_assemblages))
+    def master_sort_key(assemblage_str):
+        if assemblage_str == "None":
+            return ((2, ""),) # Catch-all to push "None" to the absolute end
+        
+        parts = assemblage_str.split()
+        # Generates a nested tuple structure for strict priority sequence matching
+        return tuple(
+            (0, priority_order.index(p)) if p in priority_order else (1, p) 
+            for p in parts
+        )
+
+    # Sort the master list entirely based on the dynamic structural key
+    master_phases = sorted(list(all_unique_assemblages), key=master_sort_key)
+    
     phase_to_id = {phase: i for i, phase in enumerate(master_phases)}
     max_id, min_id = len(master_phases) - 1, 0
 
     # Vertical Layout Setup
     n_plots = len(processed_dfs)
-    # Create a grid: n_plots rows, 2 columns (Plot area and Legend area)
-    fig = plt.figure(figsize=(10, 5 * n_plots))
+    fig = plt.figure(figsize=(12, 6 * n_plots))
     gs = fig.add_gridspec(n_plots, 2, width_ratios=[7, 3], hspace=0.3)
 
-    # 4. Plot each diagram in the first column
+    # Plot each diagram in the first column
     for i, (name, df) in enumerate(processed_dfs.items()):
         ax = fig.add_subplot(gs[i, 0])
+        
+        # --- THE FIX: Sort rows before reshaping the grid ---
+        df = df.sort_values(['T_C', 'P_bar'], ascending=[True, True])
+        # ----------------------------------------------------
         
         df['PhaseNo.'] = df['Phase'].map(phase_to_id)
         T_vals = np.unique(df['T_C'])
@@ -962,22 +970,22 @@ def plot_phaseDiagram_multi(Combined_data, P_units="bar", T_units="C", colormap=
                 subset = df[df['Phase'] == phase_name]
                 if not subset.empty:
                     ax.text(subset['T_C'].median(), subset['P_bar'].median() * p_scale, 
-                            str(p_id), ha='center', va='center', fontsize=8)
+                            str(p_id), ha='center', va='center', fontsize=8,
+                            bbox=dict(boxstyle="round,pad=0.1", fc="white", ec="none", alpha=0.0))
 
-    # 5. Create Master Legend in a single axis spanning all rows
+    # Create Master Legend
     legend_ax = fig.add_subplot(gs[:, 1])
     legend_ax.axis("off")
     
-    # Dynamic spacing for legend text
     y_start = 0.95
-    y_step = 0.03 # Adjusted for longer lists
+    y_step = 0.03 
     for phase_name, p_id in phase_to_id.items():
         legend_ax.text(0, y_start - (p_id * y_step), f"{p_id}. {phase_name}", 
                        fontsize=9, transform=legend_ax.transAxes)
 
     return fig, fig.axes
 
-def plot_phaseDiagram(Model = "Holland", Combined = None, P_units = "bar", T_units = "C", 
+def plot_phaseDiagram(Combined = None, P_units = "bar", T_units = "C", 
                       lines = None, T_C = None, P_bar = None, label = True, colormap = None):
     '''
     This function plots the phase diagrams based on the results obtained from thermodynamic models.
@@ -989,8 +997,6 @@ def plot_phaseDiagram(Model = "Holland", Combined = None, P_units = "bar", T_uni
     for the phase boundaries (if requested).
 
     Input Parameters:
-        Model: string specifying which thermodynamic model was used to obtain the results. Default
-               is "Holland". Other option is "MELTS".
         Combined: pandas dataframe with the results. The default value is None.
         P_units: string specifying the units used for pressure. The default is "bar". Other options
                  are "MPa", "kbar", and "GPa".
@@ -1025,13 +1031,30 @@ def plot_phaseDiagram(Model = "Holland", Combined = None, P_units = "bar", T_uni
         if A[i] is None:
             A[i] = "None"
 
+    # --- MODIFICATION 1: Sort internal phases within each cell sequence ---
+    priority_order = [
+        'Liq', 'Ol', 'Opx', 'Cpx', 'Grt', 'Sp', 'Kspar', 'Qtz', 'Rhm', 'Apa', 
+        'Ol2', 'Plag', 'Cpx2', 'Plag2', 'Sp2', 'Kspar2', 'Grt2', 'Rhm2', 'Qtz2', 
+        'Opx2', 'Apa2', 'Fl', 'Liq2', 'Liq3', 'Liq4', 'Fsp', 'Fsp2'
+    ]
+    def sort_assemblage(s):
+        if s == "None": return "None"
+        return " ".join(sorted(s.split(), key=lambda p: (0, priority_order.index(p)) if p in priority_order else (1, p)))
+    A = [sort_assemblage(x) for x in A]
+    # ----------------------------------------------------------------------
+
     Results['Phase'] = A
 
     Results = Results.sort_values(['T_C', 'P_bar'], ascending=[True, True])
 
     B = np.zeros(len(Results['Phase']))
-    CC = np.sort(np.unique(A))
-    C = CC[np.where(CC != 'None')]
+    
+    # --- MODIFICATION 2: Replace alpha sort with dynamic master sort key ---
+    def master_sort_key(s):
+        return tuple((0, priority_order.index(p)) if p in priority_order else (1, p) for p in s.split())
+    C = np.array(sorted([x for x in set(A) if x != "None"], key=master_sort_key))
+    # ----------------------------------------------------------------------
+
     for i in range(len(C)):
         B[np.where(Results['Phase'] == C[i])] = i
 
@@ -1110,12 +1133,12 @@ def plot_phaseDiagram(Model = "Holland", Combined = None, P_units = "bar", T_uni
     a[1].set_xlim([-0.2, 4])
 
     if lines is not None:
-        A = np.zeros((len(T_C)+len(T_C)-1,len(P_bar)+len(P_bar)-1))
+        A_lines = np.zeros((len(T_C)+len(T_C)-1,len(P_bar)+len(P_bar)-1))
         T_mid = np.zeros((len(T_C)+len(T_C)-1,len(P_bar)+len(P_bar)-1))
         P_mid = np.zeros((len(T_C)+len(T_C)-1,len(P_bar)+len(P_bar)-1))
         tol = 1e-9
-        for i in range(np.shape(A[0])[0]):
-            for j in range(np.shape(A[1])[0]):
+        for i in range(np.shape(A_lines[0])[0]):
+            for j in range(np.shape(A_lines[1])[0]):
                 if i % 2 == 0:
                     if j % 2 == 0:
                         T_mid[i,j] = Results['T_C'][int(i/2),int(j/2)]
@@ -1129,7 +1152,7 @@ def plot_phaseDiagram(Model = "Holland", Combined = None, P_units = "bar", T_uni
                                                 PT_Results['PhaseNo.'][int(i/2),int(j/2+0.5)], rtol=tol, atol=tol)
 
                         if identical == False:
-                            A[i,j] = 1
+                            A_lines[i,j] = 1
 
                 elif i % 2 != 0:
                     if j % 2 == 0:
@@ -1141,7 +1164,7 @@ def plot_phaseDiagram(Model = "Holland", Combined = None, P_units = "bar", T_uni
                                                 PT_Results['PhaseNo.'][int(i/2+0.5),int(j/2)], rtol=tol, atol=tol)
 
                         if identical == False:
-                            A[i,j] = 1
+                            A_lines[i,j] = 1
 
                     elif j % 2 != 0:
                         T_mid[i,j] = np.nanmean(np.array([PT_Results['T_C'][int(i/2-0.5),int(j/2-0.5)],
@@ -1157,9 +1180,9 @@ def plot_phaseDiagram(Model = "Holland", Combined = None, P_units = "bar", T_uni
                                     and np.allclose(PT_Results['PhaseNo.'][int(i/2-0.5),int(j/2-0.5)], PT_Results['PhaseNo.'][int(i/2+0.5),int(j/2+0.5)], rtol=tol, atol=tol)
 
                         if identical == False:
-                            A[i,j] = 1
+                            A_lines[i,j] = 1
 
-        a[0].contour(T_mid, P_mid/10, A, colors = 'k', linewidths = 0.5)
+        a[0].contour(T_mid, P_mid/10, A_lines, colors = 'k', linewidths = 0.5)
 
     plt.show()
 

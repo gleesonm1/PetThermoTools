@@ -13,10 +13,10 @@ import random
 import time
 import psutil
 
-try:
-    from petthermotools.nGibbs_bridge import _nGibbs_models, build_PT_vectors, nGibbsAPI, grid_sample
-except: 
-    pass # Installation hint in module __init__.py
+# try:
+#    from petthermotools.nGibbs_bridge import _nGibbs_models, build_PT_vectors, nGibbsAPI, grid_sample
+# except: 
+#     pass # Installation hint in module __init__.py
 
 
 
@@ -173,6 +173,11 @@ def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar
 
     
     ############## nGibbs branch ################## -> Future dev in sparsifying output for large grids to look more like ptt outputs?
+    if Model.startswith('n'):
+        try:
+            from petthermotools.nGibbs_bridge import _nGibbs_models, build_PT_vectors, nGibbsAPI, grid_sample
+        except: 
+            pass # Installation hint in module __init__.py
     _ng_base = Model[:-6] if Model.endswith('NoProp') else Model
     if Model.startswith('n') and _ng_base in _nGibbs_models:
         try: # Try to follow user directions, otherwise fallback to generous defaults          
