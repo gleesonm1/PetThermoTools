@@ -1147,7 +1147,7 @@ def path_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid = None, 
         if isochoric is not None:
             if i == 0:
                 try:
-                    # melts.engine.setSystemProperties("Mode", "Isochoric")
+                    melts.engine.setSystemProperties("Mode", "Isochoric")
                     melts.engine.calcEquilibriumState(1,0)
                     melts.engine.setSystemProperties("Mode", "Isochoric")
                 except:
