@@ -382,3 +382,49 @@ def test_alphaMELTS(path = None):
                                    H2O_init = 0.2)
 
     print(Res['liquid1'])
+
+
+def install_nGibbs(version=None):
+    """
+    Install nGibbs from PyPI into the current Python environment.
+    """
+    try:
+        import ngibbs
+        print("nGibbs is already installed.")
+
+        return
+    except ImportError:
+        pass
+
+    package = "ngibbs" if version is None else f"ngibbs=={version}"
+    print(f"Installing {package}...")
+
+    try:
+        subprocess.check_call([sys.executable, "-m", "pip", "install", package])
+        print("nGibbs installed successfully. You may need to restart your kernel.")
+    except subprocess.CalledProcessError as e:
+        print(f"Installation failed: {e}")
+
+
+def test_nGibbs():
+    """
+    Test that nGibbs is importable and functional after installation.
+    """
+    try:
+        import ngibbs
+        print("nGibbs import successful.")
+        bulk = Compositions['G2']
+
+        isobaric_crystallisation(Model = "nMELTSv1.0.2",
+                                   bulk = bulk,
+                                   P_bar = 2000, 
+                                   T_end_C = 1100.0,
+                                   dt_C = 5.0,
+                                   find_liquidus = True,
+                                   H2O_init = 0.2)
+        return True
+    except ImportError:
+        print("nGibbs not found, Run ptt.install_nGibbs() first.")
+        return False
+
+    

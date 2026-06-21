@@ -1164,3 +1164,81 @@ def plot_phaseDiagram(Model = "Holland", Combined = None, P_units = "bar", T_uni
     plt.show()
 
     return f, a
+
+
+def melts_colors() -> dict:
+    """Default color mapping for ptt phase abbreviations."""
+    return {
+        'Liq':   'red',
+        'Ol':    'forestgreen',
+        'Opx':   'steelblue',
+        'Cpx':   'deepskyblue',
+        'Grt':   'orange',
+        'Sp':    'brown',
+        'Kspar': 'lightgray',
+        'Qtz':   'dimgray',
+        'Rhm':   'darkorange',
+        'Apa':   'mediumpurple',
+        'Plag':  'silver',
+        'Fl':    'cyan',
+    }
+
+def _draw_stack(ax, x_vals: np.ndarray, phase_frame: np.ndarray,
+                phase_names: list, colors: dict, title: str,
+                x_name: str = 'X') -> None:
+    """Draw one stacked-area frame onto *ax*.
+
+    Parameters
+    ----------
+    x_vals      : (Nx,) x-axis coordinates
+    phase_frame : (Nx, P) phase fractions for this frame — columns match phase_names
+    phase_names : length-P phase label strings (also used as color-dict keys)
+    colors      : mapping phase name → matplotlib color
+    title       : axes title for this frame
+    x_name      : x-axis label
+    """
+   
+    x_vals = np.asarray(x_vals, dtype=np.float32).ravel()
+    phase_frame = np.asarray(phase_frame, dtype=np.float32)
+
+    # Translate internal names to display abbreviations (MELTS then MAGEMin)
+    _all_names = {**Names, **Names_MM}
+    display_names = [_all_names[n].lstrip('_') if n in _all_names else n for n in phase_names]
+
+    # Sort columns: solids in melts_colors() order, then liquid variants last
+    _priority = list(melts_colors().keys())
+    _liq_set = {'Liq', 'Liq2', 'Liq3', 'Liq4'}
+
+    def _sort_key(name):
+        pri = _priority.index(name) if name in _priority else len(_priority)
+        return (name in _liq_set, pri)
+
+    order = sorted(range(len(display_names)), key=lambda i: _sort_key(display_names[i]))
+    display_names = [display_names[i] for i in order]
+    phase_frame = phase_frame[:, order]
+
+    ax.cla()
+    bottoms = np.zeros(len(x_vals), dtype=np.float32)
+    for i, name in enumerate(display_names):
+        vals = np.clip(phase_frame[:, i], 0.0, None)
+        top = bottoms + vals
+        ax.fill_between(x_vals, bottoms, top,
+                        facecolor=colors.get(name, '#aaaaaa'),
+                        edgecolor='k', linewidth=0.4)
+        peak = float(np.nanmax(vals))
+        if peak > 0.03:
+            band = vals > 0.35 * peak
+            if band.any():
+                x_c = np.average(x_vals[band], weights=vals[band])
+                y_c = np.average(0.5 * (bottoms[band] + top[band]), weights=vals[band])
+                ax.text(x_c, y_c, name, ha='center', va='center',
+                        fontsize=7, clip_on=True)
+        bottoms = top
+    ax.set_ylim(0.0, 1.0)
+    ax.set_xlim(x_vals.min(), x_vals.max())
+    ax.set_xlabel(x_name)
+    ax.set_ylabel('Phase fraction')
+    ax.set_title(title, fontsize=10)
+    ax.grid(True, alpha=0.2)
+
+
