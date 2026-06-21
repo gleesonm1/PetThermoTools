@@ -149,7 +149,7 @@ def equilibrate_multi(cores = multiprocessing.cpu_count(), Model = "MELTSv1.0.2"
     ### NGIBBS BRANCH ###
     _ng_base = Model[:-6] if Model.endswith('NoProp') else Model
     if Model.startswith('n') and _ng_base in _nGibbs_models:
-        output = nGibbsAPI(Model = Model, bulk = bulk, T_C = T_C, P_bar = P_bar, 
+        output = nGibbsAPI(Model = Model, comp = bulk, T_C = T_C, P_bar = P_bar,
                       Fe3Fet_init = Fe3Fet_init, H2O_init = H2O_init, CO2_init = CO2_init, 
                       Fe3Fet_Liq = Fe3Fet_Liq, H2O_Liq = H2O_Liq, CO2_Liq = CO2_Liq, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset,
                       Suppress = None, Suppress_except = None)

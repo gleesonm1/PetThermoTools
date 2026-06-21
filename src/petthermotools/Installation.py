@@ -391,6 +391,7 @@ def install_nGibbs(version=None):
     try:
         import ngibbs
         print("nGibbs is already installed.")
+
         return
     except ImportError:
         pass
@@ -412,6 +413,18 @@ def test_nGibbs():
     try:
         import ngibbs
         print("nGibbs import successful.")
-        # add a minimal calculation here once the API is known
+        bulk = Compositions['G2']
+
+        isobaric_crystallisation(Model = "nMELTSv1.0.2",
+                                   bulk = bulk,
+                                   P_bar = 2000, 
+                                   T_end_C = 1100.0,
+                                   dt_C = 5.0,
+                                   find_liquidus = True,
+                                   H2O_init = 0.2)
+        return True
     except ImportError:
-        print("nGibbs not found. Run ptt.install_nGibbs() first.")
+        print("nGibbs not found, Run ptt.install_nGibbs() first.")
+        return False
+
+    

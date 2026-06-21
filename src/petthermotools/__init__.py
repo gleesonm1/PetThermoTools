@@ -73,13 +73,13 @@ from petthermotools.Methods import *
 # Instantiated once in nGibbs_bridge.py and imported here so users can
 # inspect or extend the registry via `ptt._nGibbs_models`.
 # Path.py also imports from nGibbs_bridge, so there is no duplication.
-try:
-    from petthermotools.nGibbs_bridge import _nGibbs_models
-except ImportError:
-    _nGibbs_models = {}
+
+from petthermotools.nGibbs_bridge import _nGibbs_models
+
+if not len(_nGibbs_models):
     print(
-        "nGibbs not found — nGibbs emulators are unavailable. "
-        "Install it with `ptt.install_nGibbs()` (~300 MB storage required)."
+        "nGibbs not installed — nGibbs emulators are unavailable. "
+        "Install it if you'd like with `ptt.install_nGibbs()` (~300 MB storage required)."
     )
 
 # version

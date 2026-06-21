@@ -13,6 +13,12 @@ import random
 import time
 import psutil
 
+try:
+    from petthermotools.nGibbs_bridge import _nGibbs_models, build_PT_vectors, nGibbsAPI, grid_sample
+except: 
+    pass # Installation hint in module __init__.py
+
+
 
 def make_grid_variables_from_phase_diagram(Results = None, x_col = "T_C", y_col = "P_bar"):
     """
@@ -164,6 +170,46 @@ def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar
             Fe3Fet_init = Fe3Fet_Liq
 
     comp = bulk.copy()
+
+    
+    ############## nGibbs branch ################## -> Future dev in sparsifying output for large grids to look more like ptt outputs?
+    _ng_base = Model[:-6] if Model.endswith('NoProp') else Model
+    if Model.startswith('n') and _ng_base in _nGibbs_models:
+        try: # Try to follow user directions, otherwise fallback to generous defaults          
+            P_vec, T_vec, is_grid = build_PT_vectors(T_C = T_C, P_bar = P_bar, 
+                        T_min_C = T_min_C, T_max_C = T_max_C, T_num = T_num, 
+                        P_min_bar = P_min_bar, P_max_bar = P_max_bar, P_num = P_num)           
+               
+            T_min_C = T_vec.min()
+            T_max_C = T_vec.max()
+            P_min_bar = P_vec.min()
+            P_max_bar = P_vec.max()
+            T_num = len(T_vec) if len(T_vec) > 175 else 175 # 175^2 = 30625, will not require batching (over ~32K)
+            P_num = len(P_vec) if len(P_vec) > 175 else 175
+
+        except:
+            if T_min_C is None: # Set reasonable defaults if no T or P vals are provided. 
+                T_min_C = 1000 if 'pMELTS' in Model else 800
+            if T_max_C is None:                
+                T_max_C = 1800 if 'pMELTS' in Model else 1500
+            if T_num is None or T_num < 175:
+                T_num = 175
+            if P_min_bar is None:
+                P_min_bar = 10000 if 'pMELTS' in Model else 1
+            if P_max_bar is None:
+                P_max_bar = 30000 if 'pMELTS' in Model else 10000
+            if P_num is None or P_num < 175:
+                P_num = 175
+
+        # Express a grid as a PT path to keep output table as singular unit 
+        Path_Table = grid_sample([[P_min_bar, P_max_bar, P_num], [T_min_C, T_max_C, T_num]])
+        
+        return nGibbsAPI(Model = _ng_base+"NoProp", comp = comp, T_path_C = Path_Table[:,1], P_path_bar = Path_Table[:,0],
+                      Fe3Fet_Liq = Fe3Fet_Liq, H2O_Liq = H2O_Liq, CO2_Liq = CO2_Liq, # Here these overrides are guarunteed to be floats or None
+                      Fe3Fet_init = Fe3Fet_init, H2O_init = H2O_init, CO2_init = CO2_init, # Here these overrides are guarunteed to be floats or None
+                      fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, Suppress = Suppress)['All']
+
+    #####################
 
     if fO2_buffer is not None:
         if fO2_buffer != "NNO":
@@ -345,7 +391,7 @@ def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar
                                                                 'P_path_bar': P_path_bar, 
                                                                 'fO2_buffer': fO2_buffer, 
                                                                 'fO2_offset': fO2_offset,
-                                                                'Suppress': ['rutile', 'tridymite'],
+                                                                'Suppress': Suppress,
                                                                 'find_liquidus': False})
 
                 ps.append([p,q, i])
@@ -964,3 +1010,150 @@ def tidy_phaseDiagram(Data = None, Model = None, bulk = None, Fe3Fet_Liq = None,
 
 #         q.put([Combined, index])
 #         return
+
+
+def animate_phaseDiagram(base_kwargs, frame_kwargs, P_units="bar", T_units="C",
+                         label=True, colormap=None, interval=500):
+    """
+    Animate a phase diagram over a sequence of phaseDiagram_calc calls using FuncAnimation.
+
+    Parameters
+    ----------
+    base_kwargs : dict
+        kwargs passed to phaseDiagram_calc for every frame (e.g. Model, bulk, T_C, P_bar).
+    frame_kwargs : dict
+        Maps kwarg name(s) to an array of values, one per frame.
+        e.g. ``{"fO2_offset": np.linspace(-5, 5, 21)}`` produces 21 frames, each
+        overriding the matching key in base_kwargs with the corresponding value.
+    P_units : str
+        Pressure axis units: "bar" (default), "MPa", "kbar", or "GPa".
+    T_units : str
+        Temperature axis units: "C" (default) or "K".
+    label : bool
+        Whether to print phase-field number labels on the diagram.
+    colormap : str or None
+        Matplotlib colormap name. Defaults to "Reds".
+    interval : int
+        Milliseconds between frames.
+
+    Returns
+    -------
+    matplotlib.animation.FuncAnimation
+        Call .save() to export or display with HTML(anim.to_jshtml()) in a notebook.
+    """
+    from matplotlib.animation import FuncAnimation
+
+    cmap_name = colormap if colormap is not None else "Reds"
+
+    priority_order = [
+        'Liq', 'Ol', 'Opx', 'Cpx', 'Grt', 'Sp', 'Kspar', 'Qtz', 'Rhm', 'Apa',
+        'Ol2', 'Plag', 'Cpx2', 'Plag2', 'Sp2', 'Kspar2', 'Grt2', 'Rhm2', 'Qtz2',
+        'Opx2', 'Apa2', 'Fl', 'Liq2', 'Liq3', 'Liq4', 'Fsp', 'Fsp2'
+    ]
+
+    def sort_assemblage(assemblage_str):
+        if assemblage_str == "None":
+            return "None"
+        parts = assemblage_str.split()
+        def sort_key(phase):
+            if phase in priority_order:
+                return (0, priority_order.index(phase))
+            return (1, phase)
+        return " ".join(sorted(parts, key=sort_key))
+
+    def get_assemblage_labels(df):
+        phase_cols = [c for c in df.columns if 'mass_g' in c and '%' not in c and 'mole' not in c]
+        labels = []
+        for _, row in df.iterrows():
+            active = [p[7:] for p in phase_cols if not np.isnan(row[p]) and row[p] > 0.0]
+            if active:
+                active = ['Fsp' if x == 'Plag10' else x for x in active]
+                labels.append(sort_assemblage(" ".join(set(active))))
+            else:
+                labels.append("None")
+        return labels
+
+    # frame_kwargs maps kwarg name(s) → array of values; broadcast into per-frame dicts.
+    lengths = [len(v) for v in frame_kwargs.values() if hasattr(v, '__len__')]
+    n_frames = lengths[0] if lengths else 1
+    per_frame = [
+        {k: (v[i] if hasattr(v, '__len__') else v) for k, v in frame_kwargs.items()}
+        for i in range(n_frames)
+    ]
+
+    # Pre-compute all frames upfront.
+    precomputed = []
+    for fkw in per_frame:
+        precomputed.append(phaseDiagram_calc(**{**base_kwargs, **fkw}))
+
+    # Build master phase→id mapping across all frames so colors/numbers are stable.
+    all_assemblages = set()
+    for df in precomputed:
+        all_assemblages.update(a for a in get_assemblage_labels(df) if a != "None")
+
+    master_phases = sorted(list(all_assemblages))
+    phase_to_id = {phase: i for i, phase in enumerate(master_phases)}
+    max_id = max(phase_to_id.values()) if phase_to_id else 0
+    p_scale = {"bar": 1, "MPa": 0.1, "kbar": 0.001, "GPa": 0.0001}.get(P_units, 1)
+
+    fig, axes = plt.subplots(1, 2, figsize=(10, 6), gridspec_kw={'width_ratios': [8, 2]})
+
+    # Scale legend text so all entries fit regardless of how many phases exist.
+    n_phases = max(len(master_phases), 1)
+    fig_h_pts = fig.get_size_inches()[1] * fig.dpi * (72.0 / fig.dpi)  # figure height in pts
+    legend_fontsize = min(9, max(4, int(fig_h_pts * 0.80 / n_phases)))
+    legend_y_step = 1.0 / n_phases
+
+    def _draw(ax_main, ax_legend, df, fkw):
+        ax_main.cla()
+        ax_legend.cla()
+        ax_legend.axis("off")
+
+        Results = df.copy()
+        Results['Phase'] = get_assemblage_labels(Results)
+        Results['PhaseNo.'] = Results['Phase'].map(phase_to_id)
+        Results = Results.sort_values(['T_C', 'P_bar'])
+
+        T_vals = np.unique(Results['T_C'])
+        P_vals = np.unique(Results['P_bar'])
+        grid = Results['PhaseNo.'].values.reshape((len(T_vals), len(P_vals)))
+
+        T_plot = T_vals + 273.15 if T_units == "K" else T_vals
+        P_plot = P_vals * p_scale
+
+        ax_main.imshow(
+            grid.T,
+            extent=[T_plot.min(), T_plot.max(), P_plot.min(), P_plot.max()],
+            cmap=cmap_name, vmin=0, vmax=max_id,
+            zorder=2, aspect='auto', origin='lower'
+        )
+
+        title = ",  ".join(f"{k} = {v:.3g}" for k, v in fkw.items())
+        ax_main.set_title(title, fontsize=10)
+        ax_main.set_xlabel('Temperature ($\\degree$K)' if T_units == "K" else 'Temperature ($\\degree$C)')
+        ylabel_map = {"MPa": "Pressure (MPa)", "kbar": "Pressure (kbar)", "GPa": "Pressure (GPa)"}
+        ax_main.set_ylabel(ylabel_map.get(P_units, "Pressure (bar)"))
+
+        if label:
+            for phase_name, p_id in phase_to_id.items():
+                subset = Results[Results['Phase'] == phase_name]
+                if not subset.empty:
+                    ax_main.text(
+                        subset['T_C'].median(),
+                        subset['P_bar'].median() * p_scale,
+                        str(p_id), ha='center', va='center', fontsize=8
+                    )
+
+        # Draw legend from master mapping so it never changes between frames.
+        for phase_name, p_id in phase_to_id.items():
+            ax_legend.text(0.05, 1.0 - (p_id + 0.5) * legend_y_step,
+                           f"{p_id}. {phase_name}",
+                           fontsize=legend_fontsize, transform=ax_legend.transAxes, va='center')
+
+    def _update(frame_idx):
+        _draw(axes[0], axes[1], precomputed[frame_idx], per_frame[frame_idx])
+        return axes
+
+    _draw(axes[0], axes[1], precomputed[0], per_frame[0])
+
+    return FuncAnimation(fig, _update, frames=len(precomputed), interval=interval, blit=False)

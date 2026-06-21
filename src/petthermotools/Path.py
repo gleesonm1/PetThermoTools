@@ -17,7 +17,7 @@ import os
 
 # nGibbs registry and input builder live in nGibbs_bridge.py (single
 # instantiation point, shared with __init__.py without circular imports).
-from petthermotools.nGibbs_bridge import _nGibbs_models, _build_ngibbs_input, nGibbsAPI
+from petthermotools.nGibbs_bridge import _nGibbs_models, nGibbsAPI
 
 
 try:
@@ -146,19 +146,56 @@ def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid 
     CO2_Liq    = check_array(CO2_Liq)
     fO2_offset = check_array(fO2_offset)
 
+    # Resolve bulk→comp alias and set default Model before any routing.
+    if bulk is not None:
+        comp = bulk.copy()
+
+    if Model is None:
+        Model = "MELTSv1.0.2"
+
+    if H2O_Liq is not None:
+        print('Warning - the kwarg "H2O_Liq" will be removed from v1.0.0 onwards. Please use "H2O_init" instead.')
+        if H2O_init is None:
+            H2O_init = H2O_Liq
+
+    if CO2_Liq is not None:
+        print('Warning - the kwarg "CO2_Liq" will be removed from v1.0.0 onwards. Please use "CO2_init" instead.')
+        if CO2_init is None:
+            CO2_init = CO2_Liq
+
+    if Fe3Fet_Liq is not None:
+        print('Warning - the kwarg "Fe3Fet_Liq" will be removed from v1.0.0 onwards. Please use "Fe3Fet_init" instead.')
+        if Fe3Fet_init is None:
+            Fe3Fet_init = Fe3Fet_Liq
+
+    # ── nGibbs neural-network emulator branch ───────────────────────────────
+    # Routed BEFORE the PTT length-consistency check so that nGibbs grid mode
+    # (len(P_bar) != len(T_C)) is not incorrectly rejected.
+    # Model strings start with 'n' (e.g. "nMELTSv1.0.2", "nMELTSv1.0.2NoProp").
+    _ng_base = Model[:-6] if Model.endswith('NoProp') else Model
+    if Model.startswith('n') and _ng_base in _nGibbs_models:
+        return nGibbsAPI(Model = Model, comp = comp, Frac_solid = Frac_solid, Frac_fluid = Frac_fluid,
+               T_C = T_C, T_path_C = T_path_C, T_start_C = T_start_C, T_end_C = T_end_C, dt_C = dt_C,
+               P_bar = P_bar, P_path_bar = P_path_bar, P_start_bar = P_start_bar, P_end_bar = P_end_bar, dp_bar = dp_bar,
+               Fe3Fet_init = Fe3Fet_init, Fe3Fet_Liq = Fe3Fet_Liq, H2O_init = H2O_init, H2O_Liq = H2O_Liq, CO2_init = CO2_init, CO2_Liq = CO2_Liq,
+               isenthalpic = isenthalpic, isentropic = isentropic, isochoric = isochoric, find_liquidus = find_liquidus,
+               fO2_buffer = fO2_buffer, fO2_offset = fO2_offset,
+               Print_suppress = Print_suppress, fluid_sat = fluid_sat, Crystallinity_limit = Crystallinity_limit, Combined = Combined,
+               label = label, Suppress = Suppress, Suppress_except=Suppress_except)
+
     ## add check to ensure that there arn't multiple lists provided with different lengths
     l = []
     for item in [Fe3Fet_init,Fe3Fet_Liq,H2O_init,H2O_Liq,CO2_init,CO2_Liq,fO2_offset,P_bar,P_start_bar, P_end_bar, dp_bar, T_C, T_start_C, T_end_C, dt_C]:
         if type(item) == np.ndarray:
             l.append(len(item))
-    
+
     if type(comp) == pd.core.frame.DataFrame:
         l.append(len(comp))
 
     if len(l) > 1:
         if len(set(l))>1:
             raise ValueError("Error: non-identical length in provided conditions. \nPlease check lists or arrays are the same length and/or specify single values.")
-    
+
     if len(l) == 0:
         ln = 1
     else:
@@ -181,45 +218,6 @@ def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid 
 
     if Frac_fluid is False:
         Frac_fluid = None
-
-    if bulk is not None:
-        comp = bulk.copy()
-        
-    # set default values if required
-    if Model is None:
-        Model = "MELTSv1.0.2"
-
-    if H2O_Liq is not None:
-        print('Warning - the kwarg "H2O_Liq" will be removed from v1.0.0 onwards. Please use "H2O_init" instead.')
-        if H2O_init is None:
-            H2O_init = H2O_Liq
-
-    if CO2_Liq is not None:
-        print('Warning - the kwarg "CO2_Liq" will be removed from v1.0.0 onwards. Please use "CO2_init" instead.')
-        if CO2_init is None:
-            CO2_init = CO2_Liq
-
-    if Fe3Fet_Liq is not None:
-        print('Warning - the kwarg "Fe3Fet_Liq" will be removed from v1.0.0 onwards. Please use "Fe3Fet_init" instead.')
-        if Fe3Fet_init is None:
-            Fe3Fet_init = Fe3Fet_Liq
-
-     # ── nGibbs neural-network emulator branch ───────────────────────────────
-    # Model strings for nGibbs emulators start with lowercase 'n' followed by
-    # the name of the model they emulate (e.g. "nMELTSv1.0.2" → "MELTSv1.0.2").
-    # Appending "NoProp" skips the calc_phase_props_MELTS call after ForwardMB
-    # (e.g. Model="nMELTSv1.0.2NoProp").
-    
-    _ng_base = Model[:-6] if Model.endswith('NoProp') else Model
-    if Model.startswith('n') and _ng_base in _nGibbs_models:
-        return nGibbsAPI(Model = Model, comp = comp, Frac_solid = Frac_solid, Frac_fluid = Frac_fluid, 
-               T_C = T_C, T_path_C = T_path_C, T_start_C = T_start_C, T_end_C = T_end_C, dt_C = dt_C, 
-               P_bar = P_bar, P_path_bar = P_path_bar, P_start_bar = P_start_bar, P_end_bar = P_end_bar, dp_bar = dp_bar, 
-               Fe3Fet_init = Fe3Fet_init, Fe3Fet_Liq = Fe3Fet_Liq, H2O_init = H2O_init, H2O_Liq = H2O_Liq, CO2_init = CO2_init, CO2_Liq = CO2_Liq, 
-               isenthalpic = isenthalpic, isentropic = isentropic, isochoric = isochoric, find_liquidus = find_liquidus, 
-               fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, 
-               Print_suppress = Print_suppress, fluid_sat = fluid_sat, Crystallinity_limit = Crystallinity_limit, Combined = Combined,
-               label = label, Suppress = Suppress, Suppress_except=Suppress_except)
 
     # if comp is entered as a pandas series, it must first be converted to a dict
     if type(comp) == pd.core.series.Series:
