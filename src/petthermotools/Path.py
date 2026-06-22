@@ -266,9 +266,24 @@ def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid 
             jl.Suppress = Suppress
             jl.seval("Suppress = Vector{String}(Suppress)")
             julia_Suppress = jl.Suppress
+
+        if isinstance(comp, dict):
+            # If it's already a dict, convert it to a Julia Dict
+            julia_comp = jl.seval("Dict")(comp)
+        elif hasattr(comp, 'to_dict'):  # Detects a Pandas DataFrame
+            # Convert the entire DataFrame into a list of nested dictionaries (one per row)
+            # orient='records' turns it into: [{'SiO2': 50, 'MgO': 10}, {'SiO2': 52, 'MgO': 8}, ...]
+            py_dict_list = comp.to_dict(orient='records')
+            
+            # Convert the Python list of dicts into a Julia Vector of Dicts
+            # This makes it incredibly easy for Julia to read row 'i'
+            julia_comp = [jl.seval("Dict")(row) for row in py_dict_list]
+        else:
+            julia_comp = comp
+
         args = {
             "Model": Model,
-            "comp": jl.seval("Dict")(comp),
+            "comp": julia_comp,
             "Frac_solid": Frac_solid,
             "Frac_fluid": Frac_fluid,
 
