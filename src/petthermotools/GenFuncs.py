@@ -402,8 +402,133 @@ def rename_keys_with_prefix(d, mapping):
         new_dict[new_key] = v
     return new_dict
 
-# Create a global flag to ensure we only setup once per session
 _JULIA_INITIALIZED = False
+_JULIA_WORKERS_READY = False
+
+def _ensure_julia_workers():
+    """
+    The master function that actually boots the environment and workers.
+    It checks the flag so it only ever executes once per session.
+    """
+    global _JULIA_WORKERS_READY
+    
+    if not _JULIA_WORKERS_READY:
+        print("Initializing MAGEMin environment and workers...")
+        _ensure_julia_ready()
+        
+        import sys
+        import os
+        from pathlib import Path
+        from juliacall import Main as jl
+        
+        env_dir = Path.home() / ".petthermotools_julia_env"
+        jl_env_path = env_dir.as_posix()
+        
+        # Format Python path safely for Julia strings (prevents Windows crash)
+        py_exe = sys.executable.replace('\\', '\\\\')
+        cores = memory_limit(cores=get_performance_core_count())
+        
+        # 1. Activate Main Environment
+        jl.seval(f"""
+            using Pkg
+            Pkg.activate("{jl_env_path}")
+        """)
+        
+        # 2. Boot Workers with STRICT environment mapping
+        # This guarantees workers know exactly which Python to use for PythonCall
+        jl.seval(f"""
+            using Distributed
+            if nworkers() <= 1
+                addprocs(
+                    {cores},
+                    exeflags=["--project={jl_env_path}"],
+                    env=Dict(
+                        "JULIA_PYTHONCALL_EXE" => "{py_exe}",
+                        "JULIA_CONDAPKG_BACKEND" => "Null",
+                        "JULIA_PROJECT" => "{jl_env_path}"
+                    )
+                )
+            end
+        """)
+        
+        # 3. Force environment activation on all workers
+        jl.seval("@everywhere import Pkg")
+        jl.seval(f'@everywhere Pkg.activate("{jl_env_path}")')
+        
+        # 4. Load the packages
+        # jl.seval("@everywhere using PythonCall")
+        jl.seval("@everywhere using MAGEMinCalc")
+        jl.seval("using MAGEMinCalc")
+        
+        print("Julia Environment and Workers Ready.")
+        _JULIA_WORKERS_READY = True
+
+
+def activate_petthermotools_env():
+    """
+    Public API: Smart Activator.
+    Pre-loads Mac/Linux. Defers Windows to protect MELTS multiprocessing.
+    """
+    import os
+    import sys
+
+    # 1. Set environment variables FIRST
+    os.environ["JULIA_PYTHONCALL_EXE"] = sys.executable
+    os.environ["JULIA_CONDAPKG_BACKEND"] = "Null"
+
+    _ensure_julia_ready()
+    # if platform.system() != "Windows":
+    _ensure_julia_workers()
+    # else:
+    #     print("Windows detected: Environment pre-activation is bypassed to prevent process deadlocks.")
+    #     print("MAGEMin workers will automatically load when you run your first calculation.")
+
+
+def cleanup_julia_workers():
+    """
+    Public API: Manual shutdown for Windows users.
+    Run this before a MELTS calculation if MAGEMin was previously run.
+    """
+    global _JULIA_WORKERS_READY
+    if platform.system() == "Windows":
+        if _JULIA_WORKERS_READY:
+            from juliacall import Main as jl
+            print("Shutting down background MAGEMin workers...")
+            jl.seval("rmprocs(workers())")
+            _JULIA_WORKERS_READY = False
+            print("Workers terminated. System resources released.")
+
+# def _ensure_julia_workers():
+#     """Spawns Julia worker processes if they aren't already running."""
+#     global _JULIA_WORKERS_READY
+    
+#     if not _JULIA_WORKERS_READY:
+#         from juliacall import Main as jl
+        
+#         # 1. Ensure the Distributed module is loaded into Main
+#         jl.seval("using Distributed")
+        
+#         # 2. Now it is safe to call nworkers()
+#         if jl.nworkers() <= 1:
+#             print("Booting up MAGEMin background workers...")
+#             # addprocs is already available because we just ran 'using Distributed'
+#             jl.Distributed.addprocs(memory_limit(cores=get_performance_core_count()))
+#             jl.seval("@everywhere using MAGEMinCalc")
+            
+#         _JULIA_WORKERS_READY = True
+
+# def cleanup_julia_workers():
+#     """
+#     Manually shuts down background Julia processes.
+#     Recommended for Windows users running MELTS after MAGEMin calculations.
+#     """
+#     global _JULIA_WORKERS_READY
+#     if _JULIA_WORKERS_READY:
+#         from juliacall import Main as jl
+#         print("Shutting down background MAGEMin workers...")
+#         jl.seval("rmprocs(workers())")
+#         _JULIA_WORKERS_READY = False
+#         print("Workers terminated. System resources released.")
 
 def _ensure_julia_ready():
     """
@@ -460,36 +585,61 @@ def get_performance_core_count():
     # Fallback for non-hyperthreaded or non-hybrid CPUs
     return lf
 
-def activate_petthermotools_env():
-    '''
-    Activates the custom Julia environment (.petthermotools_julia_env) required 
-    for running MAGEMinCalc calculations via the JuliaCall interface.
+# def activate_petthermotools_env():
+#     '''Activates the custom Julia environment (.petthermotools_julia_env).'''
+#     _ensure_julia_ready()
+#     from juliacall import Main as jl
+#     env_dir = Path.home() / ".petthermotools_julia_env"
+#     jl_env_path = env_dir.as_posix()
+    
+#     jl.seval(f"""import Pkg
+#              Pkg.activate(expanduser("{jl_env_path}"))
+#              """)
+#     jl.seval("using MAGEMinCalc")
+#     jl.seval(f"""
+#         if pkgversion(MAGEMinCalc) != v"0.6.2"
+#             error("Incorrect version! Expected v0.6.2. Please run ptt.update_MAGEMinCalc()")
+#         else
+#              println("Julia Environment Ready. MAGEMinCalc v0.6.2 detected")
+#         end"""
+#     )
 
-    Parameters:
-    ----------
-    None
+#     # OS-Level Routing
+#     # if platform.system() != "Windows":
+#     _ensure_julia_workers()
+    # else:
+    #     print("Windows detected: MAGEMin workers will load lazily to protect MELTS performance.")
 
-    Returns:
-    ----------
-    None. Activates the environment using `Pkg.activate`.
-    '''
-    _ensure_julia_ready()
-    from juliacall import Main as jl
-    env_dir = Path.home() / ".petthermotools_julia_env"
-    jl_env_path = env_dir.as_posix()
-    jl.seval(f"""import Pkg
-             Pkg.activate(expanduser("{jl_env_path}"))
-             Pkg.precompile()""")
-    jl.seval("using Distributed")
-    jl.Distributed.addprocs(memory_limit(cores = get_performance_core_count()))
-    jl.seval("@everywhere using MAGEMinCalc")
-    jl.seval(f"""
-        if pkgversion(MAGEMinCalc) != v"0.6.2"
-            error("Incorrect version! Expected v0.6.2. Please run ptt.update_MAGEMinCalc()")
-        else
-             println("Julia Environment Ready. MAGEMinCalc v0.6.2 detected")
-        end"""
-    )
+# def activate_petthermotools_env():
+#     '''
+#     Activates the custom Julia environment (.petthermotools_julia_env) required 
+#     for running MAGEMinCalc calculations via the JuliaCall interface.
+
+#     Parameters:
+#     ----------
+#     None
+
+#     Returns:
+#     ----------
+#     None. Activates the environment using `Pkg.activate`.
+#     '''
+#     _ensure_julia_ready()
+#     from juliacall import Main as jl
+#     env_dir = Path.home() / ".petthermotools_julia_env"
+#     jl_env_path = env_dir.as_posix()
+#     jl.seval(f"""import Pkg
+#              Pkg.activate(expanduser("{jl_env_path}"))
+#              Pkg.precompile()""")
+#     jl.seval("using Distributed")
+#     jl.Distributed.addprocs(memory_limit(cores = get_performance_core_count()))
+#     jl.seval("@everywhere using MAGEMinCalc")
+#     jl.seval(f"""
+#         if pkgversion(MAGEMinCalc) != v"0.6.2"
+#             error("Incorrect version! Expected v0.6.2. Please run ptt.update_MAGEMinCalc()")
+#         else
+#              println("Julia Environment Ready. MAGEMinCalc v0.6.2 detected")
+#         end"""
+#     )
     
 
 def to_float(x):

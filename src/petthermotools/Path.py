@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 from petthermotools.GenFuncs import *
 from petthermotools.GenFuncs import _ensure_julia_ready
+from petthermotools.GenFuncs import _ensure_julia_workers
 from petthermotools.Plotting import *
 from petthermotools.MELTS import *
 from petthermotools.core_config import MAX_WORKERS
@@ -13,6 +14,7 @@ import sys
 from tqdm.notebook import tqdm, trange
 from pathlib import Path
 from queue import Empty
+import platform
 import os
 
 # nGibbs registry and input builder live in nGibbs_bridge.py (single
@@ -168,6 +170,10 @@ def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid 
         if Fe3Fet_init is None:
             Fe3Fet_init = Fe3Fet_Liq
 
+    if "MELTS" in Model and multi_processing:
+        if platform.system() == "Windows" and "juliacall" in sys.modules:
+            raise Exception("On Windows MELTS cannot be run after MAGEMin \nhas been initiated. Please reformat your \nnotebook so that all MELTS calculations take place \nbefore running ptt.activate_petthermotools_env()")
+
     # ── nGibbs neural-network emulator branch ───────────────────────────────
     # Routed BEFORE the PTT length-consistency check so that nGibbs grid mode
     # (len(P_bar) != len(T_C)) is not incorrectly rejected.
@@ -256,6 +262,7 @@ def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid 
         if ln > 1:
             P_bar, T_C, P_start_bar, T_start_C, P_end_bar, T_end_C, dp_bar, dt_C, P_path_bar, T_path_C, fO2_offset = control_path_parameters(ln, P_bar, T_C, P_start_bar, T_start_C, P_end_bar, T_end_C, dp_bar, dt_C, P_path_bar, T_path_C, fO2_offset)
 
+        _ensure_julia_workers()
         from juliacall import Main as jl 
         julia_Suppress = None                
         if Suppress == ['rutile', 'tridymite']:

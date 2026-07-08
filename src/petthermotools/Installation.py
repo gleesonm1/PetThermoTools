@@ -97,6 +97,9 @@ def install_MAGEMinCalc():
 
     print("If you encounter issues with the installation process please contact me at gleesonm@berkeley.edu")
 
+    import os, sys
+    os.environ["JULIA_PYTHONCALL_EXE"] = sys.executable
+    os.environ["JULIA_CONDAPKG_BACKEND"] = "Null"
     # warn_if_incompatible_julia()
 
     import juliapkg
@@ -157,7 +160,10 @@ def update_MAGEMinCalc():
     '''
     Update MAGEMinCalc and MAGEMin_C to the latest versions that are compatible with PetThermoTools. It is useful to run this function once following each upgrade of PetThermoTools to ensure compatibility.
     '''
-
+    import os, sys
+    os.environ["JULIA_PYTHONCALL_EXE"] = sys.executable
+    os.environ["JULIA_CONDAPKG_BACKEND"] = "Null"
+    
     import juliapkg
     juliapkg.require_julia("~1.11")
     juliapkg.resolve()
