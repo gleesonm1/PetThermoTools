@@ -459,6 +459,13 @@ def _ensure_julia_workers():
         # jl.seval("@everywhere using PythonCall")
         jl.seval("@everywhere using MAGEMinCalc")
         jl.seval("using MAGEMinCalc")
+        jl.seval(f"""
+            if pkgversion(MAGEMinCalc) != v"0.6.3"
+                error("Incorrect version! Expected v0.6.3. Please run ptt.update_MAGEMinCalc()")
+            else
+                println("Julia Environment Ready. MAGEMinCalc v0.6.3 detected")
+            end"""
+        )
         
         print("Julia Environment and Workers Ready.")
         _JULIA_WORKERS_READY = True
@@ -1317,6 +1324,7 @@ def stich_work(Results = None, Order = None, Model = "MELTS", Frac_fluid = None,
             Results_All = pd.concat([Results_All, Results[R]], axis = 1)
 
     Results['All'] = Results_All
+    # print(Results['All'].columns[Results['All'].columns.str.contains('mass_g_')])
     def combine_headers(row):
         return ','.join([col[7:] for col in Results['All'].loc[:, Results['All'].columns.str.contains('mass_g_')].columns if row[col] > 0.0 and not pd.isna(row[col])])
 

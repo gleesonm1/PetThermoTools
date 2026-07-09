@@ -413,13 +413,17 @@ def equilibrate_multi(cores = multiprocessing.cpu_count(), Model = "MELTSv1.0.2"
                 bulk = np.array([[comp['SiO2_Liq'], comp['Al2O3_Liq'], comp['CaO_Liq'], comp['MgO_Liq'], comp['FeOt_Liq'], comp['K2O_Liq'], comp['Na2O_Liq'], comp['TiO2_Liq'], comp['O'], comp['Cr2O3_Liq']]], dtype=float)
             else:
                 bulk = np.array([[comp['SiO2_Liq'], comp['Al2O3_Liq'], comp['CaO_Liq'], comp['MgO_Liq'], comp['FeOt_Liq'], comp['K2O_Liq'], comp['Na2O_Liq'], comp['TiO2_Liq'], comp['O'], comp['Cr2O3_Liq'], comp['H2O_Liq']]], dtype = float)
+            
+            # If a length is specified and is greater than 1, copy the row 'length' times
+            if length > 1:
+                bulk = np.tile(bulk, (length, 1))
         else:
             if Model == "Weller2024":
                 bulk = comp[['SiO2_Liq', 'Al2O3_Liq', 'CaO_Liq', 'MgO_Liq', 'FeOt_Liq', 'K2O_Liq', 'Na2O_Liq', 'TiO2_Liq', 'O', 'Cr2O3_Liq']].astype(float).values
             else:
                 bulk = comp[['SiO2_Liq', 'Al2O3_Liq', 'CaO_Liq', 'MgO_Liq', 'FeOt_Liq', 'K2O_Liq', 'Na2O_Liq', 'TiO2_Liq', 'O', 'Cr2O3_Liq', 'H2O_Liq']].astype(float).values
 
-        print(np.shape(bulk))
+        # print(np.shape(bulk))
         bulk_jl = jl.seval("collect")(bulk)
 
         if type(T_C) == np.ndarray:
