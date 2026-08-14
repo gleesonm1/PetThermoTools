@@ -219,7 +219,7 @@ def test_MAGEMinCalc():
 
     """)
 
-def install_alphaMELTS(file_location=None, admin=True, version="2.3.1", system = None):
+def install_alphaMELTS(file_location=None, admin=True, version="2.3.2", system = None):
     try:
         from meltsdynamic import meltsdynamic
         print(f'alphaMELTS already installed and available.')
@@ -235,7 +235,7 @@ def install_alphaMELTS(file_location=None, admin=True, version="2.3.1", system =
     # 1. Construct the download URL
     if version == "2.3.2":
         # Note: Using the specific naming convention for 2.3.2 assets
-        base_url = f"https://github.com/magmasource/alphaMELTS/releases/download/v{version}-beta.1"
+        base_url = f"https://github.com/magmasource/alphaMELTS/releases/download/v{version}"
         if system == "Darwin":
             tag = "macosx_14_0-arm64" if is_arm else "macosx_14_0-x86_64"
         elif system == "Windows":
@@ -345,7 +345,7 @@ def remove_alphaMELTS_path():
     if fail:
         print(f"Unable to locate {pth_file_path}")
 
-def update_alphaMELTS_path(file_location = None, admin = True, version = "2.3.1", system = None):
+def update_alphaMELTS_path(file_location = None, admin = True, version = "2.3.2", system = None):
     '''
     Updates the installed alphaMELTS for Python files by removing the old path configuration
     and installing a new version.

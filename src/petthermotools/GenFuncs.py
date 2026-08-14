@@ -8,16 +8,9 @@ import os
 import re
 import platform
 import subprocess
-# from petthermotools.Barom import *
-# from petthermotools.Liq import *
-# from petthermotools.Crystallise import *
-# from petthermotools.MELTS import *
 from petthermotools.Compositions import *
 from petthermotools.core_config import MAX_WORKERS
-# try:
-#     from petthermotools.Holland import *
-# except:
-#     pass
+from scipy.optimize import nnls
 
 Names = {'liquid1': '_Liq',
         'olivine1': '_Ol',
@@ -105,6 +98,154 @@ molar_masses = {
     "Na2O_Liq": 61.979,
     "K2O_Liq": 94.196
 }
+
+OXIDE_MW = {
+    "SiO2": 60.084,
+    "TiO2": 79.866,
+    "Al2O3": 101.961,
+    "Fe2O3": 159.688,
+    "FeO": 71.844,
+    "MnO": 70.937,
+    "MgO": 40.304,
+    "CaO": 56.077,
+    "Na2O": 61.979,
+    "K2O": 94.200,
+    "P2O5": 141.945,
+    "H2O": 18.015,
+}
+
+
+def calculate_retained_masses(
+    results: dict, residual: list[str] = ["liquid"]
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Calculates retained mass (g) and retention fraction (%) for each phase
+
+    between step t and step t+1.
+
+    Parameters
+    ----------
+    results : dict
+        Contains 'mass_g' DataFrame and individual phase composition DataFrames.
+    residual : list of str, default ['liquid']
+        Phases to consider 100% retained (fixed). Can contain any combination of:
+        'liquid', 'fluid', and/or 'solid'.
+    """
+    mass_df = results["mass_g"]
+    mass_df = mass_df.loc[:,~mass_df.columns.str.contains('_cumsum')]
+    phase_dict = results
+
+    retained_mass_df = pd.DataFrame(
+        0.0, index=mass_df.index[:-1], columns=mass_df.columns
+    )
+    retention_fraction_df = pd.DataFrame(
+        0.0, index=mass_df.index[:-1], columns=mass_df.columns
+    )
+
+    def is_fixed_phase(phase_name: str) -> bool:
+        """Determines if a phase should be 100% retained based on the residual list."""
+        name_lower = phase_name.lower()
+        if "liquid" in residual and name_lower.startswith("liquid"):
+            return True
+        if "fluid" in residual and name_lower.startswith("fluid"):
+            return True
+        if "solid" in residual and not (
+            name_lower.startswith("liquid") or name_lower.startswith("fluid")
+        ):
+            return True
+        return False
+
+    for t in range(len(mass_df) - 1):
+        # 1. Identify active phases at step t
+        active_phases = [
+            p
+            for p in mass_df.columns
+            if p in phase_dict and mass_df.loc[t, p] > 0
+        ]
+
+        if not active_phases:
+            continue
+
+        # Separate phases into fixed (100% retained) vs variable (solved by NNLS)
+        fixed_phases = [p for p in active_phases if is_fixed_phase(p)]
+        variable_phases = [p for p in active_phases if not is_fixed_phase(p)]
+
+        # 2. Calculate total oxide mass target at step t+1 (C_next)
+        active_next_phases = [
+            p
+            for p in mass_df.columns
+            if p in phase_dict and mass_df.loc[t + 1, p] > 0
+        ]
+
+        if not active_next_phases:
+            continue
+
+        # Get number of oxide columns from the first phase
+        sample_phase = phase_dict[active_phases[0]]
+        num_oxides = sample_phase.shape[1]
+
+        C_next = np.zeros(num_oxides)
+        for p in active_next_phases:
+            p_mass = mass_df.loc[t + 1, p]
+            p_comp = phase_dict[p].loc[t + 1].fillna(0.0).values / 100.0
+            C_next += p_mass * p_comp
+
+        # 3. Process Fixed Phases (Retain 100% mass at step t)
+        C_fixed = np.zeros(num_oxides)
+        for p in fixed_phases:
+            orig_mass = mass_df.loc[t, p]
+            p_comp = phase_dict[p].loc[t].fillna(0.0).values / 100.0
+
+            # Store 100% retention directly
+            retained_mass_df.loc[t, p] = orig_mass
+            retention_fraction_df.loc[t, p] = 100.0
+
+            # Accumulate oxide mass contribution from fixed phases
+            C_fixed += orig_mass * p_comp
+
+        # 4. If no variable phases need solving, proceed to next step
+        if not variable_phases:
+            continue
+
+        # 5. Build Composition Matrix A_var for variable phases
+        A_var_list = []
+        for p in variable_phases:
+            comp_row = phase_dict[p].loc[t].fillna(0.0).values / 100.0
+            A_var_list.append(comp_row)
+
+        A_var = np.array(A_var_list).T  # Shape: (num_oxides, num_variable_phases)
+
+        # 6. Adjust target vector: C_target = C_next - C_fixed
+        C_target = C_next - C_fixed
+        C_target = np.maximum(
+            0.0, C_target
+        )  # Enforce non-negative target mass
+
+        # Clean NaNs / Infs
+        A_var = np.nan_to_num(A_var, nan=0.0, posinf=0.0, neginf=0.0)
+        C_target = np.nan_to_num(C_target, nan=0.0, posinf=0.0, neginf=0.0)
+
+        # Filter inactive oxide rows
+        valid_rows = (np.abs(A_var).sum(axis=1) > 0) | (C_target > 0)
+        A_var_clean = A_var[valid_rows]
+        C_target_clean = C_target[valid_rows]
+
+        if A_var_clean.size == 0 or np.all(C_target_clean == 0):
+            continue
+
+        # 7. Solve NNLS for variable phases
+        retained_masses, _ = nnls(A_var_clean, C_target_clean)
+
+        # 8. Store results for variable phases
+        for idx, p in enumerate(variable_phases):
+            r_mass = retained_masses[idx]
+            orig_mass = mass_df.loc[t, p]
+
+            retained_mass_df.loc[t, p] = r_mass
+            retention_fraction_df.loc[t, p] = (
+                (r_mass / orig_mass) * 100.0 if orig_mass > 0 else 0.0
+            )
+
+    return retained_mass_df, retention_fraction_df
 
 # Number of cations per oxide
 cation_numbers = {
@@ -470,7 +611,6 @@ def _ensure_julia_workers():
         print("Julia Environment and Workers Ready.")
         _JULIA_WORKERS_READY = True
 
-
 def activate_petthermotools_env():
     """
     Public API: Smart Activator.
@@ -490,7 +630,6 @@ def activate_petthermotools_env():
     #     print("Windows detected: Environment pre-activation is bypassed to prevent process deadlocks.")
     #     print("MAGEMin workers will automatically load when you run your first calculation.")
 
-
 def cleanup_julia_workers():
     """
     Public API: Manual shutdown for Windows users.
@@ -504,38 +643,6 @@ def cleanup_julia_workers():
             jl.seval("rmprocs(workers())")
             _JULIA_WORKERS_READY = False
             print("Workers terminated. System resources released.")
-
-# def _ensure_julia_workers():
-#     """Spawns Julia worker processes if they aren't already running."""
-#     global _JULIA_WORKERS_READY
-    
-#     if not _JULIA_WORKERS_READY:
-#         from juliacall import Main as jl
-        
-#         # 1. Ensure the Distributed module is loaded into Main
-#         jl.seval("using Distributed")
-        
-#         # 2. Now it is safe to call nworkers()
-#         if jl.nworkers() <= 1:
-#             print("Booting up MAGEMin background workers...")
-#             # addprocs is already available because we just ran 'using Distributed'
-#             jl.Distributed.addprocs(memory_limit(cores=get_performance_core_count()))
-#             jl.seval("@everywhere using MAGEMinCalc")
-            
-#         _JULIA_WORKERS_READY = True
-
-# def cleanup_julia_workers():
-#     """
-#     Manually shuts down background Julia processes.
-#     Recommended for Windows users running MELTS after MAGEMin calculations.
-#     """
-#     global _JULIA_WORKERS_READY
-#     if _JULIA_WORKERS_READY:
-#         from juliacall import Main as jl
-#         print("Shutting down background MAGEMin workers...")
-#         jl.seval("rmprocs(workers())")
-#         _JULIA_WORKERS_READY = False
-#         print("Workers terminated. System resources released.")
 
 def _ensure_julia_ready():
     """
@@ -591,63 +698,6 @@ def get_performance_core_count():
     
     # Fallback for non-hyperthreaded or non-hybrid CPUs
     return lf
-
-# def activate_petthermotools_env():
-#     '''Activates the custom Julia environment (.petthermotools_julia_env).'''
-#     _ensure_julia_ready()
-#     from juliacall import Main as jl
-#     env_dir = Path.home() / ".petthermotools_julia_env"
-#     jl_env_path = env_dir.as_posix()
-    
-#     jl.seval(f"""import Pkg
-#              Pkg.activate(expanduser("{jl_env_path}"))
-#              """)
-#     jl.seval("using MAGEMinCalc")
-#     jl.seval(f"""
-#         if pkgversion(MAGEMinCalc) != v"0.6.2"
-#             error("Incorrect version! Expected v0.6.2. Please run ptt.update_MAGEMinCalc()")
-#         else
-#              println("Julia Environment Ready. MAGEMinCalc v0.6.2 detected")
-#         end"""
-#     )
-
-#     # OS-Level Routing
-#     # if platform.system() != "Windows":
-#     _ensure_julia_workers()
-    # else:
-    #     print("Windows detected: MAGEMin workers will load lazily to protect MELTS performance.")
-
-# def activate_petthermotools_env():
-#     '''
-#     Activates the custom Julia environment (.petthermotools_julia_env) required 
-#     for running MAGEMinCalc calculations via the JuliaCall interface.
-
-#     Parameters:
-#     ----------
-#     None
-
-#     Returns:
-#     ----------
-#     None. Activates the environment using `Pkg.activate`.
-#     '''
-#     _ensure_julia_ready()
-#     from juliacall import Main as jl
-#     env_dir = Path.home() / ".petthermotools_julia_env"
-#     jl_env_path = env_dir.as_posix()
-#     jl.seval(f"""import Pkg
-#              Pkg.activate(expanduser("{jl_env_path}"))
-#              Pkg.precompile()""")
-#     jl.seval("using Distributed")
-#     jl.Distributed.addprocs(memory_limit(cores = get_performance_core_count()))
-#     jl.seval("@everywhere using MAGEMinCalc")
-#     jl.seval(f"""
-#         if pkgversion(MAGEMinCalc) != v"0.6.2"
-#             error("Incorrect version! Expected v0.6.2. Please run ptt.update_MAGEMinCalc()")
-#         else
-#              println("Julia Environment Ready. MAGEMinCalc v0.6.2 detected")
-#         end"""
-#     )
-    
 
 def to_float(x):
     '''
@@ -1333,6 +1383,28 @@ def stich_work(Results = None, Order = None, Model = "MELTS", Frac_fluid = None,
     Results['mass_g'] = Results_Mass.fillna(0.0)
     Results['volume_cm3'] = Results_Volume.fillna(0.0)
     Results['rho_kg/m3'] = Results_rho.fillna(0.0)
+
+    if "MELTS" in Model:
+        if Frac_solid or Frac_fluid:
+            if Frac_solid is None:
+                residual_mass = calculate_retained_masses(Results, residual = ['liquid', 'solid'])[0]
+                Results['residual_mass_g'] = residual_mass.copy()
+                residual_mass = residual_mass.add_suffix('_cumsum')
+                residual_mass = residual_mass.loc[:,residual_mass.columns.str.contains("fluid")]
+            elif Frac_fluid is None:
+                residual_mass = calculate_retained_masses(Results, residual = ['liquid', 'fluid'])[0]
+                Results['residual_mass_g'] = residual_mass.copy()
+                residual_mass = residual_mass.add_suffix('_cumsum')
+                residual_mass = residual_mass.loc[:,~residual_mass.columns.str.contains("liquid|fluid")]
+            else:
+                residual_mass = calculate_retained_masses(Results, residual = ['liquid'])[0]
+                Results['residual_mass_g'] = residual_mass.copy()
+                residual_mass = residual_mass.add_suffix('_cumsum')
+                residual_mass = residual_mass.loc[:,~residual_mass.columns.str.contains("liquid")]
+            
+            zero_row = pd.DataFrame(0, index=[0], columns=residual_mass.columns)
+            residual_mass = pd.concat([zero_row, residual_mass], ignore_index = True)
+            Results['mass_g'][residual_mass.columns] = Results['mass_g'][residual_mass.columns] - residual_mass.cumsum()
 
     if Results['mass_g'].sum(axis = 1).iloc[-1] == 0.0:
         for R in Results:

@@ -4,10 +4,6 @@ from petthermotools.GenFuncs import *
 from petthermotools.GenFuncs import _ensure_julia_ready
 from petthermotools.Plotting import *
 from petthermotools.MELTS import *
-# try:
-#     from petthermotools.Holland import *
-# except:
-#     pass
 import multiprocessing
 from multiprocessing import Queue
 from multiprocessing import Process
@@ -15,7 +11,6 @@ from tqdm.notebook import tqdm, trange
 from pathlib import Path
 import time
 import warnings
-# from petthermotools.nGibbs_bridge import nGibbsAPI, _nGibbs_models
 
 def supCalc(Model = "MELTSv1.0.2", bulk = None, phase = None, T_C = None, P_bar = None,
              Fe3Fet_Liq = None, H2O_Liq = None, CO2_Liq = None, fO2_buffer = None, fO2_offset = None, 
