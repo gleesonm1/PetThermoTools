@@ -2,6 +2,27 @@
 Change Log
 ================================================
 
+Version 1.1.6 (Aug 2026)
+====================================
+Updated installation script to automatically download alphaMELTS v2.3.2 files.
+
+Version 1.1.4 (Jun 2026)
+====================================
+Improved version control for julia installation
+
+Version 1.1.3 (Jun 2026)
+====================================
+Change to Python-Julia conection to allow better integration when performing multiple MAGEMin calculations.
+
+Version 1.1.2 (Jun 2026)
+====================================
+Pre-release of nGibbs included in package for Volcali workshop
+
+Version 1.0.0 (Jun 2026)
+====================================
+Full release to accompany publication of manuscript in Volcanica
+Includes fix to potential temperature search when using pMELTS (can set Tp as input to melting calcs)
+
 Version 0.4.0 (March 2026)
 ====================================
 Major update to MAGEMinCalc. Please run ptt.update_MAGEMinCalc().

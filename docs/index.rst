@@ -54,6 +54,12 @@ Welcome to PetThermoTools's documentation!
 
 .. toctree::
    :maxdepth: 2
+   :caption: Saturation pressure calculations
+
+   Examples/Saturation_Pressure/SatP_example
+
+.. toctree::
+   :maxdepth: 2
    :caption: Decompression Calculations
 
    Examples/DecompressionTests/StHelens_decompress_simple

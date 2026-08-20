@@ -104,6 +104,7 @@ OXIDE_MW = {
     "TiO2": 79.866,
     "Al2O3": 101.961,
     "Fe2O3": 159.688,
+    "Cr2O3": 151.990,
     "FeO": 71.844,
     "MnO": 70.937,
     "MgO": 40.304,
@@ -112,8 +113,59 @@ OXIDE_MW = {
     "K2O": 94.200,
     "P2O5": 141.945,
     "H2O": 18.015,
+    "CO2": 44.010,
 }
 
+OXIDE_N = {
+    "SiO2": 2,
+    "TiO2": 2,
+    "Al2O3": 3,
+    "Fe2O3": 3,
+    "Cr2O3": 3,
+    "FeO": 1,
+    "MnO": 1,
+    "MgO": 1,
+    "CaO": 1,
+    "Na2O": 1,
+    "K2O": 1,
+    "P2O5": 5,
+    "H2O": 1,
+    "CO2": 2,
+}
+
+CATION_MW = {
+    "SiO2": 28.086,  # Si
+    "TiO2": 47.868,  # Ti
+    "Al2O3": 26.982,  # Al
+    "Fe2O3": 55.845,  # Fe
+    "Cr2O3": 51.996,  # Cr
+    "FeO": 55.845,  # Fe
+    "MnO": 54.938,  # Mn
+    "MgO": 24.305,  # Mg
+    "CaO": 40.078,  # Ca
+    "Na2O": 22.990,  # Na
+    "K2O": 39.098,  # K
+    "P2O5": 30.974,  # P
+    "H2O": 1.008,  # H
+    "CO2": 12.011,  # C
+}
+
+CATION_N = {
+    "SiO2": 1,
+    "TiO2": 1,
+    "Al2O3": 2,
+    "Fe2O3": 2,
+    "Cr2O3": 2,
+    "FeO": 1,
+    "MnO": 1,
+    "MgO": 1,
+    "CaO": 1,
+    "Na2O": 2,
+    "K2O": 2,
+    "P2O5": 2,
+    "H2O": 2,
+    "CO2": 1,
+}
 
 def calculate_retained_masses(
     results: dict, residual: list[str] = ["liquid"]
@@ -140,6 +192,18 @@ def calculate_retained_masses(
     retention_fraction_df = pd.DataFrame(
         0.0, index=mass_df.index[:-1], columns=mass_df.columns
     )
+
+    def clean_phase_comp(phase_name: str, step: int) -> np.ndarray:
+        """Extracts compositional vector excluding non-total Fe species dynamically."""
+        df = phase_dict[phase_name]
+        # Regex matches FeO, Fe2O3, or Fe3/Fet variations, leaving FeOt intact
+        exclude_pattern = r"^(FeO|Fe2O3)(_|\b)|^Fe3.*Fet"
+        cols_to_use = [
+            c
+            for c in df.columns
+            if not re.search(exclude_pattern, c, re.IGNORECASE)
+        ]
+        return df.loc[step, cols_to_use].fillna(0.0).values / 100.0
 
     def is_fixed_phase(phase_name: str) -> bool:
         """Determines if a phase should be 100% retained based on the residual list."""
@@ -180,20 +244,20 @@ def calculate_retained_masses(
             continue
 
         # Get number of oxide columns from the first phase
-        sample_phase = phase_dict[active_phases[0]]
-        num_oxides = sample_phase.shape[1]
+        sample_phase = clean_phase_comp(active_phases[0], t)
+        num_oxides = len(sample_phase)
 
         C_next = np.zeros(num_oxides)
         for p in active_next_phases:
             p_mass = mass_df.loc[t + 1, p]
-            p_comp = phase_dict[p].loc[t + 1].fillna(0.0).values / 100.0
+            p_comp = clean_phase_comp(p, t + 1)
             C_next += p_mass * p_comp
 
         # 3. Process Fixed Phases (Retain 100% mass at step t)
         C_fixed = np.zeros(num_oxides)
         for p in fixed_phases:
             orig_mass = mass_df.loc[t, p]
-            p_comp = phase_dict[p].loc[t].fillna(0.0).values / 100.0
+            p_comp = clean_phase_comp(p, t)
 
             # Store 100% retention directly
             retained_mass_df.loc[t, p] = orig_mass
@@ -209,7 +273,7 @@ def calculate_retained_masses(
         # 5. Build Composition Matrix A_var for variable phases
         A_var_list = []
         for p in variable_phases:
-            comp_row = phase_dict[p].loc[t].fillna(0.0).values / 100.0
+            comp_row = clean_phase_comp(p, t)
             A_var_list.append(comp_row)
 
         A_var = np.array(A_var_list).T  # Shape: (num_oxides, num_variable_phases)
