@@ -219,7 +219,7 @@ def test_MAGEMinCalc():
 
     """)
 
-def install_alphaMELTS(file_location=None, admin=True, version="2.3.2", system = None):
+def install_alphaMELTS(file_location=None, admin=True, version="2.3.1", system = None):
     try:
         from meltsdynamic import meltsdynamic
         print(f'alphaMELTS already installed and available.')
@@ -345,7 +345,7 @@ def remove_alphaMELTS_path():
     if fail:
         print(f"Unable to locate {pth_file_path}")
 
-def update_alphaMELTS_path(file_location = None, admin = True, version = "2.3.2", system = None):
+def update_alphaMELTS_path(file_location = None, admin = True, version = "2.3.1", system = None):
     '''
     Updates the installed alphaMELTS for Python files by removing the old path configuration
     and installing a new version.
