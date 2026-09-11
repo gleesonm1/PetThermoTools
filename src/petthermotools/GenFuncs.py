@@ -167,162 +167,56 @@ CATION_N = {
     "CO2": 1,
 }
 
-def calculate_retained_masses(
-    results: dict, residual: list[str] = ["liquid"]
-) -> tuple[pd.DataFrame, pd.DataFrame]:
-    mass_df = results["mass_g"]
-    mass_df = mass_df.loc[:, ~mass_df.columns.str.contains('_cumsum')]
-    phase_dict = results
-
-    retained_mass_df = pd.DataFrame(0.0, index=mass_df.index[:-1], columns=mass_df.columns)
-    retention_fraction_df = pd.DataFrame(0.0, index=mass_df.index[:-1], columns=mass_df.columns)
-
-    # Columns that are never oxide wt% data and must be dropped outright
-    exclude_pattern = r"^(FeO|Fe2O3)(_|\b)|^Fe3.*Fet|^X_.*_mol$"
-
-    def base_oxide_name(col: str) -> str:
-        """Strip known per-phase suffixes (_phase, _Fl, etc.) to get a common oxide key."""
-        return re.sub(r"_(phase|Fl|Liq|Sol)$", "", col, flags=re.IGNORECASE)
-
-    # --- Build one common set of oxide basenames across ALL phases up front ---
-    common_cols = []
-    seen = set()
-    for p in mass_df.columns:
-        if p not in phase_dict:
-            continue
-        df = phase_dict[p]
-        for c in df.columns:
-            if re.search(exclude_pattern, c, re.IGNORECASE):
-                continue
-            base = base_oxide_name(c)
-            if base not in seen:
-                seen.add(base)
-                common_cols.append(base)
-    num_oxides = len(common_cols)
-
-    def clean_phase_comp(phase_name: str, step: int) -> np.ndarray:
-        """Extracts compositional vector, remapped onto the common oxide basenames."""
-        df = phase_dict[phase_name]
-        cols_to_use = [
-            c for c in df.columns
-            if not re.search(exclude_pattern, c, re.IGNORECASE)
-        ]
-        s = df.loc[step, cols_to_use].fillna(0.0)
-        # rename this phase's columns to the shared basenames (e.g. H2O_Fl -> H2O)
-        s.index = [base_oxide_name(c) for c in s.index]
-        # collapse any accidental duplicate basenames (shouldn't normally happen)
-        s = s.groupby(level=0).sum()
-        # align onto the full common set; anything this phase doesn't track -> 0
-        s = s.reindex(common_cols, fill_value=0.0)
-        return s.values / 100.0
-
-    def is_fixed_phase(phase_name: str) -> bool:
-        name_lower = phase_name.lower()
-        if "liquid" in residual and name_lower.startswith("liquid"):
-            return True
-        if "fluid" in residual and name_lower.startswith("fluid"):
-            return True
-        if "solid" in residual and not (
-            name_lower.startswith("liquid") or name_lower.startswith("fluid")
-        ):
-            return True
-        return False
-
-    for t in range(len(mass_df) - 1):
-        active_phases = [p for p in mass_df.columns if p in phase_dict and mass_df.loc[t, p] > 0]
-        if not active_phases:
-            continue
-
-        fixed_phases = [p for p in active_phases if is_fixed_phase(p)]
-        variable_phases = [p for p in active_phases if not is_fixed_phase(p)]
-
-        active_next_phases = [p for p in mass_df.columns if p in phase_dict and mass_df.loc[t + 1, p] > 0]
-        if not active_next_phases:
-            continue
-
-        C_next = np.zeros(num_oxides)
-        for p in active_next_phases:
-            p_mass = mass_df.loc[t + 1, p]
-            p_comp = clean_phase_comp(p, t + 1)
-            C_next += p_mass * p_comp
-
-        C_fixed = np.zeros(num_oxides)
-        for p in fixed_phases:
-            orig_mass = mass_df.loc[t, p]
-            p_comp = clean_phase_comp(p, t)
-            retained_mass_df.loc[t, p] = orig_mass
-            retention_fraction_df.loc[t, p] = 100.0
-            C_fixed += orig_mass * p_comp
-
-        if not variable_phases:
-            continue
-
-        A_var_list = [clean_phase_comp(p, t) for p in variable_phases]
-        A_var = np.array(A_var_list).T
-
-        C_target = C_next - C_fixed
-        C_target = np.maximum(0.0, C_target)
-
-        A_var = np.nan_to_num(A_var, nan=0.0, posinf=0.0, neginf=0.0)
-        C_target = np.nan_to_num(C_target, nan=0.0, posinf=0.0, neginf=0.0)
-
-        valid_rows = (np.abs(A_var).sum(axis=1) > 0) | (C_target > 0)
-        A_var_clean = A_var[valid_rows]
-        C_target_clean = C_target[valid_rows]
-
-        if A_var_clean.size == 0 or np.all(C_target_clean == 0):
-            continue
-
-        retained_masses, _ = nnls(A_var_clean, C_target_clean)
-
-        for idx, p in enumerate(variable_phases):
-            r_mass = retained_masses[idx]
-            orig_mass = mass_df.loc[t, p]
-            retained_mass_df.loc[t, p] = r_mass
-            retention_fraction_df.loc[t, p] = (r_mass / orig_mass) * 100.0 if orig_mass > 0 else 0.0
-
-    return retained_mass_df, retention_fraction_df
-
 # def calculate_retained_masses(
 #     results: dict, residual: list[str] = ["liquid"]
 # ) -> tuple[pd.DataFrame, pd.DataFrame]:
-#     """Calculates retained mass (g) and retention fraction (%) for each phase
-
-#     between step t and step t+1.
-
-#     Parameters
-#     ----------
-#     results : dict
-#         Contains 'mass_g' DataFrame and individual phase composition DataFrames.
-#     residual : list of str, default ['liquid']
-#         Phases to consider 100% retained (fixed). Can contain any combination of:
-#         'liquid', 'fluid', and/or 'solid'.
-#     """
-#     mass_df = results["mass_g"]
-#     mass_df = mass_df.loc[:,~mass_df.columns.str.contains('_cumsum')]
+#     mass_df = results["mass_g"].copy()
+#     mass_df = mass_df.loc[:, ~mass_df.columns.str.contains('_cumsum')]
 #     phase_dict = results
 
-#     retained_mass_df = pd.DataFrame(
-#         0.0, index=mass_df.index[:-1], columns=mass_df.columns
-#     )
-#     retention_fraction_df = pd.DataFrame(
-#         0.0, index=mass_df.index[:-1], columns=mass_df.columns
-#     )
+#     retained_mass_df = pd.DataFrame(0.0, index=mass_df.index[:-1], columns=mass_df.columns)
+#     retention_fraction_df = pd.DataFrame(0.0, index=mass_df.index[:-1], columns=mass_df.columns)
+
+#     # Columns that are never oxide wt% data and must be dropped outright
+#     exclude_pattern = r"^(FeO|Fe2O3)(_|\b)|^Fe3.*Fet|^X_.*_mol$"
+
+#     def base_oxide_name(col: str) -> str:
+#         """Strip known per-phase suffixes (_phase, _Fl, etc.) to get a common oxide key."""
+#         return re.sub(r"_(phase|Fl|Liq|Sol)$", "", col, flags=re.IGNORECASE)
+
+#     # --- Build one common set of oxide basenames across ALL phases up front ---
+#     common_cols = []
+#     seen = set()
+#     for p in mass_df.columns:
+#         if p not in phase_dict:
+#             continue
+#         df = phase_dict[p]
+#         for c in df.columns:
+#             if re.search(exclude_pattern, c, re.IGNORECASE):
+#                 continue
+#             base = base_oxide_name(c)
+#             if base not in seen:
+#                 seen.add(base)
+#                 common_cols.append(base)
+#     num_oxides = len(common_cols)
 
 #     def clean_phase_comp(phase_name: str, step: int) -> np.ndarray:
-#         """Extracts compositional vector excluding non-total Fe species dynamically."""
+#         """Extracts compositional vector, remapped onto the common oxide basenames."""
 #         df = phase_dict[phase_name]
-#         # Regex matches FeO, Fe2O3, or Fe3/Fet variations, leaving FeOt intact
-#         exclude_pattern = r"^(FeO|Fe2O3)(_|\b)|^Fe3.*Fet"
 #         cols_to_use = [
-#             c
-#             for c in df.columns
+#             c for c in df.columns
 #             if not re.search(exclude_pattern, c, re.IGNORECASE)
 #         ]
-#         return df.loc[step, cols_to_use].fillna(0.0).values / 100.0
+#         s = df.loc[step, cols_to_use].fillna(0.0)
+#         # rename this phase's columns to the shared basenames (e.g. H2O_Fl -> H2O)
+#         s.index = [base_oxide_name(c) for c in s.index]
+#         # collapse any accidental duplicate basenames (shouldn't normally happen)
+#         s = s.groupby(level=0).sum()
+#         # align onto the full common set; anything this phase doesn't track -> 0
+#         s = s.reindex(common_cols, fill_value=0.0)
+#         return s.values / 100.0
 
 #     def is_fixed_phase(phase_name: str) -> bool:
-#         """Determines if a phase should be 100% retained based on the residual list."""
 #         name_lower = phase_name.lower()
 #         if "liquid" in residual and name_lower.startswith("liquid"):
 #             return True
@@ -335,33 +229,16 @@ def calculate_retained_masses(
 #         return False
 
 #     for t in range(len(mass_df) - 1):
-#         # 1. Identify active phases at step t
-#         active_phases = [
-#             p
-#             for p in mass_df.columns
-#             if p in phase_dict and mass_df.loc[t, p] > 0
-#         ]
-
+#         active_phases = [p for p in mass_df.columns if p in phase_dict and mass_df.loc[t, p] > 0]
 #         if not active_phases:
 #             continue
 
-#         # Separate phases into fixed (100% retained) vs variable (solved by NNLS)
 #         fixed_phases = [p for p in active_phases if is_fixed_phase(p)]
 #         variable_phases = [p for p in active_phases if not is_fixed_phase(p)]
 
-#         # 2. Calculate total oxide mass target at step t+1 (C_next)
-#         active_next_phases = [
-#             p
-#             for p in mass_df.columns
-#             if p in phase_dict and mass_df.loc[t + 1, p] > 0
-#         ]
-
+#         active_next_phases = [p for p in mass_df.columns if p in phase_dict and mass_df.loc[t + 1, p] > 0]
 #         if not active_next_phases:
 #             continue
-
-#         # Get number of oxide columns from the first phase
-#         sample_phase = clean_phase_comp(active_phases[0], t)
-#         num_oxides = len(sample_phase)
 
 #         C_next = np.zeros(num_oxides)
 #         for p in active_next_phases:
@@ -369,42 +246,26 @@ def calculate_retained_masses(
 #             p_comp = clean_phase_comp(p, t + 1)
 #             C_next += p_mass * p_comp
 
-#         # 3. Process Fixed Phases (Retain 100% mass at step t)
 #         C_fixed = np.zeros(num_oxides)
 #         for p in fixed_phases:
 #             orig_mass = mass_df.loc[t, p]
 #             p_comp = clean_phase_comp(p, t)
-
-#             # Store 100% retention directly
 #             retained_mass_df.loc[t, p] = orig_mass
 #             retention_fraction_df.loc[t, p] = 100.0
-
-#             # Accumulate oxide mass contribution from fixed phases
 #             C_fixed += orig_mass * p_comp
 
-#         # 4. If no variable phases need solving, proceed to next step
 #         if not variable_phases:
 #             continue
 
-#         # 5. Build Composition Matrix A_var for variable phases
-#         A_var_list = []
-#         for p in variable_phases:
-#             comp_row = clean_phase_comp(p, t)
-#             A_var_list.append(comp_row)
+#         A_var_list = [clean_phase_comp(p, t) for p in variable_phases]
+#         A_var = np.array(A_var_list).T
 
-#         A_var = np.array(A_var_list).T  # Shape: (num_oxides, num_variable_phases)
-
-#         # 6. Adjust target vector: C_target = C_next - C_fixed
 #         C_target = C_next - C_fixed
-#         C_target = np.maximum(
-#             0.0, C_target
-#         )  # Enforce non-negative target mass
+#         C_target = np.maximum(0.0, C_target)
 
-#         # Clean NaNs / Infs
 #         A_var = np.nan_to_num(A_var, nan=0.0, posinf=0.0, neginf=0.0)
 #         C_target = np.nan_to_num(C_target, nan=0.0, posinf=0.0, neginf=0.0)
 
-#         # Filter inactive oxide rows
 #         valid_rows = (np.abs(A_var).sum(axis=1) > 0) | (C_target > 0)
 #         A_var_clean = A_var[valid_rows]
 #         C_target_clean = C_target[valid_rows]
@@ -412,20 +273,159 @@ def calculate_retained_masses(
 #         if A_var_clean.size == 0 or np.all(C_target_clean == 0):
 #             continue
 
-#         # 7. Solve NNLS for variable phases
 #         retained_masses, _ = nnls(A_var_clean, C_target_clean)
 
-#         # 8. Store results for variable phases
 #         for idx, p in enumerate(variable_phases):
 #             r_mass = retained_masses[idx]
 #             orig_mass = mass_df.loc[t, p]
-
 #             retained_mass_df.loc[t, p] = r_mass
-#             retention_fraction_df.loc[t, p] = (
-#                 (r_mass / orig_mass) * 100.0 if orig_mass > 0 else 0.0
-#             )
+#             retention_fraction_df.loc[t, p] = (r_mass / orig_mass) * 100.0 if orig_mass > 0 else 0.0
 
 #     return retained_mass_df, retention_fraction_df
+
+def calculate_retained_masses(
+    results: dict, residual: list[str] = ["liquid"]
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Calculates retained mass (g) and retention fraction (%) for each phase
+
+    between step t and step t+1.
+
+    Parameters
+    ----------
+    results : dict
+        Contains 'mass_g' DataFrame and individual phase composition DataFrames.
+    residual : list of str, default ['liquid']
+        Phases to consider 100% retained (fixed). Can contain any combination of:
+        'liquid', 'fluid', and/or 'solid'.
+    """
+    mass_df = results["mass_g"].copy()
+    mass_df = mass_df.loc[:,~mass_df.columns.str.contains('_cumsum')]
+    phase_dict = results.copy()
+
+    retained_mass_df = pd.DataFrame(
+        0.0, index=mass_df.index[:-1], columns=mass_df.columns
+    )
+    retention_fraction_df = pd.DataFrame(
+        0.0, index=mass_df.index[:-1], columns=mass_df.columns
+    )
+
+    def clean_phase_comp(phase_name: str, step: int) -> np.ndarray:
+        """Extracts compositional vector excluding non-total Fe species dynamically."""
+        df = phase_dict[phase_name]
+        # Regex matches FeO, Fe2O3, or Fe3/Fet variations, leaving FeOt intact
+        exclude_pattern = r"^(FeO|Fe2O3)(_|\b)|^Fe3.*Fet"
+        cols_to_use = [
+            c
+            for c in df.columns
+            if not re.search(exclude_pattern, c, re.IGNORECASE)
+        ]
+        return df.loc[step, cols_to_use].fillna(0.0).values / 100.0
+
+    def is_fixed_phase(phase_name: str) -> bool:
+        """Determines if a phase should be 100% retained based on the residual list."""
+        name_lower = phase_name.lower()
+        if "liquid" in residual and name_lower.startswith("liquid"):
+            return True
+        if "fluid" in residual and name_lower.startswith("fluid"):
+            return True
+        if "solid" in residual and not (
+            name_lower.startswith("liquid") or name_lower.startswith("fluid")
+        ):
+            return True
+        return False
+
+    for t in range(len(mass_df) - 1):
+        # 1. Identify active phases at step t
+        active_phases = [
+            p
+            for p in mass_df.columns
+            if p in phase_dict and mass_df.loc[t, p] > 0
+        ]
+
+        if not active_phases:
+            continue
+
+        # Separate phases into fixed (100% retained) vs variable (solved by NNLS)
+        fixed_phases = [p for p in active_phases if is_fixed_phase(p)]
+        variable_phases = [p for p in active_phases if not is_fixed_phase(p)]
+
+        # 2. Calculate total oxide mass target at step t+1 (C_next)
+        active_next_phases = [
+            p
+            for p in mass_df.columns
+            if p in phase_dict and mass_df.loc[t + 1, p] > 0
+        ]
+
+        if not active_next_phases:
+            continue
+
+        # Get number of oxide columns from the first phase
+        sample_phase = clean_phase_comp(active_phases[0], t)
+        num_oxides = len(sample_phase)
+
+        C_next = np.zeros(num_oxides)
+        for p in active_next_phases:
+            p_mass = mass_df.loc[t + 1, p]
+            p_comp = clean_phase_comp(p, t + 1)
+            C_next += p_mass * p_comp
+
+        # 3. Process Fixed Phases (Retain 100% mass at step t)
+        C_fixed = np.zeros(num_oxides)
+        for p in fixed_phases:
+            orig_mass = mass_df.loc[t, p]
+            p_comp = clean_phase_comp(p, t)
+
+            # Store 100% retention directly
+            retained_mass_df.loc[t, p] = orig_mass
+            retention_fraction_df.loc[t, p] = 100.0
+
+            # Accumulate oxide mass contribution from fixed phases
+            C_fixed += orig_mass * p_comp
+
+        # 4. If no variable phases need solving, proceed to next step
+        if not variable_phases:
+            continue
+
+        # 5. Build Composition Matrix A_var for variable phases
+        A_var_list = []
+        for p in variable_phases:
+            comp_row = clean_phase_comp(p, t)
+            A_var_list.append(comp_row)
+
+        A_var = np.array(A_var_list).T  # Shape: (num_oxides, num_variable_phases)
+
+        # 6. Adjust target vector: C_target = C_next - C_fixed
+        C_target = C_next - C_fixed
+        C_target = np.maximum(
+            0.0, C_target
+        )  # Enforce non-negative target mass
+
+        # Clean NaNs / Infs
+        A_var = np.nan_to_num(A_var, nan=0.0, posinf=0.0, neginf=0.0)
+        C_target = np.nan_to_num(C_target, nan=0.0, posinf=0.0, neginf=0.0)
+
+        # Filter inactive oxide rows
+        valid_rows = (np.abs(A_var).sum(axis=1) > 0) | (C_target > 0)
+        A_var_clean = A_var[valid_rows]
+        C_target_clean = C_target[valid_rows]
+
+        if A_var_clean.size == 0 or np.all(C_target_clean == 0):
+            continue
+
+        # 7. Solve NNLS for variable phases
+        retained_masses, _ = nnls(A_var_clean, C_target_clean)
+
+        # 8. Store results for variable phases
+        for idx, p in enumerate(variable_phases):
+            r_mass = retained_masses[idx]
+            orig_mass = mass_df.loc[t, p]
+
+            retained_mass_df.loc[t, p] = r_mass
+            retention_fraction_df.loc[t, p] = (
+                (r_mass / orig_mass) * 100.0 if orig_mass > 0 else 0.0
+            )
+
+    return retained_mass_df, retention_fraction_df
 
 # Number of cations per oxide
 cation_numbers = {
@@ -1417,12 +1417,13 @@ def stich_work(Results = None, Order = None, Model = "MELTS", Frac_fluid = None,
                 Results[R][Results[R + '_prop']['Mass'] == 0.0] = np.nan
             Results[R] = Results[R][Order]
             if R == "fluid1":
+                fluid = Results[R].copy()
                 El = ['SiO2', 'TiO2', 'Al2O3', 'Cr2O3', 'FeO', 'Fe2O3', 'FeOt', 'Fe3Fet',
                       'MnO','MgO', 'CaO', 'Na2O', 'K2O', 'P2O5']
                 for e in El:
-                    Results[R] = Results[R].drop(columns = e)
-                Results[R].loc[:,'X_H2O_mol'] = (Results[R].loc[:, 'H2O']/18)/(Results[R].loc[:, 'H2O']/18 + Results[R].loc[:, 'CO2']/44)
-                Results[R].loc[:,'X_CO2_mol'] = 1 - Results[R].loc[:, 'X_H2O_mol']
+                    fluid = fluid.drop(columns = e)
+                fluid.loc[:,'X_H2O_mol'] = (fluid.loc[:, 'H2O']/18)/(fluid.loc[:, 'H2O']/18 + fluid.loc[:, 'CO2']/44)
+                fluid.loc[:,'X_CO2_mol'] = 1 - fluid.loc[:, 'X_H2O_mol']
         else:
             Results[R] = Results[R].rename(columns = {'FeO': 'FeOt'})
             Tot = Results[R].sum(axis = 1)
@@ -1551,7 +1552,8 @@ def stich_work(Results = None, Order = None, Model = "MELTS", Frac_fluid = None,
                     else:
                         Results[R] = Results[R].add_suffix('_' + R)
 
-            Results_All = pd.concat([Results_All, Results[R]], axis = 1)
+            if  R != "fluid1":
+                Results_All = pd.concat([Results_All, Results[R]], axis = 1)
 
     Results['All'] = Results_All
     # print(Results['All'].columns[Results['All'].columns.str.contains('mass_g_')])
@@ -1585,6 +1587,25 @@ def stich_work(Results = None, Order = None, Model = "MELTS", Frac_fluid = None,
             zero_row = pd.DataFrame(0, index=[0], columns=residual_mass.columns)
             residual_mass = pd.concat([zero_row, residual_mass], ignore_index = True)
             Results['mass_g'][residual_mass.columns] = Results['mass_g'][residual_mass.columns] - residual_mass.cumsum()
+
+        if 'fluid1' in Results.keys():
+            if "MELTS" in Model:
+                Results['fluid1'] = fluid.add_suffix('_Fl')
+
+            Results['All'] = pd.concat([Results['All'], Results['fluid1']], axis = 1)
+        # for R in Results.keys():
+        #     if 'fluid' in R:
+        #         El = ['SiO2', 'TiO2', 'Al2O3', 'Cr2O3', 'FeO', 'Fe2O3', 'FeOt', 'Fe3Fet',
+        #                 'MnO','MgO', 'CaO', 'Na2O', 'K2O', 'P2O5']
+        #         num = R[-1]
+        #         if num == "1":
+        #             for e in El:
+        #                 Results[R] = Results[R].drop(columns = [e+"_Fl"])
+        #         else:
+        #             for e in El:
+        #                 Results[R] = Results[R].drop(columns = [e+"_Fl"+num])
+        #         Results[R].loc[:,'X_H2O_mol'] = (Results[R].loc[:, 'H2O']/18)/(Results[R].loc[:, 'H2O']/18 + Results[R].loc[:, 'CO2']/44)
+        #         Results[R].loc[:,'X_CO2_mol'] = 1 - Results[R].loc[:, 'X_H2O_mol']
 
     if Results['mass_g'].sum(axis = 1).iloc[-1] == 0.0:
         for R in Results:

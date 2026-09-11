@@ -529,7 +529,7 @@ def phase_mass_comparison(Results=None, x_axis = "MgO_Liq", phase = "liquid1", c
         print("Phase comparison is designed to work with multiple calculations. You've only provided one")
         return
     
-    c = cm.get_cmap(cmap, len(Results))
+    c = plt.get_cmap(cmap, len(Results))
     RunColors = {p: c(i) for i, p in enumerate(Results)}
 
     f, a = plt.subplots(1,1)
@@ -689,7 +689,7 @@ def phase_plot(Results, x_axis = None, y_axis = None, cmap = "Reds", lines = Fal
         sorted_phases.append(liquid_label)
 
     # 4. Generate the Master Color Map
-    c = cm.get_cmap(cmap, len(sorted_phases))
+    c = plt.get_cmap(cmap, len(sorted_phases))
     MasterPhaseColors = {p: c(i) for i, p in enumerate(sorted_phases)}
     # Ensure both naming conventions for liquid map to the same color
     if "liq1" in MasterPhaseColors:
