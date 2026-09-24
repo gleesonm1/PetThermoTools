@@ -1,0 +1,23 @@
+{
+ "environment": {
+  "utc": "2026-09-23T22:36:45+00:00",
+  "host": "windows-5955wx-32t",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "cpu_logical": 32,
+  "python": "3.13.9"
+ },
+ "rows": [
+  {"target": "package", "concurrent": 1, "median_s": 1.263, "min_s": 1.253, "all_s": [1.269, 1.253, 1.263]},
+  {"target": "package", "concurrent": 2, "median_s": 1.316, "min_s": 1.312, "all_s": [1.312, 1.316, 1.325]},
+  {"target": "package", "concurrent": 4, "median_s": 1.427, "min_s": 1.416, "all_s": [1.427, 1.416, 1.444]},
+  {"target": "package", "concurrent": 8, "median_s": 1.692, "min_s": 1.686, "all_s": [1.704, 1.692, 1.686]},
+  {"target": "package", "concurrent": 16, "median_s": 2.255, "min_s": 2.246, "all_s": [2.246, 2.255, 2.293]},
+  {"target": "package", "concurrent": 32, "median_s": 3.894, "min_s": 3.892, "all_s": [3.894, 3.892, 3.931]},
+  {"target": "slim", "concurrent": 1, "median_s": 0.466, "min_s": 0.46, "all_s": [0.466, 0.471, 0.46]},
+  {"target": "slim", "concurrent": 2, "median_s": 0.494, "min_s": 0.492, "all_s": [0.494, 0.494, 0.492]},
+  {"target": "slim", "concurrent": 4, "median_s": 0.529, "min_s": 0.528, "all_s": [0.529, 0.528, 0.533]},
+  {"target": "slim", "concurrent": 8, "median_s": 0.648, "min_s": 0.646, "all_s": [0.646, 0.648, 0.661]},
+  {"target": "slim", "concurrent": 16, "median_s": 0.876, "min_s": 0.86, "all_s": [0.885, 0.876, 0.86]},
+  {"target": "slim", "concurrent": 32, "median_s": 1.546, "min_s": 1.53, "all_s": [1.53, 1.546, 1.554]}
+ ]
+}

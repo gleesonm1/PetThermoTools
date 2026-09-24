@@ -28,3 +28,5 @@ MELTS/
 Docs/Installation/alphamelts_py/
 docs/Installation/alphamelts_py-2.3.1/
 docs/Installation/alphamelts_py-2.3.2/
+# Raw benchmark output contains host names; curated, anonymised copies live in benchmarks/baselines/
+/benchmarks/results/

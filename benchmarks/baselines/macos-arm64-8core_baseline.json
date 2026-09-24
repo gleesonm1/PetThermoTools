@@ -1,0 +1,88 @@
+{
+ "environment": {
+  "utc": "2026-09-23T23:10:42+00:00",
+  "host": "macos-arm64-8core",
+  "platform": "macOS-26.2-arm64-arm-64bit",
+  "processor": "arm",
+  "cpu_logical": 8,
+  "cpu_physical": 8,
+  "python": "3.11.0",
+  "pandas": "3.0.2",
+  "numpy": "2.4.6",
+  "petthermotools": "1.1.9",
+  "git_commit": "f23a508",
+  "package_default_workers": 4
+ },
+ "scenarios": [
+  {
+   "runs": 1,
+   "cores": 1,
+   "repeats": 2,
+   "wall_s_all": [
+    3.219,
+    3.427
+   ],
+   "wall_s_median": 3.323,
+   "wall_s_min": 3.219,
+   "s_per_run_median": 3.323,
+   "peak_procs": 3,
+   "peak_rss_mb": 832
+  },
+  {
+   "runs": 8,
+   "cores": 1,
+   "repeats": 2,
+   "wall_s_all": [
+    11.147,
+    10.546
+   ],
+   "wall_s_median": 10.847,
+   "wall_s_min": 10.546,
+   "s_per_run_median": 1.356,
+   "peak_procs": 3,
+   "peak_rss_mb": 587
+  },
+  {
+   "runs": 8,
+   "cores": 2,
+   "repeats": 2,
+   "wall_s_all": [
+    8.178,
+    8.648
+   ],
+   "wall_s_median": 8.413,
+   "wall_s_min": 8.178,
+   "s_per_run_median": 1.052,
+   "peak_procs": 4,
+   "peak_rss_mb": 992
+  },
+  {
+   "runs": 8,
+   "cores": 4,
+   "repeats": 2,
+   "wall_s_all": [
+    5.704,
+    5.295
+   ],
+   "wall_s_median": 5.499,
+   "wall_s_min": 5.295,
+   "s_per_run_median": 0.687,
+   "peak_procs": 6,
+   "peak_rss_mb": 1936
+  },
+  {
+   "runs": 8,
+   "cores": 8,
+   "repeats": 2,
+   "wall_s_all": [
+    8.6,
+    10.18
+   ],
+   "wall_s_median": 9.39,
+   "wall_s_min": 8.6,
+   "s_per_run_median": 1.174,
+   "peak_procs": 11,
+   "peak_rss_mb": 3100
+  }
+ ]
+}

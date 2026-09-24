@@ -1,0 +1,18 @@
+{
+ "000.csv": "All",
+ "001.csv": "Conditions",
+ "002.csv": "PhaseList",
+ "003.csv": "clinopyroxene1",
+ "004.csv": "clinopyroxene1_prop",
+ "005.csv": "clinopyroxene2",
+ "006.csv": "clinopyroxene2_prop",
+ "007.csv": "liquid1",
+ "008.csv": "liquid1_prop",
+ "009.csv": "mass_g",
+ "010.csv": "olivine1",
+ "011.csv": "olivine1_prop",
+ "012.csv": "orthopyroxene1",
+ "013.csv": "orthopyroxene1_prop",
+ "014.csv": "rho_kg/m3",
+ "015.csv": "volume_cm3"
+}

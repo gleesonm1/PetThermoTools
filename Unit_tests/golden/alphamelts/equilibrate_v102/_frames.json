@@ -1,0 +1,15 @@
+{
+ "000.csv": "Affinity",
+ "001.csv": "All",
+ "002.csv": "Conditions",
+ "003.csv": "PhaseList",
+ "004.csv": "clinopyroxene1",
+ "005.csv": "clinopyroxene1_prop",
+ "006.csv": "liquid1",
+ "007.csv": "liquid1_prop",
+ "008.csv": "mass_g",
+ "009.csv": "orthopyroxene1",
+ "010.csv": "orthopyroxene1_prop",
+ "011.csv": "rho_kg/m3",
+ "012.csv": "volume_cm3"
+}
