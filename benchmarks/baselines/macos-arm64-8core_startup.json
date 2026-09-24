@@ -1,0 +1,99 @@
+{
+ "environment": {
+  "utc": "2026-09-23T22:22:19+00:00",
+  "host": "macos-arm64-8core",
+  "platform": "macOS-26.2-arm64-arm-64bit",
+  "cpu_logical": 8,
+  "python": "3.11.0"
+ },
+ "rows": [
+  {
+   "target": "package",
+   "concurrent": 1,
+   "median_s": 2.858,
+   "min_s": 2.839,
+   "all_s": [
+    2.878,
+    2.839,
+    2.858
+   ]
+  },
+  {
+   "target": "package",
+   "concurrent": 2,
+   "median_s": 3.202,
+   "min_s": 3.058,
+   "all_s": [
+    3.341,
+    3.202,
+    3.058
+   ]
+  },
+  {
+   "target": "package",
+   "concurrent": 4,
+   "median_s": 3.794,
+   "min_s": 3.634,
+   "all_s": [
+    4.033,
+    3.634,
+    3.794
+   ]
+  },
+  {
+   "target": "package",
+   "concurrent": 8,
+   "median_s": 6.447,
+   "min_s": 5.99,
+   "all_s": [
+    6.552,
+    6.447,
+    5.99
+   ]
+  },
+  {
+   "target": "slim",
+   "concurrent": 1,
+   "median_s": 0.372,
+   "min_s": 0.366,
+   "all_s": [
+    0.387,
+    0.366,
+    0.372
+   ]
+  },
+  {
+   "target": "slim",
+   "concurrent": 2,
+   "median_s": 0.421,
+   "min_s": 0.417,
+   "all_s": [
+    0.417,
+    0.421,
+    0.426
+   ]
+  },
+  {
+   "target": "slim",
+   "concurrent": 4,
+   "median_s": 0.525,
+   "min_s": 0.514,
+   "all_s": [
+    0.525,
+    0.544,
+    0.514
+   ]
+  },
+  {
+   "target": "slim",
+   "concurrent": 8,
+   "median_s": 0.727,
+   "min_s": 0.726,
+   "all_s": [
+    0.727,
+    0.726,
+    0.747
+   ]
+  }
+ ]
+}

@@ -1,0 +1,16 @@
+{
+ "000.csv": "All",
+ "001.csv": "Conditions",
+ "002.csv": "PhaseList",
+ "003.csv": "fluid1",
+ "004.csv": "fluid1_prop",
+ "005.csv": "liquid1",
+ "006.csv": "liquid1_prop",
+ "007.csv": "mass_g",
+ "008.csv": "olivine1",
+ "009.csv": "olivine1_prop",
+ "010.csv": "orthopyroxene1",
+ "011.csv": "orthopyroxene1_prop",
+ "012.csv": "rho_kg/m3",
+ "013.csv": "volume_cm3"
+}

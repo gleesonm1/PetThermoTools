@@ -1,0 +1,23 @@
+{
+ "environment": {
+  "utc": "2026-09-24T00:07:37+00:00",
+  "host": "windows-5955wx-32t",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "processor": "AMD64 Family 25 Model 8 Stepping 2, AuthenticAMD",
+  "cpu_logical": 32,
+  "cpu_physical": 16,
+  "python": "3.13.9",
+  "pandas": "3.0.6",
+  "numpy": "2.5.3",
+  "petthermotools": "1.1.9",
+  "git_commit": "f23a508",
+  "package_default_workers": 16
+ },
+ "scenarios": [
+  {"runs": 1, "cores": 1, "repeats": 2, "wall_s_all": [2.34, 2.349], "wall_s_median": 2.344, "wall_s_min": 2.34, "s_per_run_median": 2.344, "peak_procs": 2, "peak_rss_mb": 278},
+  {"runs": 8, "cores": 1, "repeats": 2, "wall_s_all": [8.903, 9.009], "wall_s_median": 8.956, "wall_s_min": 8.903, "s_per_run_median": 1.119, "peak_procs": 2, "peak_rss_mb": 284},
+  {"runs": 8, "cores": 2, "repeats": 2, "wall_s_all": [6.167, 6.424], "wall_s_median": 6.296, "wall_s_min": 6.167, "s_per_run_median": 0.787, "peak_procs": 3, "peak_rss_mb": 425},
+  {"runs": 8, "cores": 4, "repeats": 2, "wall_s_all": [4.273, 4.259], "wall_s_median": 4.266, "wall_s_min": 4.259, "s_per_run_median": 0.533, "peak_procs": 5, "peak_rss_mb": 705},
+  {"runs": 8, "cores": 8, "repeats": 2, "wall_s_all": [4.931, 4.933], "wall_s_median": 4.932, "wall_s_min": 4.931, "s_per_run_median": 0.616, "peak_procs": 9, "peak_rss_mb": 1261}
+ ]
+}

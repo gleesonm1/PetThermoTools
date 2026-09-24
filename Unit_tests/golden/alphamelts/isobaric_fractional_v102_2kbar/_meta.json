@@ -1,0 +1,9 @@
+{
+ "captured_utc": "2026-09-23T20:50:43+00:00",
+ "platform": "macOS-26.2-arm64-arm-64bit",
+ "python": "3.11.0",
+ "pandas": "3.0.2",
+ "numpy": "2.4.6",
+ "petthermotools": "1.1.9",
+ "git_commit": "f23a508"
+}
