@@ -30,3 +30,12 @@ docs/Installation/alphamelts_py-2.3.1/
 docs/Installation/alphamelts_py-2.3.2/
 # Raw benchmark output contains host names; curated, anonymised copies live in benchmarks/baselines/
 /benchmarks/results/
+
+# Files the alphaMELTS engine writes into the current working directory every time a
+# calculation runs (so they appear next to any notebook that is run). Generated, never inputs.
+Bulk_comp_tbl.txt
+Liquid_comp_tbl.txt
+Phase_main_tbl.txt
+Solid_comp_tbl.txt
+System_main_tbl.txt
+liquid-model-batch.inp

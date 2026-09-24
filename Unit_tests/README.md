@@ -62,7 +62,10 @@ rtol 1e-6 under pandas 2 and 3.
 - Deliberate result changes are re-recorded with `capture_golden.py` in the same PR (example: correcting the Fe2O3
   molar mass to 159.69 everywhere moved primary results by a median 5e-6, 99th percentile 8e-4, with the same phases).
 - MELTS drops `*_tbl.txt` / `.inp` files in the current directory: the tests run in a temporary directory. This is
-  also why `docs/Examples/**` has stray `*_tbl.txt` files after a notebook is run there.
+  also why `docs/Examples/**` has stray `*_tbl.txt` files after a notebook is run there. The six file names the
+  engine writes (`Bulk_comp_tbl.txt`, `Liquid_comp_tbl.txt`, `Phase_main_tbl.txt`, `Solid_comp_tbl.txt`,
+  `System_main_tbl.txt`, `liquid-model-batch.inp`) are git-ignored and no longer tracked, so running a notebook does
+  not change `git status`.
 - The engine writes about 420 KB per run to **stderr** (file descriptor 2). `_cases.quiet_fds()` silences it;
   use `keep_stderr=False` when timing (capturing it to one shared file serialises the workers).
 
