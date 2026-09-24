@@ -145,7 +145,45 @@ language = None
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
 # This pattern also affects html_static_path and html_extra_path .
-exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
+exclude_patterns = [
+    '_build', 'Thumbs.db', '.DS_Store',
+
+    # Notebooks that are not part of the maintained documentation.
+    # nbsphinx builds EVERY notebook it finds under docs/ (with nbsphinx_execute =
+    # 'never', so the saved output is shown and nothing is ever run), and a notebook
+    # that is not in a toctree is still published as an unlinked page. Listing a
+    # notebook here stops it being built or published; the file stays in the repository.
+    #
+    # Maintained (kept out of this list): the notebooks in the toctrees, plus
+    # PaperFigures/ and teaching_materials/ (and Workshops/, which is outside docs/).
+
+    # Installation scratch / development notebooks
+    'Installation/ExtractSource.ipynb',
+    'Installation/InstallationGuide.ipynb',
+    'Installation/InstallationScriptWindows.ipynb',
+    'Installation/MAGEMinTests.ipynb',
+    'Installation/MAGEMinUpdate.ipynb',
+    'Installation/MAGEMin_Installation.ipynb',
+    'Installation/MAGEMin_PythonCall_MattLocal.ipynb',
+    'Installation/MAGEMin_PythonCall_testARM.ipynb',
+    'Installation/NewMageMinSetup.ipynb',
+    'Installation/Untitled-2.ipynb',
+
+    # Older or experimental examples
+    'Examples/CrystallisationTests/BasalticCrystallisation_FeCalc.ipynb',
+    'Examples/CrystallisationTests/BasalticCrystallisation_Holland.ipynb',
+    'Examples/CrystallisationTests/IntegrationThermobar.ipynb',
+    'Examples/CrystallisationTests/LargeNumbers_BasalticCrystallisation.ipynb',
+    'Examples/CrystallisationTests/MELTS_Crystallization_Examples.ipynb',
+    'Examples/DecompressionTests/StHelensDecompression.ipynb',
+    'Examples/EquilibrateTests/EquilibrateExample.ipynb',
+    'Examples/LiquidusTests/LiquidusTest_checks.ipynb',
+    'Examples/MELTS_OSaS/MELTS_OSaS.ipynb',
+    'Examples/MeltingTests/MeltingComparisons.ipynb',
+    'Examples/PhaseDiagrams/GalapagosGabbros.ipynb',
+    'Examples/PhaseDiagrams/SimpleG2.ipynb',
+    'Examples/TraceEngine_Tests/Test1_defining_dictionaries.ipynb',
+]
 
 # The name of the Pygments (syntax highlighting) style to use.
 pygments_style = 'sphinx'
