@@ -103,7 +103,7 @@ OXIDE_MW = {
     "SiO2": 60.084,
     "TiO2": 79.866,
     "Al2O3": 101.961,
-    "Fe2O3": 159.688,
+    "Fe2O3": 159.69,
     "Cr2O3": 151.990,
     "FeO": 71.844,
     "MnO": 70.937,
@@ -1430,7 +1430,7 @@ def stich_work(Results = None, Order = None, Model = "MELTS", Frac_fluid = None,
             for el in Results[R]:
                 Results[R][el] = 100*Results[R][el]/Tot
 
-            Results[R]['Fe3Fet'] = Results[R]['O']/(((159.9/2)/71.844)*Results[R]['FeOt'] - Results[R]['FeOt'])
+            Results[R]['Fe3Fet'] = Results[R]['O']/(((159.69/2)/71.844)*Results[R]['FeOt'] - Results[R]['FeOt'])
             Results[R][Results[R + '_prop']['mass_g'] == 0.0] = np.nan
             Results[R] = Results[R][Order]
 

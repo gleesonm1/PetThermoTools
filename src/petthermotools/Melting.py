@@ -259,7 +259,7 @@ def AdiabaticDecompressionMelting(cores = multiprocessing.cpu_count(),
             from juliacall import Main as jl
             
 
-            comp_1['O'] = comp_1['Fe3Fet_Liq']*(((159.59/2)/71.844)*comp_1['FeOt_Liq'] - comp_1['FeOt_Liq'])
+            comp_1['O'] = comp_1['Fe3Fet_Liq']*(((159.69/2)/71.844)*comp_1['FeOt_Liq'] - comp_1['FeOt_Liq'])
 
             if type(comp_1) == dict:
                 comp_julia = jl.seval("Dict")(comp_1) 
@@ -430,7 +430,7 @@ def AdiabaticMelt(q, index, *, Model = None, comp_1 = None, comp_2 = None, comp_
 
         # jl.seval("using MAGEMinCalc")
 
-        comp_1['O'] = comp_1['Fe3Fet_Liq']*(((159.59/2)/71.844)*comp_1['FeOt_Liq'] - comp_1['FeOt_Liq'])
+        comp_1['O'] = comp_1['Fe3Fet_Liq']*(((159.69/2)/71.844)*comp_1['FeOt_Liq'] - comp_1['FeOt_Liq'])
 
         if type(comp_1) == dict:
             comp_julia = jl.seval("Dict")(comp_1) 

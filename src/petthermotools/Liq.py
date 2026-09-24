@@ -401,7 +401,7 @@ def equilibrate_multi(cores = multiprocessing.cpu_count(), Model = "MELTSv1.0.2"
 
         # jl.seval("using MAGEMinCalc")
 
-        comp['O'] = comp['Fe3Fet_Liq']*(((159.59/2)/71.844)*comp['FeOt_Liq'] - comp['FeOt_Liq'])
+        comp['O'] = comp['Fe3Fet_Liq']*(((159.69/2)/71.844)*comp['FeOt_Liq'] - comp['FeOt_Liq'])
 
         if type(comp) == dict:
             if Model == "Weller2024":
@@ -566,7 +566,7 @@ def multi_equilibrate(q, index, *, Model = None, comp = None,
     if "MELTS" not in Model:
         jl.seval("using MAGEMinCalc")
 
-        comp['O'] = comp['Fe3Fet_Liq']*(((159.59/2)/71.844)*comp['FeOt_Liq'] - comp['FeOt_Liq'])
+        comp['O'] = comp['Fe3Fet_Liq']*(((159.69/2)/71.844)*comp['FeOt_Liq'] - comp['FeOt_Liq'])
 
         if Model == "Weller2024":
             bulk = comp[['SiO2_Liq', 'Al2O3_Liq', 'CaO_Liq', 'MgO_Liq', 'FeOt_Liq', 'K2O_Liq', 'Na2O_Liq', 'TiO2_Liq', 'O', 'Cr2O3_Liq']].astype(float).values
