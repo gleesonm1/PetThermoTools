@@ -25,7 +25,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from _cases import CASES, flatten_frames, run_case
+from _cases import CASES, flatten_frames, quiet_fds, run_case
 
 pytestmark = pytest.mark.melts
 
@@ -51,7 +51,12 @@ def test_matches_golden(name, tmp_path, monkeypatch):
     expected = _load_golden(name)
 
     monkeypatch.chdir(tmp_path)  # MELTS writes *_tbl.txt / .inp files into the CWD
-    actual = flatten_frames(run_case(name))
+    # The engine writes ~420 KB of progress text per run to stderr from several
+    # workers at once. Left alone, pytest shows it interleaved character by
+    # character in the failure report and buries the assertion (seen on Windows).
+    # quiet_fds() silences it, and still shows a worker's traceback if the run raises.
+    with quiet_fds():
+        actual = flatten_frames(run_case(name))
 
     assert set(actual) == set(expected), (
         f"tables differ. only in result: {sorted(set(actual) - set(expected))}; "

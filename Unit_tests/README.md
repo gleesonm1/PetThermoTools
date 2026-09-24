@@ -57,6 +57,10 @@ rtol 1e-6 under pandas 2 and 3.
 - `capture_golden.py` rewrites the reference data. Run it only when a change in results is deliberate (for example a
   constant is corrected) and commit the diff. Never run it casually or from a second machine.
 - Tolerance is rtol 1e-6; set `PTT_GOLDEN_RTOL` to change it. The set of tables (phases) must match exactly.
+  For a refactor that must not change any result, run locally with `PTT_GOLDEN_RTOL=1e-11`: the CSVs store 12
+  significant digits, so that is the practical exact gate (`0` can never pass, because the stored values are rounded).
+- Deliberate result changes are re-recorded with `capture_golden.py` in the same PR (example: correcting the Fe2O3
+  molar mass to 159.69 everywhere moved primary results by a median 5e-6, 99th percentile 8e-4, with the same phases).
 - MELTS drops `*_tbl.txt` / `.inp` files in the current directory: the tests run in a temporary directory. This is
   also why `docs/Examples/**` has stray `*_tbl.txt` files after a notebook is run there.
 - The engine writes about 420 KB per run to **stderr** (file descriptor 2). `_cases.quiet_fds()` silences it;

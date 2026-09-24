@@ -749,14 +749,14 @@ def saturationP_multi(q, index, *, Model = None, comp = None, T_C_init = None, T
 
         if type(comp) == dict:
             bulk = [comp['SiO2_Liq'], comp['TiO2_Liq'], comp['Al2O3_Liq'], 
-                    comp['Fe3Fet_Liq']*((159.59/2)/71.844)*comp['FeOt_Liq'], 
+                    comp['Fe3Fet_Liq']*((159.69/2)/71.844)*comp['FeOt_Liq'], 
                     comp['Cr2O3_Liq'], (1- comp['Fe3Fet_Liq'])*comp['FeOt_Liq'], 
                     comp['MnO_Liq'], comp['MgO_Liq'], 0.0, 0.0, comp['CaO_Liq'], 
                     comp['Na2O_Liq'], comp['K2O_Liq'], comp['P2O5_Liq'], 
                     comp['H2O_Liq'], comp['CO2_Liq'], 0.0, 0.0, 0.0]
         else:
             bulk = [comp.loc[0,'SiO2_Liq'], comp.loc[0,'TiO2_Liq'], comp.loc[0,'Al2O3_Liq'], 
-                    comp.loc[0,'Fe3Fet_Liq']*((159.59/2)/71.844)*comp.loc[0,'FeOt_Liq'], 
+                    comp.loc[0,'Fe3Fet_Liq']*((159.69/2)/71.844)*comp.loc[0,'FeOt_Liq'], 
                     comp.loc[0,'Cr2O3_Liq'], (1- comp.loc[0,'Fe3Fet_Liq'])*comp.loc[0,'FeOt_Liq'], 
                     comp.loc[0,'MnO_Liq'], comp.loc[0,'MgO_Liq'], 0.0, 0.0, comp.loc[0,'CaO_Liq'], 
                     comp.loc[0,'Na2O_Liq'], comp.loc[0,'K2O_Liq'], comp.loc[0,'P2O5_Liq'], 
