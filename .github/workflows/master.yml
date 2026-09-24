@@ -8,6 +8,13 @@ on:
   release:
     types: [ created ]
 
+# A newer push to the same pull request makes an older, still-running run
+# pointless, so cancel it. Never cancel runs on master or for a release: every
+# merge and every release must be tested to completion.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   test:
     # Tier A only (see Unit_tests/conftest.py): pure-Python tests with no
@@ -16,6 +23,11 @@ jobs:
     # is installed on these runners -- MELTS/MAGEMin integration tests stay
     # local-only for now, by team decision.
     runs-on: ${{ matrix.os }}
+    # A healthy job takes about 5 minutes (the suite itself ~2 min); 60 leaves
+    # generous headroom for slow runners and queued installs. The default limit
+    # is 6 hours, so a hung test (this suite spawns processes, and several tests
+    # deliberately provoke hangs) would otherwise hold a runner for hours.
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -84,9 +96,26 @@ jobs:
 
 
 
+  # One stable check that summarises the whole test matrix. Require THIS check
+  # in the branch protection rule for master, instead of listing every matrix
+  # job by name (those names change whenever the matrix does). `if: always()`
+  # makes it run, and fail, even when the matrix failed or was cancelled; a
+  # skipped required check would count as passing.
+  tests-passed:
+    needs: test
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+    - name: Require every test job to have succeeded
+      run: |
+        echo "result of the test matrix: ${{ needs.test.result }}"
+        test "${{ needs.test.result }}" = "success"
+
   deploy:
     needs: test
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     name: deploy
     steps:
     - uses: actions/checkout@v4
