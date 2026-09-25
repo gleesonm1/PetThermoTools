@@ -11,7 +11,7 @@ from multiprocessing import Queue
 from multiprocessing import Process
 import time
 import sys
-from tqdm.notebook import tqdm, trange
+from tqdm.auto import tqdm, trange
 from pathlib import Path
 from queue import Empty
 import platform
