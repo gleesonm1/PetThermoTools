@@ -65,6 +65,9 @@ it fails only when a change would break something users call.
   packages (alphaMELTS, ...) are never required, so a minimal environment such as CI passes.
 - **Changing the public API on purpose:** run `python Unit_tests/api/capture_public_api.py` and commit the diff; the diff
   is the review of what changed for users. Deprecate first (keep the old name and warn) before removing anything.
+  The script imports the package from the **committed** code (a temporary checkout of `HEAD`), never from your working
+  tree, so uncommitted work cannot leak into the snapshot (an uncommitted `trace_engine` import once put five names in
+  it and CI failed): commit the code change first, then capture. `--working-tree` overrides this.
 
 ## Golden tests (`integration/alphamelts/`)
 
