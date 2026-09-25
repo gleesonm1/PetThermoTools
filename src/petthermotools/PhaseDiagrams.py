@@ -8,7 +8,7 @@ from petthermotools.core_config import MAX_WORKERS
 import multiprocessing
 from multiprocessing import Queue
 from multiprocessing import Process
-from tqdm.notebook import tqdm, trange
+from tqdm.auto import tqdm, trange
 import random
 import time
 import psutil

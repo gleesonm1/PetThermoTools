@@ -9,7 +9,7 @@ from multiprocessing import Queue
 from multiprocessing import Process
 import time
 import sys, os
-from tqdm.notebook import tqdm, trange
+from tqdm.auto import tqdm, trange
 import tempfile # use to create unique temp directories for each specific process
 
 def findSatPressure_multi(cores = multiprocessing.cpu_count(), Model = "MELTSv1.2.0", bulk = None, T_fixed_C = None, 

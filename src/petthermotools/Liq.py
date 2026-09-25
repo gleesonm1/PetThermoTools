@@ -7,7 +7,7 @@ from petthermotools.MELTS import *
 import multiprocessing
 from multiprocessing import Queue
 from multiprocessing import Process
-from tqdm.notebook import tqdm, trange
+from tqdm.auto import tqdm, trange
 from pathlib import Path
 import time
 import warnings

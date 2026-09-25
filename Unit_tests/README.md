@@ -43,7 +43,7 @@ Most of `unit/` is a set of failure-injection tests that pin bugs found in the m
 | `test_process_reaping.py` | workers that exit on their own are never `join()`ed |
 | `test_worker_cleanup_on_failure.py` | if the parent is interrupted or raises, live workers are left running and their timeout is no longer enforced |
 | `test_input_validation.py` | unknown or mistyped `Model`, and bad compositions, are silently routed, accepted, or fail with obscure errors (the file also pins routing and existing clear errors that must not regress) |
-| `test_progress_bars.py` | `tqdm.notebook` needs ipywidgets, which `setup.py` does not declare: `findLiq_multi` etc. crash on a clean install outside Jupyter |
+| `test_progress_bars.py` | FIXED in Phase 1 (now an ordinary passing regression test): `tqdm.notebook` needed ipywidgets, which `setup.py` does not declare, so `findLiq_multi` etc. crashed on a clean install outside Jupyter; the modules now use `tqdm.auto` |
 | `test_import_hygiene.py` | `petthermotools.Path` is shadowed by `pathlib.Path` (star-imports); pins current behaviour |
 
 ## Public API freeze (`unit/test_public_api.py`)
