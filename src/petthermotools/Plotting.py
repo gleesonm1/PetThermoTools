@@ -273,7 +273,7 @@ def plot_surfaces(Results = None, P_bar = None, phases = None, H2O_Liq = None):
     if H2O_Liq is None:
         f, a = plt.subplots(1,1, figsize = (5,4))
         a.set_xlabel('P (bars)')
-        a.set_ylabel('T ($\degree$C)')
+        a.set_ylabel(r'T ($\degree$C)')
         for i in range(len(phases)):
             try:
                 if i == 0:
@@ -322,8 +322,8 @@ def residualT_plot(Results = None, P_bar = None, phases = None, H2O_Liq = None, 
             f.tight_layout()
             a[1][0].set_xlabel('P (bars)')
             a[1][1].set_xlabel('P (bars)')
-            a[0][0].set_ylabel('Residual T ($\degree$C)')
-            a[1][0].set_ylabel('Residual T ($\degree$C)')
+            a[0][0].set_ylabel(r'Residual T ($\degree$C)')
+            a[1][0].set_ylabel(r'Residual T ($\degree$C)')
             if xlim is not None:
                 a[0][0].set_xlim(xlim)
             if ylim is not None:
@@ -353,7 +353,7 @@ def residualT_plot(Results = None, P_bar = None, phases = None, H2O_Liq = None, 
         else:
             f, a = plt.subplots(1,1, figsize = (5,4))
             a.set_xlabel('P (bars)')
-            a.set_ylabel('Residual T ($\degree$C)')
+            a.set_ylabel(r'Residual T ($\degree$C)')
             a.set_title(phases[0] + ' - ' + phases[1])
             if xlim is not None:
                 a.set_xlim(xlim)
@@ -392,7 +392,7 @@ def residualT_plot(Results = None, P_bar = None, phases = None, H2O_Liq = None, 
                 for j in range(2):
                     a[i][j].set_xlabel('P (bars)')
                     a[i][j].set_ylabel('H$_{2}$O (wt%)')
-                    a[i][j].set_zlabel('Residual T ($\degree$C)')
+                    a[i][j].set_zlabel(r'Residual T ($\degree$C)')
                     a[i][j].set_title(Name[i,j])
 
             for i in range(2):
@@ -459,7 +459,7 @@ def residualT_plot(Results = None, P_bar = None, phases = None, H2O_Liq = None, 
                 for j in range(2):
                     a[i][j].set_xlabel('P (bars)')
                     a[i][j].set_ylabel('H$_{2}$O (wt%)')
-                    a[i][j].set_zlabel('Residual T ($\degree$C)')
+                    a[i][j].set_zlabel(r'Residual T ($\degree$C)')
                     a[i][j].set_title(Name[i,j])
 
             for i in range(2):
@@ -963,7 +963,7 @@ def plot_phaseDiagram_multi(Combined_data, P_units="bar", T_units="C", colormap=
         
         ax.set_title(name)
         ax.set_ylabel(f"Pressure ({P_units})")
-        ax.set_xlabel(f"Temperature ($\degree${T_units})")
+        ax.set_xlabel(fr"Temperature ($\degree${T_units})")
 
         if label:
             for phase_name, p_id in phase_to_id.items():
@@ -1090,9 +1090,9 @@ def plot_phaseDiagram(Combined = None, P_units = "bar", T_units = "C",
     #f.colorbar(im, ax = a[1])
 
     if T_units == "K":
-        a[0].set_xlabel('Temperature ($\degree$K)')
+        a[0].set_xlabel(r'Temperature ($\degree$K)')
     else:
-        a[0].set_xlabel('Temperature ($\degree$C)')
+        a[0].set_xlabel(r'Temperature ($\degree$C)')
 
     if P_units == "MPa":
         a[0].set_ylabel('Pressure (MPa)')

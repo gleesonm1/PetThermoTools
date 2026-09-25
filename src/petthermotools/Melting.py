@@ -40,7 +40,7 @@ def AdiabaticDecompressionMelting(cores = multiprocessing.cpu_count(),
         Mantle **potential temperature** ($T_{\text{p}}$) in °C.
     Tp_Method : str, optional, default "pyMelt"
         Method to calculate the **starting temperature** ($T_{\text{start}}$) on the adiabat 
-        at $P_{\text{start\_bar}}$. If "pyMelt", it uses the `pyMelt` adiabat calculation.
+        at $P_{\text{start\\_bar}}$. If "pyMelt", it uses the `pyMelt` adiabat calculation.
     P_start_bar, P_end_bar, dp_bar : float or array, optional
         Starting, ending, and step size pressures (in bar) for the adiabatic decompression path. 
         Defaults: 30000, 2000, and 200, respectively.
@@ -56,7 +56,7 @@ def AdiabaticDecompressionMelting(cores = multiprocessing.cpu_count(),
     fO2_offset : float, optional
         Offset (log units) from the chosen $\text{f}\text{O}_2$ buffer.
     Fe3Fet : float, optional
-        Initial $\text{Fe}^{3+}/\Sigma\text{Fe}$ ratio for the bulk composition.
+        Initial $\text{Fe}^{3+}/\\Sigma\text{Fe}$ ratio for the bulk composition.
     MELTS_filter : bool, default True
         If True, applies a filter to oxide components to manage common MELTS calculation instability issues.
 
