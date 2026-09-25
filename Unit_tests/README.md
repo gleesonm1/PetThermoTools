@@ -8,6 +8,7 @@
 | `integration/alphamelts/` | B1 | a working alphaMELTS (`meltsdynamic`) | no: skipped automatically when alphaMELTS is not found |
 | `integration/magemin/` | B2 (not written yet) | Julia + MAGEMinCalc | no |
 | `golden/alphamelts/` | data | recorded results for the B1 tests | - |
+| `api/` | data | snapshot of the public API (`public_api.json`) used by `unit/test_public_api.py`, and the script that regenerates it | - |
 
 `conftest.py` puts `src/` on `sys.path` (tests run against the working tree, not an installed copy), registers the
 `melts` / `magemin` markers and skips those tests when the backend is missing. Availability is checked with
@@ -44,6 +45,29 @@ Most of `unit/` is a set of failure-injection tests that pin bugs found in the m
 | `test_input_validation.py` | unknown or mistyped `Model`, and bad compositions, are silently routed, accepted, or fail with obscure errors (the file also pins routing and existing clear errors that must not regress) |
 | `test_progress_bars.py` | `tqdm.notebook` needs ipywidgets, which `setup.py` does not declare: `findLiq_multi` etc. crash on a clean install outside Jupyter |
 | `test_import_hygiene.py` | `petthermotools.Path` is shadowed by `pathlib.Path` (star-imports); pins current behaviour |
+
+## Public API freeze (`unit/test_public_api.py`)
+
+A guard rail for maintainers, not a restriction on users: nothing here ships with the package or runs at run time, and
+it fails only when a change would break something users call.
+
+- **Documented usage.** Every *maintained* notebook is scanned; each `ptt.<name>` it uses must still exist and each call
+  must still fit the function's signature (keywords and positional count). Maintained = the notebooks ReadTheDocs links
+  from the toctrees in `docs/index.rst`, plus everything in `Workshops/`, `docs/teaching_materials/` and
+  `docs/PaperFigures/`. Notebooks listed in `exclude_patterns` in `docs/conf.py` are retired and ignored. ReadTheDocs
+  never runs notebooks (`nbsphinx_execute = 'never'`), so this is the only automatic check that the published examples
+  still match the code. A new docs notebook is covered as soon as it is in a toctree.
+- **Snapshot** (`api/public_api.json`): every public name and, for functions and classes defined in the package, their
+  parameters. It fails on: a removed or renamed name or parameter, reordered leading positional parameters, a parameter
+  that used to be optional and is now required, or a new required parameter. Free: new names, new optional parameters,
+  changes to behaviour or default values, and underscore names. Names that only leak in from other libraries
+  (`ptt.np`, ...) are recorded but not enforced (`ENFORCE_EXTERNAL_NAMES` in `unit/_api_scan.py`); names from optional
+  packages (alphaMELTS, ...) are never required, so a minimal environment such as CI passes.
+- **Changing the public API on purpose:** run `python Unit_tests/api/capture_public_api.py` and commit the diff; the diff
+  is the review of what changed for users. Deprecate first (keep the old name and warn) before removing anything.
+  The script imports the package from the **committed** code (a temporary checkout of `HEAD`), never from your working
+  tree, so uncommitted work cannot leak into the snapshot (an uncommitted `trace_engine` import once put five names in
+  it and CI failed): commit the code change first, then capture. `--working-tree` overrides this.
 
 ## Golden tests (`integration/alphamelts/`)
 
