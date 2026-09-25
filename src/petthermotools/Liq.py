@@ -614,7 +614,7 @@ def findCO2_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P
     bulk : dict or pd.DataFrame
         Input bulk composition(s).
     T_initial_C : float or np.ndarray, optional
-        Starting temperature(s) in Celsius for the calculation. If None, defaults to $1300\,^{\circ}\text{C}$.
+        Starting temperature(s) in Celsius for the calculation. If None, defaults to $1300\\,^{\\circ}\text{C}$.
     P_bar : float or np.ndarray
         Pressure(s) in bars at which to determine the $\text{CO}_2$ saturation.
     Fe3Fet_Liq : float or np.ndarray, optional
@@ -629,7 +629,7 @@ def findCO2_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P
     Returns
     -------
     T_Liq_C : np.ndarray
-        Liquid temperature ($^{\circ}\text{C}$) at which the $\text{CO}_2$ saturation was determined.
+        Liquid temperature ($^{\\circ}\text{C}$) at which the $\text{CO}_2$ saturation was determined.
     H2O : np.ndarray
         $\text{H}_2\text{O}$ content (wt%) in the liquid at $\text{CO}_2$ saturation.
     CO2 : np.ndarray
@@ -810,7 +810,7 @@ def findLiq_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P
     bulk : pd.DataFrame or dict
         A DataFrame (preferred for multiple runs) or dictionary containing oxide compositions (wt%).
     T_initial_C : float or np.ndarray, optional
-        Initial guess temperature in Celsius for the liquidus search. Default is $1300\,^{\circ}\text{C}$.
+        Initial guess temperature in Celsius for the liquidus search. Default is $1300\\,^{\\circ}\text{C}$.
     P_bar : float or np.ndarray
         Pressure(s) in bars for the calculations. If an array, the length must match the number of compositions 
         if `bulk` is a DataFrame.

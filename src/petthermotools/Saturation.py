@@ -55,7 +55,7 @@ def findSatPressure_multi(cores = multiprocessing.cpu_count(), Model = "MELTSv1.
     -------
     Warning
         - If $\text{H}_2\text{O}$ is zero in a MELTS model (may affect oxide/apatite saturation).
-        - If $\text{Fe}^{3+}/\Sigma\text{Fe}$ is zero without an $\text{f}\text{O}_2$ buffer in a MELTS model (may cause calculation failure).
+        - If $\text{Fe}^{3+}/\\Sigma\text{Fe}$ is zero without an $\text{f}\text{O}_2$ buffer in a MELTS model (may cause calculation failure).
     '''
     comp = bulk.copy()
 

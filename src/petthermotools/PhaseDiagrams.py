@@ -94,7 +94,7 @@ def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar
     P_min_bar, P_max_bar, P_num : float, float, int, optional
         Minimum, maximum, and number of pressure points for the grid creation.
     Fe3Fet_init, H2O_init, CO2_init : float, optional
-        Initial $\text{Fe}^{3+}/\Sigma\text{Fe}$ ratio, $\text{H}_2\text{O}$ (wt%), and $\text{CO}_2$ (wt%) 
+        Initial $\text{Fe}^{3+}/\\Sigma\text{Fe}$ ratio, $\text{H}_2\text{O}$ (wt%), and $\text{CO}_2$ (wt%) 
         content used to initialize the bulk system. These replace the deprecated `_Liq` arguments.
     Fe3Fet_Liq, H2O_Liq, CO2_Liq : float, optional
         **DEPRECATED**. Use `Fe3Fet_init`, `H2O_init`, `CO2_init` instead.
@@ -105,7 +105,7 @@ def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar
     i_max : int, optional, default 15
         The maximum number of times the parallel loop will re-attempt to calculate missing P-T points.
     grid : bool, optional, default True
-        If True, a full 2D T-P meshgrid is created. If False, T\_C and P\_bar must be 1D arrays of the same length.
+        If True, a full 2D T-P meshgrid is created. If False, T\\_C and P\\_bar must be 1D arrays of the same length.
     refine : int, optional
         The number of times to run `phaseDiagram_refine` after the initial calculation to improve 
         phase boundary resolution.

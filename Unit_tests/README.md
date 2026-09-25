@@ -46,6 +46,13 @@ Most of `unit/` is a set of failure-injection tests that pin bugs found in the m
 | `test_progress_bars.py` | FIXED in Phase 1 (now an ordinary passing regression test): `tqdm.notebook` needed ipywidgets, which `setup.py` does not declare, so `findLiq_multi` etc. crashed on a clean install outside Jupyter; the modules now use `tqdm.auto` |
 | `test_import_hygiene.py` | `petthermotools.Path` is shadowed by `pathlib.Path` (star-imports); pins current behaviour |
 
+## Source hygiene guard (`unit/test_no_invalid_escape_sequences.py`)
+
+Fails if any package source file contains an invalid escape sequence (for example `'$\degree$'` without an `r` prefix).
+These warn on every import (DeprecationWarning up to Python 3.11, SyntaxWarning from 3.12) and will become errors. Write
+such strings as raw strings, `r'...'`; if the string also needs a real escape such as `\n`, double only the offending
+backslash. All 14 existing ones were fixed in Phase 1, each proven to leave the string's value unchanged.
+
 ## Public API freeze (`unit/test_public_api.py`)
 
 A guard rail for maintainers, not a restriction on users: nothing here ships with the package or runs at run time, and
