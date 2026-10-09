@@ -8,6 +8,7 @@ import warnings
 import site
 import sysconfig
 import importlib
+import multiprocessing
 from pathlib import Path
 import matplotlib.pyplot as plt
 # import subprocess
@@ -20,20 +21,29 @@ from os import path
 # # Check if 'meltsdynamic' exists in the current Python path
 # spec = importlib.util.find_spec("meltsdynamic")
 
-# if spec is not None:
-#     print("Module found!")
-# else:
-#     print("Module not found on the current path.")
+# Child processes spawned by multiprocessing (every multi_* / *_multi worker)
+# re-import the whole package from scratch, so these import-time messages
+# would otherwise print once per worker (visible in a notebook/IDE kernel as
+# the message repeated 100+ times for a batch run). Only the main process
+# prints them. Note: `multiprocessing.parent_process()` is NOT a reliable
+# signal here — it is only populated by `_bootstrap()`, which runs *after*
+# the spawned child has already re-imported this module, so it still reads
+# as None during this very import. `current_process().name` is set to
+# something other than "MainProcess" (e.g. "Process-1") before the child's
+# re-import begins, so it is the check that actually works at import time.
+_IS_MAIN_PROCESS = multiprocessing.current_process().name == "MainProcess"
 
 try:
     if os.path.exists('/home/jovyan/shared/Models/alphaMELTS'):
         sys.path.append('/home/jovyan/shared/Models/alphaMELTS')
     from meltsdynamic import MELTSdynamic
-    print("alphaMELTS for Python files successfully located.")
+    if _IS_MAIN_PROCESS:
+        print("alphaMELTS for Python files successfully located.")
 except (ImportError, ModuleNotFoundError) as e:
     warnings.warn(f"Failed to import MELTSdynamic: {e}. \nUse `import sys; sys.path.append(r'path_to_alphaMELTS_4_python')` to add the alphaMELTS for Python files to the Python path.")
 
-print("If using the Green et al. (2025) or Weller et al. (2024) thermodynamic models please run `ptt.activate_petthermotools_env()` prior to any calculations.")
+if _IS_MAIN_PROCESS:
+    print("If using the Green et al. (2025) or Weller et al. (2024) thermodynamic models please run `ptt.activate_petthermotools_env()` prior to any calculations.")
 
 # test installation script
 from petthermotools.Installation import *
@@ -63,11 +73,8 @@ from petthermotools.MELTS import *
 from petthermotools.Compositions import *
 # Compsitions saved for use in petthermotools
 from petthermotools.Methods import *
-# This contains the functions used to perform calculations using the Holland et al. 2018 thermodynamic dataset - currently disabled
-# try:
-#     from petthermotools.Holland import *
-# except:
-#     print('Warning: MAGEMin calculations cannot be performed')
+# # import trace element engine
+# from petthermotools.trace_engine.partition_standards import *
 
 # ── nGibbs neural-network emulator registry ──────────────────────────────────
 # Instantiated once in nGibbs_bridge.py and imported here so users can
@@ -76,7 +83,7 @@ from petthermotools.Methods import *
 
 from petthermotools.nGibbs_bridge import _nGibbs_models
 
-if not len(_nGibbs_models):
+if not len(_nGibbs_models) and _IS_MAIN_PROCESS:
     print(
         "nGibbs not installed — nGibbs emulators are unavailable. "
         "Install it if you'd like with `ptt.install_nGibbs()` (~300 MB storage required)."

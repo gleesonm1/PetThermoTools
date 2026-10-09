@@ -1,7 +1,9 @@
+import contextlib
 import numpy as np
 import pandas as pd
 from petthermotools.GenFuncs import *
 from petthermotools.GenFuncs import _ensure_julia_ready
+from petthermotools.GenFuncs import _quiet_engine_output
 from petthermotools.Plotting import *
 from petthermotools.MELTS import *
 from petthermotools.Compositions import *
@@ -18,7 +20,8 @@ def AdiabaticDecompressionMelting(cores = multiprocessing.cpu_count(),
                                   comp_lith_2 = None, comp_lith_3 = None, T_start_C = None, Tp_C = 1350, Tp_Method = None,
                                   P_start_bar = 30000, P_end_bar = 2000, dp_bar = 200, 
                                   P_path_bar = None, Frac = False, prop = None, 
-                                  fO2_buffer = None, fO2_offset = None, Fe3Fet = None, MELTS_filter = True):
+                                  fO2_buffer = None, fO2_offset = None, Fe3Fet = None, MELTS_filter = True,
+                                  quiet_engine = True):
     """
     Performs adiabatic decompression melting calculations simulating mantle upwelling 
     (e.g., beneath mid-ocean ridges or plumes) using MELTS, MAGEMin, or pyMelt.
@@ -59,6 +62,9 @@ def AdiabaticDecompressionMelting(cores = multiprocessing.cpu_count(),
         Initial $\text{Fe}^{3+}/\\Sigma\text{Fe}$ ratio for the bulk composition.
     MELTS_filter : bool, default True
         If True, applies a filter to oxide components to manage common MELTS calculation instability issues.
+    quiet_engine : bool, optional
+        If True (default), the MELTS engine's own progress text is suppressed for speed. Set to
+        False to see its raw per-step output for debugging.
 
     Returns
     -------
@@ -189,19 +195,20 @@ def AdiabaticDecompressionMelting(cores = multiprocessing.cpu_count(),
                     raise RuntimeError('You havent installed pyMelt or there is an error when importing pyMelt. pyMelt is currently required to estimate the starting point for the melting calculations. Try running %pip install pyMelt')
             else:
                 p = Process(target = s_search, args = (q,),
-                            kwargs = {'Model': Model, 'comp': comp_1, 'Tp_C': Tp_C})
+                            kwargs = {'Model': Model, 'comp': comp_1, 'Tp_C': Tp_C, 'quiet_engine': quiet_engine})
                 p.start()
 
                 try:
                     s = q.get(timeout=30)
                 except:
                     raise Exception("Tp search failed. Use T_start_C instead.")
-            
+
             p = Process(target = AdiabaticMelt, args = (q, 1),
                         kwargs = {'Model': Model, 'comp_1': comp_1, 'comp_2': comp_2, 'comp_3': comp_3,
-                                'T_start_C': T_start_C, 'Tp_C': Tp_C, 'Tp_Method': Tp_Method, 'P_path_bar': P_path_bar, 
+                                'T_start_C': T_start_C, 'Tp_C': Tp_C, 'Tp_Method': Tp_Method, 'P_path_bar': P_path_bar,
                                 'P_start_bar': P_start_bar, 'P_end_bar': P_end_bar, 'dp_bar': dp_bar,
-                                'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset, 'Frac': Frac, 'prop': prop, 's': s})
+                                'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset, 'Frac': Frac, 'prop': prop, 's': s,
+                                'quiet_engine': quiet_engine})
 
             p.start()
             try:
@@ -283,8 +290,8 @@ def AdiabaticDecompressionMelting(cores = multiprocessing.cpu_count(),
     return Results
 
 def AdiabaticMelt(q, index, *, Model = None, comp_1 = None, comp_2 = None, comp_3 = None, Tp_Method = "pyMelt",
-                  Tp_C = None, T_start_C = None, P_start_bar = None, P_end_bar = None, dp_bar = None, P_path_bar = None, 
-                  Frac = None, fO2_buffer = None, fO2_offset = None, prop = None, s = None):
+                  Tp_C = None, T_start_C = None, P_start_bar = None, P_end_bar = None, dp_bar = None, P_path_bar = None,
+                  Frac = None, fO2_buffer = None, fO2_offset = None, prop = None, s = None, quiet_engine = True):
     '''
     Worker function to perform a single Adiabatic Decompression Melting (ADM) simulation.
 
@@ -329,8 +336,9 @@ def AdiabaticMelt(q, index, *, Model = None, comp_1 = None, comp_2 = None, comp_
     Results = {}
     if "MELTS" in Model:
         try:
-            Results = AdiabaticDecompressionMelting_MELTS(Model = Model, comp = comp_1, T_start_C = T_start_C, Tp_C = Tp_C, Tp_Method = Tp_Method,
-                                                          P_path_bar = P_path_bar, P_start_bar = P_start_bar, P_end_bar = P_end_bar, dp_bar = dp_bar, 
+            with (_quiet_engine_output() if quiet_engine else contextlib.nullcontext()):
+                Results = AdiabaticDecompressionMelting_MELTS(Model = Model, comp = comp_1, T_start_C = T_start_C, Tp_C = Tp_C, Tp_Method = Tp_Method,
+                                                          P_path_bar = P_path_bar, P_start_bar = P_start_bar, P_end_bar = P_end_bar, dp_bar = dp_bar,
                                                           fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, s = s)
             q.put([Results, index])
         except:
@@ -423,10 +431,6 @@ def AdiabaticMelt(q, index, *, Model = None, comp_1 = None, comp_2 = None, comp_
         # env_dir = Path.home() / ".petthermotools_julia_env"
         # jl_env_path = env_dir.as_posix()
 
-        # jl.seval(f"""
-        #     import Pkg
-        #     Pkg.activate("{jl_env_path}")
-        #     """)
 
         # jl.seval("using MAGEMinCalc")
 

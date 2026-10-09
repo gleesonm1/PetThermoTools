@@ -2,6 +2,8 @@ import numpy as np
 import pandas as pd
 from petthermotools.GenFuncs import *
 from petthermotools.GenFuncs import _ensure_julia_ready
+from petthermotools.GenFuncs import _quiet_engine_output
+import contextlib
 from petthermotools.Plotting import *
 from petthermotools.MELTS import *
 import multiprocessing
@@ -13,8 +15,8 @@ import time
 import warnings
 
 def supCalc(Model = "MELTSv1.0.2", bulk = None, phase = None, T_C = None, P_bar = None,
-             Fe3Fet_Liq = None, H2O_Liq = None, CO2_Liq = None, fO2_buffer = None, fO2_offset = None, 
-             melts = None):
+             Fe3Fet_Liq = None, H2O_Liq = None, CO2_Liq = None, fO2_buffer = None, fO2_offset = None,
+             melts = None, quiet_engine = True):
     '''
     A wrapper function to run a extrac the thermodynamic properties of a user specified
     phase in alphaMELTS for Python for a given composition and specified P-T-fO2 conditions.
@@ -42,30 +44,35 @@ def supCalc(Model = "MELTSv1.0.2", bulk = None, phase = None, T_C = None, P_bar 
         Offset in log units from the specified fO2 buffer.
     melts : MELTSdynamic object, optional
         An existing MELTSdynamic instance, reduces the overhead associated with initiating new MELTS objects.
+    quiet_engine : bool, default True
+        If True, redirects the MELTS engine's stdout/stderr to the null device for the duration of
+        the calculation, which can give a speed-up by avoiding large volumes of text being written
+        to the console/notebook. Set to False to inspect the raw engine output for debugging purposes.
 
     Returns:
     ----------
     Results : dict
         The raw results dictionary from the underlying MELTS simulation.
     '''
-    
+
     comp = bulk.copy()
 
     if type(comp) == pd.core.series.Series:
         comp = comp.to_dict()
-    
+
     comp = comp_fix(Model = Model, comp = comp, H2O_Liq = H2O_Liq, CO2_Liq = CO2_Liq, Fe3Fet_Liq = Fe3Fet_Liq)
 
-    Results = supCalc_MELTS(Model = Model, comp = comp, phase = phase, T_C = T_C, P_bar = P_bar,
-             fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, 
-             melts = melts)
-    
+    with (_quiet_engine_output() if quiet_engine else contextlib.nullcontext()):
+        Results = supCalc_MELTS(Model = Model, comp = comp, phase = phase, T_C = T_C, P_bar = P_bar,
+                 fO2_buffer = fO2_buffer, fO2_offset = fO2_offset,
+                 melts = melts)
+
     return Results
 
 def equilibrate_multi(cores = multiprocessing.cpu_count(), Model = "MELTSv1.0.2", bulk = None, T_C = None, P_bar = None, 
                       Fe3Fet_init = None, H2O_init = None, CO2_init = None, 
                       Fe3Fet_Liq = None, H2O_Liq = None, CO2_Liq = None, fO2_buffer = None, fO2_offset = None,
-                      timeout = 20, copy_columns = None, Suppress = None, Suppress_except = None):
+                      timeout = 20, copy_columns = None, Suppress = None, Suppress_except = None, quiet_engine = True):
     '''
     Runs single-step phase equilibrium calculations (isothermal and isobaric) for a batch of 
     compositions and/or P-T conditions in parallel using MELTS or MAGEMinCalc.
@@ -101,6 +108,9 @@ def equilibrate_multi(cores = multiprocessing.cpu_count(), Model = "MELTSv1.0.2"
         DataFrame (e.g., 'Sample_ID').
     Suppress : list of str, optional
         List of phases (e.g., ['rutile']) to exclude from the calculation (MELTS only).
+    quiet_engine : bool, optional
+        If True (default), the MELTS engine's own progress text is suppressed for speed. Set to
+        False to see its raw per-step output for debugging.
 
     Returns
     -------
@@ -169,11 +179,6 @@ def equilibrate_multi(cores = multiprocessing.cpu_count(), Model = "MELTSv1.0.2"
         if fO2_buffer == "NNO":
             fO2_buffer = "nno"
 
-    # if "MELTS" in Model:
-    #     try:
-    #         from meltsdynamic import MELTSdynamic
-    #     except:
-    #         Warning('alphaMELTS for Python files are not on the python path. \n Please add these files to the path running \n import sys \n sys.path.append(r"insert_your_path_to_melts_here") \n You are looking for the location of the meltsdynamic.py file')
 
     comp = bulk.copy()
 
@@ -253,10 +258,10 @@ def equilibrate_multi(cores = multiprocessing.cpu_count(), Model = "MELTSv1.0.2"
         if length == 1:
             q = Queue()
             ps = []
-            p = Process(target = equilibrate, args = (q, 0), kwargs = {'Model': Model, 'P_bar': P_bar, 'T_C': T_C, 
-                                                                       'comp': comp, 'fO2_buffer': fO2_buffer, 
+            p = Process(target = equilibrate, args = (q, 0), kwargs = {'Model': Model, 'P_bar': P_bar, 'T_C': T_C,
+                                                                       'comp': comp, 'fO2_buffer': fO2_buffer,
                                                                        'fO2_offset': fO2_offset, 'Suppress': Suppress,
-                                                                       'Suppress_except': Suppress_except})
+                                                                       'Suppress_except': Suppress_except, 'quiet_engine': quiet_engine})
             ps.append(p)
             p.start()
 
@@ -327,7 +332,8 @@ def equilibrate_multi(cores = multiprocessing.cpu_count(), Model = "MELTSv1.0.2"
                                             'T_C': T_C,
                                             'P_bar': P_bar,
                                             'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset,
-                                            'Suppress': Suppress, 'Suppress_except': Suppress_except})
+                                            'Suppress': Suppress, 'Suppress_except': Suppress_except,
+                                            'quiet_engine': quiet_engine})
                     
                     processes.append((p, q, groups[i]))
                     p.start()
@@ -394,10 +400,6 @@ def equilibrate_multi(cores = multiprocessing.cpu_count(), Model = "MELTSv1.0.2"
         # env_dir = Path.home() / ".petthermotools_julia_env"
         # jl_env_path = env_dir.as_posix()
 
-        # jl.seval(f"""
-        #     import Pkg
-        #     Pkg.activate("{jl_env_path}")
-        #     """)
 
         # jl.seval("using MAGEMinCalc")
 
@@ -454,7 +456,7 @@ def equilibrate_multi(cores = multiprocessing.cpu_count(), Model = "MELTSv1.0.2"
 
 def multi_equilibrate(q, index, *, Model = None, comp = None,
             T_C = None, P_bar = None, fO2_buffer = None, fO2_offset = None,
-            Suppress = None, Suppress_except = None, trail = True):
+            Suppress = None, Suppress_except = None, trail = True, quiet_engine = True):
     """
     Worker function to run a subset of equilibration models (MELTS or MAGEMin) in parallel.
 
@@ -525,77 +527,43 @@ def multi_equilibrate(q, index, *, Model = None, comp = None,
             melts = MELTSdynamic(3)
         elif Model == "MELTSv1.2.0":
             melts = MELTSdynamic(4)
-    else:
-        from juliacall import Main as jl
-        env_dir = Path.home() / ".petthermotools_julia_env"
-        jl_env_path = env_dir.as_posix()
 
-        jl.seval(f"""
-            import Pkg
-            Pkg.activate("{jl_env_path}")
-            """)
+    with (_quiet_engine_output() if quiet_engine else contextlib.nullcontext()):
+        for i in index:
+            melts = melts.addNodeAfter()
+            try:
+                if "MELTS" in Model:
+                    if type(comp) == dict:
+                        Results, Affinity, tr = equilibrate_MELTS(Model = Model, comp = comp,
+                                                T_C = T_C[i], P_bar = P_bar[i],
+                                                fO2_buffer = fO2_buffer, fO2_offset = fO2_offset[i],
+                                                Suppress = Suppress, Suppress_except=Suppress_except, trail = trail, melts = melts)
+                    else:
+                        Results, Affinity, tr = equilibrate_MELTS(Model = Model, comp = comp.loc[i].to_dict(),
+                                                T_C = T_C[i], P_bar = P_bar[i],
+                                                fO2_buffer = fO2_buffer, fO2_offset = fO2_offset[i],
+                                                Suppress = Suppress, Suppress_except=Suppress_except, trail = trail, melts = melts)
 
-        jl.seval("using MAGEMinCalc")
+                    idx.append(i)
 
-    for i in index:
-        melts = melts.addNodeAfter()
-        try:
-            if "MELTS" in Model:
-                if type(comp) == dict:
-                    Results, Affinity, tr = equilibrate_MELTS(Model = Model, comp = comp, 
-                                            T_C = T_C[i], P_bar = P_bar[i], 
-                                            fO2_buffer = fO2_buffer, fO2_offset = fO2_offset[i], 
-                                            Suppress = Suppress, Suppress_except=Suppress_except, trail = trail, melts = melts)
-                else:
-                    Results, Affinity, tr = equilibrate_MELTS(Model = Model, comp = comp.loc[i].to_dict(), 
-                                            T_C = T_C[i], P_bar = P_bar[i], 
-                                            fO2_buffer = fO2_buffer, fO2_offset = fO2_offset[i], 
-                                            Suppress = Suppress, Suppress_except=Suppress_except, trail = trail, melts = melts)
-            
+                    results[f"Run {i}"] = Results
+                    affinity[f"Run {i}"] = Affinity
+
+                    if tr is False:
+                        break
+            except:
                 idx.append(i)
+                break
 
-                results[f"Run {i}"] = Results
-                affinity[f"Run {i}"] = Affinity
-
-                if tr is False:
-                    break
-        except:
-            idx.append(i)
-            break
-    
-    if "MELTS" not in Model:
-        jl.seval("using MAGEMinCalc")
-
-        comp['O'] = comp['Fe3Fet_Liq']*(((159.69/2)/71.844)*comp['FeOt_Liq'] - comp['FeOt_Liq'])
-
-        if Model == "Weller2024":
-            bulk = comp[['SiO2_Liq', 'Al2O3_Liq', 'CaO_Liq', 'MgO_Liq', 'FeOt_Liq', 'K2O_Liq', 'Na2O_Liq', 'TiO2_Liq', 'O', 'Cr2O3_Liq']].astype(float).values
-        else:
-            bulk = comp[['SiO2_Liq', 'Al2O3_Liq', 'CaO_Liq', 'MgO_Liq', 'FeOt_Liq', 'K2O_Liq', 'Na2O_Liq', 'TiO2_Liq', 'O', 'Cr2O3_Liq', 'H2O_Liq']].astype(float).values
-
-        # print(np.shape(bulk))
-        bulk_jl = jl.seval("collect")(bulk)
-
-        if type(T_C) == np.ndarray:
-            T_C = jl.seval("collect")(T_C)
-        if type(P_bar) == np.ndarray:
-            P_kbar = jl.seval("collect")(P_bar/1000.0)
-        else:
-            P_kbar = P_bar/1000.0
-        if type(fO2_offset) == np.ndarray:
-            fO2_offset = jl.seval("collect")(fO2_offset)
-
-        Output = jl.MAGEMinCalc.equilibrate(bulk = bulk_jl, P_kbar = P_kbar, T_C = T_C, fo2_buffer = fO2_buffer, fo2_offset = fO2_offset, Model = Model)
-        results = dict(Output)
-        # results = stich(Output, Model = Model)
-
-        idx = index
 
     q.put([idx, results, affinity])
     return
 
 
-def findCO2_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P_bar = None, Fe3Fet_Liq = None, H2O_Liq = None, fO2_buffer = None, fO2_offset = None):
+# TODO(phase 1/2): findCO2_multi and its worker findCO2 (below) rely on the older per-worker, non-batched
+# structure, are slow, and have no caller in any maintained notebook, test or doc. Revisit once the
+# supervisor rewrite (Phase 2) and backend registry (Phase 1) land, rather than updating them in place now.
+def findCO2_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P_bar = None, Fe3Fet_Liq = None, H2O_Liq = None, fO2_buffer = None, fO2_offset = None, quiet_engine = True):
     '''
     Calculates the $\text{CO}_2$ saturation limit (solubility) in the melt at 
     given P-T conditions using a $\text{CO}_2$-incorporating thermodynamic model (MELTSv1.1.0 or MELTSv1.2.0).
@@ -625,6 +593,9 @@ def findCO2_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P
         Oxygen fugacity buffer ("FMQ" or "NNO").
     fO2_offset : float or np.ndarray, optional
         Offset in log units from the specified $\text{f}\text{O}_2$ buffer.
+    quiet_engine : bool, optional
+        If True (default), the MELTS engine's own progress text is suppressed for speed. Set to
+        False to see its raw per-step output for debugging.
 
     Returns
     -------
@@ -636,10 +607,6 @@ def findCO2_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P
         $\text{CO}_2$ content (wt%) in the liquid at saturation.
     '''
 
-    # try:
-    #     from meltsdynamic import MELTSdynamic
-    # except:
-    #     Warning('alphaMELTS for Python files are not on the python path. \n Please add these files to the path running \n import sys \n sys.path.append(r"insert_your_path_to_melts_here") \n You are looking for the location of the meltsdynamic.py file')
 
     if fO2_buffer is not None:
         if fO2_buffer != "NNO":
@@ -725,14 +692,14 @@ def findCO2_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P
         for i in range(int(cores*j), int(cores*j + Group[j])):
             if type(comp) == dict:
                 if type(P_bar) == np.ndarray:
-                    p = Process(target = findCO2, args = (q, i), kwargs = {'Model': Model, 'P_bar': P_bar[i], 'T_initial_C': T_initial_C[i], 'comp': comp, 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset})
+                    p = Process(target = findCO2, args = (q, i), kwargs = {'Model': Model, 'P_bar': P_bar[i], 'T_initial_C': T_initial_C[i], 'comp': comp, 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset, 'quiet_engine': quiet_engine})
                 else:
-                    p = Process(target = findCO2, args = (q, i), kwargs = {'Model': Model, 'P_bar': P_bar, 'T_initial_C': T_initial_C[i], 'comp': comp, 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset})
+                    p = Process(target = findCO2, args = (q, i), kwargs = {'Model': Model, 'P_bar': P_bar, 'T_initial_C': T_initial_C[i], 'comp': comp, 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset, 'quiet_engine': quiet_engine})
             else:
                 if type(P_bar) == np.ndarray:
-                    p = Process(target = findCO2, args = (q, i), kwargs = {'Model': Model, 'P_bar': P_bar[i], 'T_initial_C': T_initial_C[i], 'comp': comp.loc[i].to_dict(), 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset})
+                    p = Process(target = findCO2, args = (q, i), kwargs = {'Model': Model, 'P_bar': P_bar[i], 'T_initial_C': T_initial_C[i], 'comp': comp.loc[i].to_dict(), 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset, 'quiet_engine': quiet_engine})
                 else:
-                    p = Process(target = findCO2, args = (q, i), kwargs = {'Model': Model, 'P_bar': P_bar, 'T_initial_C': T_initial_C[i], 'comp': comp.loc[i].to_dict(), 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset})
+                    p = Process(target = findCO2, args = (q, i), kwargs = {'Model': Model, 'P_bar': P_bar, 'T_initial_C': T_initial_C[i], 'comp': comp.loc[i].to_dict(), 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset, 'quiet_engine': quiet_engine})
 
             ps.append(p)
             p.start()
@@ -790,8 +757,9 @@ def findCO2_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P
 
     return T_Liq_C, H2O, CO2
 
-def findLiq_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P_bar = None, 
-                  Fe3Fet_Liq = None, H2O_Liq = None, CO2_Liq = None, fO2_buffer = None, fO2_offset = None, Affinity = False):
+def findLiq_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P_bar = None,
+                  Fe3Fet_Liq = None, H2O_Liq = None, CO2_Liq = None, fO2_buffer = None, fO2_offset = None, Affinity = False,
+                  quiet_engine = True):
     '''
     Performs multiple liquidus (`findLiq`) calculations for a batch of 
     compositions and/or P-fO2-H2O conditions in parallel using the MELTS dynamic library.
@@ -821,8 +789,11 @@ def findLiq_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P
     fO2_offset : float or np.ndarray, optional
         Offset from the specified $\text{f}\text{O}_2$ buffer (in log units).
     Affinity : bool, optional, default False
-        If True, returns additional DataFrame containing chemical **affinity** (driving force for crystallization) 
+        If True, returns additional DataFrame containing chemical **affinity** (driving force for crystallization)
         data for all phases.
+    quiet_engine : bool, optional
+        If True (default), the MELTS engine's own progress text is suppressed for speed. Set to
+        False to see its raw per-step output for debugging.
 
     Returns:
     ----------
@@ -867,16 +838,11 @@ def findLiq_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P
             index = np.zeros(len(P_bar)) - 1
     else:
         T_Liq_C = 0
-        T_in = 0
         index = 0
 
     if T_initial_C is None:
         if type(comp) != dict or type(P_bar) == np.ndarray:
             T_initial_C = estimate_t(comp=comp, P_bar=P_bar).values+60.0
-            # if type(comp) != dict:
-            #     T_initial_C = estimate_t(comp=comp, P_bar=P_bar)
-            # else:
-            #     T_initial_C = np.zeros(len(P_bar)) + 1300.0
         else:
             T_initial_C = np.array([estimate_t(comp=comp, P_bar=P_bar)+60.0])
     else:
@@ -917,17 +883,17 @@ def findLiq_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P
             for i in range(int(cores*j), int(cores*j + Group[j])):
                 if type(comp) == dict:
                     if type(P_bar) == np.ndarray:
-                        p = Process(target = findLiq, args = (q, i), kwargs = {'Model': Model, 'P_bar': P_bar[i], 'T_initial_C': T_initial_C[i], 'comp': comp, 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset, 'Affinity': Affinity})
+                        p = Process(target = findLiq, args = (q, i), kwargs = {'Model': Model, 'P_bar': P_bar[i], 'T_initial_C': T_initial_C[i], 'comp': comp, 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset, 'Affinity': Affinity, 'quiet_engine': quiet_engine})
                     else:
-                        p = Process(target = findLiq, args = (q, i), kwargs = {'Model': Model, 'P_bar': P_bar, 'T_initial_C': T_initial_C[i], 'comp': comp, 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset, 'Affinity': Affinity})
+                        p = Process(target = findLiq, args = (q, i), kwargs = {'Model': Model, 'P_bar': P_bar, 'T_initial_C': T_initial_C[i], 'comp': comp, 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset, 'Affinity': Affinity, 'quiet_engine': quiet_engine})
                 else:
                     if type(P_bar) == np.ndarray:
                         if len(comp['SiO2_Liq']) != len(P_bar):
                             raise Warning("The length of your composition and pressure variables are different. Please correct this before running the code.")
 
-                        p = Process(target = findLiq, args = (q, i), kwargs = {'Model': Model, 'P_bar': P_bar[i], 'T_initial_C': T_initial_C[i], 'comp': comp.loc[i].to_dict(), 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset, 'Affinity': Affinity})
+                        p = Process(target = findLiq, args = (q, i), kwargs = {'Model': Model, 'P_bar': P_bar[i], 'T_initial_C': T_initial_C[i], 'comp': comp.loc[i].to_dict(), 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset, 'Affinity': Affinity, 'quiet_engine': quiet_engine})
                     else:
-                        p = Process(target = findLiq, args = (q, i), kwargs = {'Model': Model, 'P_bar': P_bar, 'T_initial_C': T_initial_C[i], 'comp': comp.loc[i].to_dict(), 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset, 'Affinity': Affinity})
+                        p = Process(target = findLiq, args = (q, i), kwargs = {'Model': Model, 'P_bar': P_bar, 'T_initial_C': T_initial_C[i], 'comp': comp.loc[i].to_dict(), 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset, 'Affinity': Affinity, 'quiet_engine': quiet_engine})
 
                 ps.append(p)
                 p.start()
@@ -1032,7 +998,8 @@ def findLiq_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P
         # T_Liq_C = MM.findLiq_multi(P_bar = P_bar, T_initial_C = T_initial_C, comp = comp)
         return "find liquidus calculations are currently not available through the MAGEMin models. This is an issue I'm working to fix as soon as possible."
 
-def findCO2(q, index, *, Model = None, P_bar = None, T_initial_C = None, comp = None, fO2_buffer = None, fO2_offset = None):
+# TODO(phase 1/2): worker for findCO2_multi; see the note above that function.
+def findCO2(q, index, *, Model = None, P_bar = None, T_initial_C = None, comp = None, fO2_buffer = None, fO2_offset = None, quiet_engine = True):
     '''
     Worker function to determine $\text{CO}_2$ saturation (solubility) 
     in a melt at specified P-T conditions using a $\text{CO}_2$-incorporating MELTS model.
@@ -1070,14 +1037,15 @@ def findCO2(q, index, *, Model = None, P_bar = None, T_initial_C = None, comp = 
 
     if "MELTS" in Model:
         #try:
-        T_Liq_C, H2O_Melt, CO2_Melt = findCO2_MELTS(P_bar = P_bar, Model = Model, T_C = T_initial_C, comp = comp, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset)
+        with (_quiet_engine_output() if quiet_engine else contextlib.nullcontext()):
+            T_Liq_C, H2O_Melt, CO2_Melt = findCO2_MELTS(P_bar = P_bar, Model = Model, T_C = T_initial_C, comp = comp, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset)
         q.put([T_Liq_C, H2O_Melt, CO2_Melt, index])
         return
         #except:
         #    q.put([T_Liq_C, H2O_Melt, CO2_Melt, index])
         #    return
 
-def findLiq(q, index,*, Model = None, P_bar = None, T_initial_C = None, comp = None, fO2_buffer = None, fO2_offset = None, Affinity = False):
+def findLiq(q, index,*, Model = None, P_bar = None, T_initial_C = None, comp = None, fO2_buffer = None, fO2_offset = None, Affinity = False, quiet_engine = True):
     '''
     Worker function that executes the liquidus temperature search (`findLiq_MELTS`) for a single 
     composition at a specified pressure.
@@ -1114,15 +1082,15 @@ def findLiq(q, index,*, Model = None, P_bar = None, T_initial_C = None, comp = N
         where `Results` is a dictionary/series of liquidus properties and `Affin` is the affinity data.
     '''
 
-    T_in = T_initial_C
 
     
     if "MELTS" in Model:
         try:
-            if Affinity is True:
-                Results, Affin = findLiq_MELTS(P_bar = P_bar, Model = Model, T_C_init = T_initial_C, comp = comp, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, Affinity = Affinity)
-            else:
-                Results = findLiq_MELTS(P_bar = P_bar, Model = Model, T_C_init = T_initial_C, comp = comp, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, Affinity = Affinity)
+            with (_quiet_engine_output() if quiet_engine else contextlib.nullcontext()):
+                if Affinity is True:
+                    Results, Affin = findLiq_MELTS(P_bar = P_bar, Model = Model, T_C_init = T_initial_C, comp = comp, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, Affinity = Affinity)
+                else:
+                    Results = findLiq_MELTS(P_bar = P_bar, Model = Model, T_C_init = T_initial_C, comp = comp, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, Affinity = Affinity)
 
             if Affinity is True:
                 q.put([Results, Affin, index])
@@ -1138,17 +1106,8 @@ def findLiq(q, index,*, Model = None, P_bar = None, T_initial_C = None, comp = N
                 q.put([Results, index])
             return
 
-    if Model == "Holland":
-        import pyMAGEMINcalc as MM
-        #try:
-        Results = MM.findLiq(P_bar = P_bar, T_C_init = T_initial_C, comp = comp)#, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset)
-        q.put([Results, index, T_in])
-        return
-        #except:
-        #    q.put([T_Liq, H2O_Melt, index, T_in])
-        #    return
 
-def equilibrate(q, i,*, Model = None, P_bar = None, T_C = None, comp = None, fO2_buffer = None, fO2_offset = None, Suppress = None, Suppress_except=None):
+def equilibrate(q, i,*, Model = None, P_bar = None, T_C = None, comp = None, fO2_buffer = None, fO2_offset = None, Suppress = None, Suppress_except=None, quiet_engine = True):
     '''
     Worker function to execute a single-step phase equilibrium calculation (`equilibrate_MELTS`) 
     at specified P-T conditions.
@@ -1183,6 +1142,7 @@ def equilibrate(q, i,*, Model = None, P_bar = None, T_C = None, comp = None, fO2
         `q.put([Res, i])`
         where `Res` is the raw output dictionary from the MELTS calculation.
     '''
-    Res = equilibrate_MELTS(Model = Model, P_bar = P_bar, T_C = T_C, comp = comp, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, Suppress = Suppress, Suppress_except=Suppress_except)
+    with (_quiet_engine_output() if quiet_engine else contextlib.nullcontext()):
+        Res = equilibrate_MELTS(Model = Model, P_bar = P_bar, T_C = T_C, comp = comp, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, Suppress = Suppress, Suppress_except=Suppress_except)
     q.put([Res, i])
     return

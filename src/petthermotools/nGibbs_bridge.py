@@ -14,6 +14,7 @@ eliminating duplication and the need for a circular-import workaround.
 from __future__ import annotations
 
 import contextlib
+import importlib.util
 import io
 import os
 import sys
@@ -24,18 +25,54 @@ from petthermotools.MELTS import calc_phase_props_MELTS_parallel, calc_phase_pro
 
 _FE2O3_TO_FEO = 0.8998
 
-_nGibbs_models = {}
+# nGibbs is NOT imported here at module level. `import ngibbs` pulls in `torch` (~0.7-1.5s), which used to be
+# paid by every `import petthermotools` and every spawned multiprocessing worker, even for a plain MELTS or
+# MAGEMin calculation that never touches an nGibbs model (measured: ~55% of total package import time).
+# Availability is checked cheaply with `importlib.util.find_spec` (never by importing — the same technique
+# Unit_tests/conftest.py already uses for alphaMELTS/Julia); the real import happens on first actual use, via
+# `_ensure_ngibbs_loaded()`, called from `nGibbsAPI()` and `grid_sample()` below. `_nGibbs_models` keeps its
+# real keys from the start (cheap, presence-only) so the `model in _nGibbs_models` routing checks in Path.py /
+# Liq.py / PhaseDiagrams.py keep working unchanged without needing the heavy import.
+_NGIBBS_AVAILABLE = importlib.util.find_spec("ngibbs") is not None
+_NGIBBS_LOADED = False
+_nGibbs_models = {'nMELTSv1.0.2': None, 'nMELTSv1.2.0': None} if _NGIBBS_AVAILABLE else {}
 
-try:
-    import ngibbs as _ngibbs_pkg
-    from ngibbs.config.constants import ALLOWED_MELTS_OXIDES, REQUIRED_MELTS_OXIDES
-    from ngibbs.utils.math_utils import grid_sample_explicit, grid_sample # Helpers. Grid Sample used elsewhere. 
+ALLOWED_MELTS_OXIDES = None
+REQUIRED_MELTS_OXIDES = None
+grid_sample_explicit = None
+_grid_sample_real = None
+
+
+def _ensure_ngibbs_loaded():
+    """Import ngibbs (and therefore torch) on first real use. Idempotent.
+
+    Raises ImportError with a clear message if ngibbs is not installed, or if it is installed but broken
+    (the previous bare `except: pass` at module level silently reported "not installed" either way).
+    """
+    global _NGIBBS_LOADED, ALLOWED_MELTS_OXIDES, REQUIRED_MELTS_OXIDES, grid_sample_explicit, _grid_sample_real
+    if _NGIBBS_LOADED:
+        return
+    if not _NGIBBS_AVAILABLE:
+        raise ImportError(
+            "nGibbs is not installed — nGibbs emulators are unavailable. "
+            "Install it if you'd like with `ptt.install_nGibbs()` (~300 MB storage required)."
+        )
+    from ngibbs.config.constants import ALLOWED_MELTS_OXIDES as _allowed, REQUIRED_MELTS_OXIDES as _required
+    from ngibbs.utils.math_utils import grid_sample_explicit as _gse, grid_sample as _gs # Helpers. Grid Sample used elsewhere.
     from ngibbs.engine.API import MELTS102EmulatorCPU, MELTS120EmulatorCPU
+    ALLOWED_MELTS_OXIDES = _allowed
+    REQUIRED_MELTS_OXIDES = _required
+    grid_sample_explicit = _gse
+    _grid_sample_real = _gs
     _nGibbs_models['nMELTSv1.0.2'] = MELTS102EmulatorCPU
     _nGibbs_models['nMELTSv1.2.0'] = MELTS120EmulatorCPU
+    _NGIBBS_LOADED = True
 
-except:
-    pass # Installation hint in module __init__.py
+
+def grid_sample(*args, **kwargs):
+    """Lazy wrapper around ``ngibbs.utils.math_utils.grid_sample`` (triggers the nGibbs import on first call)."""
+    _ensure_ngibbs_loaded()
+    return _grid_sample_real(*args, **kwargs)
 
 def find_oxide_cols(label):
     """
@@ -871,6 +908,8 @@ def nGibbsAPI(Model="nMELTSv1.0.2NoProp", comp=None, T_C=None, T_path_C=None, T_
               Suppress=None, Suppress_except=None, label=None, find_liquidus=False, verbose=False, **kwargs):
 
     """nGibbsAPI that receives similar input to PTT's MELTS API"""
+
+    _ensure_ngibbs_loaded()
 
     if comp is None:
         raise ValueError("Composition must be provided as a pandas DataFrame, pandas Series, or dictionary.")

@@ -1,9 +1,12 @@
+import contextlib
 import numpy as np
 import pandas as pd
 import sys
 import time
 import copy
+import warnings
 from petthermotools.GenFuncs import estimate_t
+from petthermotools.GenFuncs import _quiet_engine_output
 
 def equilibrate_MELTS(Model = None, P_bar = None, T_C = None, comp = None, 
                       fO2_buffer = None, fO2_offset = None, Suppress = None, Suppress_except=None,
@@ -225,115 +228,6 @@ def findCO2_MELTS(P_bar = None, Model = None, T_C = None, comp = None, melts = N
     CO2 = bulk[15]
                 
 
-    # try:
-    #     melts.engine.setBulkComposition(bulk)
-    #     melts.engine.pressure = P_bar
-    #     melts.engine.temperature = T_C
-    # except:
-    #     return T_Liq, H2O, CO2
-
-    # if fO2_buffer is not None:
-    #     if fO2_offset is None:
-    #         melts.engine.setSystemProperties(["Log fO2 Path: " + fO2_buffer])
-    #     else:
-    #         melts.engine.setSystemProperties(["Log fO2 Path: " + fO2_buffer, "Log fO2 Offset: " + str(fO2_offset)])
-
-    # Liq = ['liquid1','water1', 'fluid1']
-    # try:
-    #     melts.engine.calcEquilibriumState(1,0)
-    # except:
-    #     return T_Liq, H2O, CO2
-
-    # PhaseList = melts.engine.solidNames
-    # if PhaseList is None:
-    #     PhaseList = ['liquid1']
-    # else:
-    #     PhaseList = ['liquid1'] + PhaseList
-
-    # i = set.intersection(set(Liq),set(PhaseList))
-
-    # if Step is None:
-    #     Step = np.array([3,1,0.1])
-
-
-    # for j in range(len(Step)):
-    #     if len(i) == len(PhaseList):
-    #         while len(i) == len(PhaseList):
-    #             try:
-    #                 melts = melts.addNodeAfter()
-    #                 melts.engine.temperature = melts.engine.temperature - Step[j]
-    #                 melts.engine.calcEquilibriumState(1,0)
-    #             except:
-    #                 return T_Liq, H2O, CO2
-
-    #             PhaseList = melts.engine.solidNames
-    #             if PhaseList is None:
-    #                 PhaseList = ['liquid1']
-    #             else:
-    #                 PhaseList = ['liquid1'] + PhaseList
-    #             i = set.intersection(set(Liq),set(PhaseList))
-
-    #     if len(i) < len(PhaseList):
-    #         while len(i) < len(PhaseList):
-    #             try:
-    #                 melts = melts.addNodeAfter()
-    #                 melts.engine.temperature = melts.engine.temperature + Step[j]
-    #                 melts.engine.calcEquilibriumState(1,0)
-    #             except:
-    #                 return T_Liq, H2O, CO2
-
-    #             PhaseList = melts.engine.solidNames
-    #             if PhaseList is None:
-    #                 PhaseList = ['liquid1']
-    #             else:
-    #                 PhaseList = ['liquid1'] + PhaseList
-    #             i = set.intersection(set(Liq),set(PhaseList))
-
-
-    # if "fluid1" not in PhaseList:
-    #     CO2_step = np.array([0.1, 0.02, 0.005])
-    #     for j in range(len(CO2_step)):
-    #         while "fluid1" not in PhaseList:
-    #             bulk[15] = bulk[15] + CO2_step[j]
-    #             melts.engine.setBulkComposition(bulk)
-    #             if len(i) == len(PhaseList):
-    #                 while len(i) == len(PhaseList):
-    #                     try:
-    #                         melts = melts.addNodeAfter()
-    #                         melts.engine.temperature = melts.engine.temperature - 0.1
-    #                         melts.engine.calcEquilibriumState(1,0)
-    #                     except:
-    #                         return T_Liq, H2O, CO2
-
-    #                     PhaseList = melts.engine.solidNames
-    #                     if PhaseList is None:
-    #                         PhaseList = ['liquid1']
-    #                     else:
-    #                         PhaseList = ['liquid1'] + PhaseList
-    #                     i = set.intersection(set(Liq),set(PhaseList))
-
-    #             if len(i) < len(PhaseList):
-    #                 while len(i) < len(PhaseList):
-    #                     try:
-    #                         melts = melts.addNodeAfter()
-    #                         melts.engine.temperature = melts.engine.temperature + 0.1
-    #                         melts.engine.calcEquilibriumState(1,0)
-    #                     except:
-    #                         return T_Liq, H2O, CO2
-
-    #                     PhaseList = melts.engine.solidNames
-    #                     if PhaseList is None:
-    #                         PhaseList = ['liquid1']
-    #                     else:
-    #                         PhaseList = ['liquid1'] + PhaseList
-    #                     i = set.intersection(set(Liq),set(PhaseList))
-
-    #         if j != len(CO2_step) - 1:
-    #             bulk[15] = bulk[15] - CO2_step[j]
-
-    # T_Liq = melts.engine.getProperty('temperature')
-    # H2O = melts.engine.getProperty('dispComposition', 'liquid1', 'H2O')
-    # CO2 = melts.engine.getProperty('dispComposition', 'liquid1', 'CO2')
 
     return T_Liq_C, H2O, CO2
 
@@ -492,7 +386,6 @@ def findLiq_MELTS(P_bar = None, Model = None, T_C_init = None, comp = None, melt
                             else:
                                 return Results
 
-                        break
 
                     PhaseList = melts.engine.solidNames
                     if PhaseList is None:
@@ -519,7 +412,6 @@ def findLiq_MELTS(P_bar = None, Model = None, T_C_init = None, comp = None, melt
                             else:
                                 return Results
 
-                        break
 
                     PhaseList = melts.engine.solidNames
                     if PhaseList is None:
@@ -529,26 +421,6 @@ def findLiq_MELTS(P_bar = None, Model = None, T_C_init = None, comp = None, melt
                     i = set.intersection(set(Liq),set(PhaseList))
 
         PL = melts.engine.solidNames
-        # try:
-        #     melts = melts.addNodeAfter()
-        #     melts.engine.temperature = melts.engine.temperature + 4*Step[j]
-        #     melts.engine.calcEquilibriumState(1,0)
-
-            
-        #     melts = melts.addNodeAfter()
-        #     melts.engine.temperature = melts.engine.temperature - 3*Step[j]
-        #     melts.engine.calcEquilibriumState(1,0)
-        # except:
-        #     if Affinity is True:
-        #         if bulk_return is not None:
-        #             return Results, Affin, melts
-        #         else:
-        #             return Results, Affin
-        #     else:
-        #         if bulk_return is not None:
-        #             return Results, melts
-        #         else:
-        #             return Results
 
     columns = ['T_Liq_C', 'liquidus_phase', 'fluid_saturated', 'SiO2', 'TiO2', 'Al2O3', 'Fe2O3', 'Cr2O3', 'FeO', 'MnO', 'MgO', 'CaO', 'Na2O', 'K2O', 'P2O5', 'H2O', 'CO2']
     # pd.DataFrame(data = np.zeros((1, 17)), columns = ['T_Liq', 'liquidus_phase', 'fluid_saturated', 'SiO2', 'TiO2', 'Al2O3', 'Fe2O3', 'Cr2O3', 'FeO', 'MnO', 'MgO', 'CaO', 'Na2O', 'K2O', 'P2O5', 'H2O', 'CO2'])
@@ -765,6 +637,8 @@ def phaseSat_MELTS(Model = None, comp = None, phases = None, T_initial_C = None,
         Dict containing a float for each saturation temperature found and the T_Liq and melt H2O values.
 
     '''
+    warnings.warn("phaseSat_MELTS() has no callers left in petthermotools and is a candidate for removal in a "
+                  "future release.", DeprecationWarning, stacklevel=2)
     Results = {phases[0]: np.nan, phases[1]: np.nan, phases[2]: np.nan, 'T_Liq_C': np.nan, 'H2O_melt': np.nan}
     if len(phases) == 2:
         del Results[phases[2]]
@@ -861,7 +735,7 @@ def path_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid = None, 
     Parameters:
     ----------
     Model: string
-        "MELTS" or "Holland". Dictates whether MELTS or MAGEMin calculations are performed. Default "MELTS".
+        "MELTS" or a MAGEMin variant ("Green2025", "Weller2024"). Dictates whether MELTS or MAGEMin calculations are performed. Default "MELTS".
         Version of melts can be specified "MELTSv1.0.2", "MELTSv1.1.0", "MELTSv1.2.0", or "pMELTS". Default "v.1.0.2".
 
     comp: Dict
@@ -931,8 +805,6 @@ def path_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid = None, 
     '''
     Results = {}
 
-    # if shared_dict is not None:
-    #     shared_dict[index] = copy.deepcopy(Results)
 
     if trail is not None:
         trail = False
@@ -1178,10 +1050,6 @@ def path_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid = None, 
             except:
                 if trail is not None:
                     trail = False
-                # if trail is not None:
-                #     return Results, trail
-                # else:
-                #     return Results
                 break
 
         if isentropic is not None:
@@ -1323,6 +1191,9 @@ def path_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid = None, 
         return Results
 
 def findSatPressure_MELTS_multi(Model = None, comp = None, fO2_buffer = None, fO2_offset = None, P_bar = None, T_fixed_C = None, index = None):
+    warnings.warn("findSatPressure_MELTS_multi() has no callers left in petthermotools (it only ever served the "
+                  "deprecated findSatPressure_multi()) and is a candidate for removal in a future release.",
+                  DeprecationWarning, stacklevel=2)
     out = pd.DataFrame(columns = ['Sample_ID_Liq', 'SiO2_Liq', 'TiO2_Liq', 'Al2O3_Liq', 'Cr2O3_Liq', 'FeOt_Liq', 'MnO_Liq', 'MgO_Liq', 'CaO_Liq', 'Na2O_Liq', 'K2O_Liq', 'P2O5_Liq', 'H2O_Liq', 'CO2_Liq', 'Fe3Fet_Liq', 'P_bar', 'T_Liq_C'])
 
     from meltsdynamic import MELTSdynamic
@@ -1879,12 +1750,6 @@ def AdiabaticDecompressionMelting_MELTS(Model = None, comp = None, Tp_C = None, 
                 s = melts.engine.getProperty('s','bulk')
             except:
                 return Results
-            # try:
-            #     melts.engine.setSystemProperties("Mode", "Isentropic")
-            #     melts.engine.calcEquilibriumState(1,0)
-            #     melts.engine.setSystemProperties("Mode", "Isentropic")
-            # except:
-            #     return Results
         if k > 0:
             s_check = 0
             n = 4
@@ -1960,7 +1825,7 @@ def AdiabaticDecompressionMelting_MELTS(Model = None, comp = None, Tp_C = None, 
 
     return Results
 
-def s_search(q, *, Model = "pMELTS", comp = None, Tp_C = 1350):
+def s_search(q, *, Model = "pMELTS", comp = None, Tp_C = 1350, quiet_engine = True):
     if comp is None:
         raise Exception("No composition specified")
     else:
@@ -1982,37 +1847,38 @@ def s_search(q, *, Model = "pMELTS", comp = None, Tp_C = 1350):
         melts = MELTSdynamic(4)
 
     try:
-        melts.engine.setBulkComposition(bulk)
-        melts.engine.pressure = 1
-        melts.engine.temperature = Tp_C
+        with (_quiet_engine_output() if quiet_engine else contextlib.nullcontext()):
+            melts.engine.setBulkComposition(bulk)
+            melts.engine.pressure = 1
+            melts.engine.temperature = Tp_C
 
-        melts.engine.setSystemProperties("Suppress", "rutile")
-        melts.engine.setSystemProperties("Suppress", "tridymite")
+            melts.engine.setSystemProperties("Suppress", "rutile")
+            melts.engine.setSystemProperties("Suppress", "tridymite")
 
-        melts.engine.calcEquilibriumState(1,0)
-
-        melts.engine.setSystemProperties("Suppress", "liquid")
-        T_search = [1100,1000,950,900,850,800,750,700,650,600]
-
-        for T in T_search:
-            melts = melts.addNodeAfter()
-            melts.engine.temperature = T
             melts.engine.calcEquilibriumState(1,0)
-            if melts.engine.getProperty('mass', "liquid") > 0.0:
-                a = 0
-                continue
-            else:
-                a = 1
-                break
-        if a == 0:
-            raise Exception("Subsolidus assemblage not found so potential temperature cannot be determined. Use T_start_C instead.")
-        
-        melts = melts.addNodeAfter()
 
-        melts.engine.temperature = Tp_C
-        melts.engine.calcEquilibriumState(1,0)
+            melts.engine.setSystemProperties("Suppress", "liquid")
+            T_search = [1100,1000,950,900,850,800,750,700,650,600]
 
-        s = melts.engine.getProperty('s', 'bulk')
+            for T in T_search:
+                melts = melts.addNodeAfter()
+                melts.engine.temperature = T
+                melts.engine.calcEquilibriumState(1,0)
+                if melts.engine.getProperty('mass', "liquid") > 0.0:
+                    a = 0
+                    continue
+                else:
+                    a = 1
+                    break
+            if a == 0:
+                raise Exception("Subsolidus assemblage not found so potential temperature cannot be determined. Use T_start_C instead.")
+
+            melts = melts.addNodeAfter()
+
+            melts.engine.temperature = Tp_C
+            melts.engine.calcEquilibriumState(1,0)
+
+            s = melts.engine.getProperty('s', 'bulk')
 
         q.put(s)
     except:

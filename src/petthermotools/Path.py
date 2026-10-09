@@ -1,8 +1,10 @@
+import contextlib
 import numpy as np
 import pandas as pd
 from petthermotools.GenFuncs import *
 from petthermotools.GenFuncs import _ensure_julia_ready
 from petthermotools.GenFuncs import _ensure_julia_workers
+from petthermotools.GenFuncs import _quiet_engine_output
 from petthermotools.Plotting import *
 from petthermotools.MELTS import *
 from petthermotools.core_config import MAX_WORKERS
@@ -33,7 +35,8 @@ try:
 except Exception:
     pipes = None  # Standard Python interpreter (or wurlitzer not available)
 
-def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid = None, Frac_fluid = None, 
+
+def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid = None, Frac_fluid = None,
                T_C = None, T_path_C = None, T_start_C = None, T_end_C = None, dt_C = None, 
                P_bar = None, P_path_bar = None, P_start_bar = None, P_end_bar = None, dp_bar = None, 
                Fe3Fet_init = None, Fe3Fet_Liq = None, H2O_init = None, H2O_Liq = None, CO2_init = None, CO2_Liq = None, 
@@ -41,7 +44,7 @@ def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid 
                fO2_buffer = None, fO2_offset = None, 
                Print_suppress = None, fluid_sat = False, Crystallinity_limit = None, Combined = None,
                label = None, timeout = None, print_label = True, Suppress = ['rutile', 'tridymite'], Suppress_except=False,
-               multi_processing = True):
+               multi_processing = True, quiet_engine = True):
     """
     Perform single or multiple MELTS/MAGEMin crystallization or degassing calculations in series or parallel.
 
@@ -102,6 +105,12 @@ def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid 
         If True, `Suppress` acts as a whitelist instead of a blacklist.
     multi_processing : bool
         If False, run sequentially in main process.
+    quiet_engine : bool, default=True
+        If True, the MELTS engine's own progress text (written to stderr, ~400 KB per run) is
+        redirected to the null device for speed -- in a notebook/IDE kernel this alone is worth
+        roughly 40% on a batch of runs, since every worker's output otherwise funnels through one
+        shared pipe. Set to False to see the engine's raw per-step output for debugging; this does
+        not affect PTT's own status messages (see `Print_suppress`) or a worker's own traceback.
 
     Returns
     -------
@@ -389,7 +398,6 @@ def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid 
         if B > 0:
             Group = np.append(Group, B)
 
-        qs = []
         q = Queue()
         
         # perform calculation if only 1 calculation is specified
@@ -406,7 +414,7 @@ def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid 
                                     'P_bar': P_bar, 'P_path_bar': P_path_bar, 'P_start_bar': P_start_bar, 'P_end_bar': P_end_bar, 'dp_bar': dp_bar,
                                     'isenthalpic': isenthalpic, 'isentropic': isentropic, 'isochoric': isochoric, 'find_liquidus': find_liquidus,
                                     'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset, 'fluid_sat': fluid_sat, 'Crystallinity_limit': Crystallinity_limit,
-                                    'Suppress': Suppress, 'Suppress_except': Suppress_except})
+                                    'Suppress': Suppress, 'Suppress_except': Suppress_except, 'quiet_engine': quiet_engine})
 
                 p.start()
 
@@ -457,33 +465,6 @@ def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid 
                         print("No calculations returned")
                         return Results
 
-                else:
-                    try:
-                        ret = q.get(timeout=timeout_main)
-                    except:
-                        ret = []
-
-                    TIMEOUT = 5
-                    start = time.time()
-                    if p.is_alive():
-                        while time.time() - start <= TIMEOUT:
-                            if not p.is_alive():
-                                p.join()
-                                p.terminate()
-                                break
-                            time.sleep(.1)
-                        else:
-                            p.terminate()
-                            p.join(5)
-                    else:
-                        p.join()
-                        p.terminate()
-
-                    if len(ret) > 0:
-                        Results, index = ret
-                        if len(Results.keys())> 1:
-                            Results = stich(Results, Model = Model, Frac_fluid = Frac_fluid, Frac_solid = Frac_solid)
-                        return Results
 
                 if Print_suppress is None:
                     print(" Complete (time taken = " + str(round(time.time() - s,2)) + " seconds)", end = "", flush = True)
@@ -492,12 +473,13 @@ def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid 
 
                 return Results
             else:
-                Results = path_MELTS(Model = Model, comp = comp, Frac_solid = Frac_solid, Frac_fluid = Frac_fluid, 
-                                        T_C = T_C, T_path_C = T_path_C, T_start_C = T_start_C, T_end_C = T_end_C, 
-                                        dt_C = dt_C, P_bar = P_bar, P_path_bar = P_path_bar, P_start_bar = P_start_bar, 
-                                        P_end_bar = P_end_bar, dp_bar = dp_bar, isenthalpic = isenthalpic, 
-                                        isentropic = isentropic, isochoric = isochoric, find_liquidus = find_liquidus, 
-                                        fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, fluid_sat = fluid_sat, 
+                with (_quiet_engine_output() if quiet_engine else contextlib.nullcontext()):
+                    Results = path_MELTS(Model = Model, comp = comp, Frac_solid = Frac_solid, Frac_fluid = Frac_fluid,
+                                        T_C = T_C, T_path_C = T_path_C, T_start_C = T_start_C, T_end_C = T_end_C,
+                                        dt_C = dt_C, P_bar = P_bar, P_path_bar = P_path_bar, P_start_bar = P_start_bar,
+                                        P_end_bar = P_end_bar, dp_bar = dp_bar, isenthalpic = isenthalpic,
+                                        isentropic = isentropic, isochoric = isochoric, find_liquidus = find_liquidus,
+                                        fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, fluid_sat = fluid_sat,
                                         Crystallinity_limit = Crystallinity_limit, Suppress = Suppress, Suppress_except = Suppress_except)
                 
                 if Results:
@@ -590,7 +572,7 @@ def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid 
                                             'P_bar': P_bar, 'P_path_bar': P_path_bar, 'P_start_bar': P_start_bar, 'P_end_bar': P_end_bar, 'dp_bar': dp_bar,
                                             'isenthalpic': isenthalpic, 'isentropic': isentropic, 'isochoric': isochoric, 'find_liquidus': find_liquidus,
                                             'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset, 'fluid_sat': fluid_sat, 'Crystallinity_limit': Crystallinity_limit,
-                                            'Suppress': Suppress, 'Suppress_except': Suppress_except})
+                                            'Suppress': Suppress, 'Suppress_except': Suppress_except, 'quiet_engine': quiet_engine})
                     
                     p.start()
                     time.sleep(0.1)
@@ -644,47 +626,9 @@ def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid 
                     #             time.sleep(0.001)
                     #             pass
 
-                    #     # If process finished and queue empty → break
-                    #         if not p.is_alive():
-                    #             try:
-                    #                 # Drain remaining items
-                    #                 while True:
-                    #                     item = q.get_nowait()
-                    #                     run_index, step_i, data = item
-                    #                     Results.setdefault(run_index, {})[step_i] = data
-                    #             except Empty:
-                    #                 time.sleep(0.001)
-                    #                 pass
-                    #             break
-
-                    #         # Timeout condition
-                    #         if time.time() - start > timeout:
-                    #             print("Timeout — terminating process")
-                    #             p.terminate()
-                    #             break
 
                     index_out = np.array(list(Results.keys()))
                 
-                else:
-                    idx_chunks = []
-                    for p, q, group in processes:
-                        # We give each process the remaining time from the total timeout
-                        remaining = max(0, timeout - (time.time() - start))
-                        try:
-                            ret = q.get(timeout=remaining)
-                            idx, results = ret
-                            Results.update(results)
-                            # idx_chunks.append(idx)
-                        except Exception as e:
-                            print(f"Failure on data extraction, likely due to an incomplete calculation: {e}")
-                            ret = []
-                            idx = np.array([group[0]],dtype = int)
-
-                        index_out = np.hstack((index_out, idx))
-
-                    for p, q, group in processes:
-                        p.terminate()
-                        p.join()
 
                 print(f"Completed {100*len(index_out)/len(index_in)} %")
 
@@ -731,7 +675,7 @@ def path_multi(q, index, *, Model = None, comp = None, Frac_solid = None, Frac_f
             P_bar = None, P_path_bar = None, P_start_bar = None, P_end_bar = None, dp_bar = None,
             isenthalpic = None, isentropic = None, isochoric = None, find_liquidus = None,
             fO2_buffer = None, fO2_offset = None, fluid_sat = False, Crystallinity_limit = None,
-            Suppress = None, Suppress_except = None, trail = True, shared_dict = None):
+            Suppress = None, Suppress_except = None, trail = True, shared_dict = None, quiet_engine = True):
     """
     Worker function to run a subset of crystallization/decompression models (MELTS or MAGEMin) in parallel.
 
@@ -774,6 +718,9 @@ def path_multi(q, index, *, Model = None, comp = None, Frac_solid = None, Frac_f
         If True, treat `Suppress` as a whitelist.
     trail : bool
         If True, include trailing properties from model output.
+    quiet_engine : bool, default=True
+        If True, redirects the MELTS engine's own stderr output to the null device for the
+        duration of this worker's runs (set to False from `multi_path` for debugging).
 
     Returns
     -------
@@ -783,7 +730,6 @@ def path_multi(q, index, *, Model = None, comp = None, Frac_solid = None, Frac_f
         where `idx` is the list of completed indices and `results` is a dictionary of output per run.
     """
 
-    results = {}
     idx = []
 
     if len(index) > 3:
@@ -800,93 +746,38 @@ def path_multi(q, index, *, Model = None, comp = None, Frac_solid = None, Frac_f
             melts = MELTSdynamic(3)
         elif Model == "MELTSv1.2.0":
             melts = MELTSdynamic(4)
-    else:
-        # os.environ["JULIA_PROJECT"] = os.path.expanduser("~/.petthermotools_julia_env")
-        from juliacall import Main as jl
-        env_dir = Path.home() / ".petthermotools_julia_env"
-        jl_env_path = env_dir.as_posix()
+    with (_quiet_engine_output() if quiet_engine else contextlib.nullcontext()):
+        for i in index:
+            try:
+                if "MELTS" in Model:
+                    q.put([i, -1, "Start"])
+                    if i != 0:
+                        melts = melts.addNodeAfter()
+                    if type(comp) == dict:
+                        Results, tr = path_MELTS(Model = Model, comp = comp, Frac_solid = Frac_solid, Frac_fluid = Frac_fluid,
+                                                T_initial_C = np.random.random()*200 + 1200, T_C = T_C[i], T_path_C = T_path_C[i], T_start_C = T_start_C[i],
+                                                T_end_C = T_end_C[i], dt_C = dt_C[i], P_bar = P_bar[i], P_path_bar = P_path_bar[i],
+                                                P_start_bar = P_start_bar[i], P_end_bar = P_end_bar[i], dp_bar = dp_bar[i],
+                                                isenthalpic = isenthalpic, isentropic = isentropic, isochoric = isochoric,
+                                                find_liquidus = find_liquidus, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset[i],
+                                                fluid_sat = fluid_sat, Crystallinity_limit = Crystallinity_limit, Suppress = Suppress,
+                                                Suppress_except=Suppress_except, trail = trail, melts = melts, q = q, index = i)
+                    else:
+                        Results, tr = path_MELTS(Model = Model, comp = comp.loc[i].to_dict(), Frac_solid = Frac_solid, Frac_fluid = Frac_fluid,
+                                                T_initial_C = np.random.random()*200 + 1200, T_C = T_C[i], T_path_C = T_path_C[i], T_start_C = T_start_C[i],
+                                                T_end_C = T_end_C[i], dt_C = dt_C[i], P_bar = P_bar[i], P_path_bar = P_path_bar[i],
+                                                P_start_bar = P_start_bar[i], P_end_bar = P_end_bar[i], dp_bar = dp_bar[i],
+                                                isenthalpic = isenthalpic, isentropic = isentropic, isochoric = isochoric,
+                                                find_liquidus = find_liquidus, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset[i],
+                                                fluid_sat = fluid_sat, Crystallinity_limit = Crystallinity_limit, Suppress = Suppress,
+                                                Suppress_except=Suppress_except, trail = trail, melts = melts, q = q, index = i)
 
-        jl.seval(f"""
-            import Pkg
-            Pkg.activate(expanduser("{jl_env_path}"))
-            """)
-
-        jl.seval("using MAGEMinCalc")
-
-        
-  
-    for i in index:
-        try:
-            if "MELTS" in Model:
-                q.put([i, -1, "Start"])
-                if i != 0:
-                    melts = melts.addNodeAfter()
-                if type(comp) == dict:
-                    Results, tr = path_MELTS(Model = Model, comp = comp, Frac_solid = Frac_solid, Frac_fluid = Frac_fluid, 
-                                            T_initial_C = np.random.random()*200 + 1200, T_C = T_C[i], T_path_C = T_path_C[i], T_start_C = T_start_C[i], 
-                                            T_end_C = T_end_C[i], dt_C = dt_C[i], P_bar = P_bar[i], P_path_bar = P_path_bar[i], 
-                                            P_start_bar = P_start_bar[i], P_end_bar = P_end_bar[i], dp_bar = dp_bar[i], 
-                                            isenthalpic = isenthalpic, isentropic = isentropic, isochoric = isochoric, 
-                                            find_liquidus = find_liquidus, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset[i], 
-                                            fluid_sat = fluid_sat, Crystallinity_limit = Crystallinity_limit, Suppress = Suppress, 
-                                            Suppress_except=Suppress_except, trail = trail, melts = melts, q = q, index = i)
-                else:
-                    Results, tr = path_MELTS(Model = Model, comp = comp.loc[i].to_dict(), Frac_solid = Frac_solid, Frac_fluid = Frac_fluid, 
-                                            T_initial_C = np.random.random()*200 + 1200, T_C = T_C[i], T_path_C = T_path_C[i], T_start_C = T_start_C[i], 
-                                            T_end_C = T_end_C[i], dt_C = dt_C[i], P_bar = P_bar[i], P_path_bar = P_path_bar[i], 
-                                            P_start_bar = P_start_bar[i], P_end_bar = P_end_bar[i], dp_bar = dp_bar[i], 
-                                            isenthalpic = isenthalpic, isentropic = isentropic, isochoric = isochoric, 
-                                            find_liquidus = find_liquidus, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset[i], 
-                                            fluid_sat = fluid_sat, Crystallinity_limit = Crystallinity_limit, Suppress = Suppress, 
-                                            Suppress_except=Suppress_except, trail = trail, melts = melts, q = q, index = i)
-                    
-            else:
-                if fO2_offset[i] is None:
-                    fO2_offset[i] = 0.0
-
-                if Frac_solid is None:
-                    Frac_solid = False
-
-                if type(comp) == dict:
-                    comp_julia = jl.seval("Dict")(comp) 
-                else:
-                    comp_new = comp.loc[i].to_dict()
-                    comp_julia = jl.seval("Dict")(comp_new)
-
-                julia_Suppress = None                
-                if Suppress == ['rutile', 'tridymite']:
-                    Suppress = None
-                    julia_Suppress = None
-
-                if Suppress is not None:
-                    jl.Suppress = Suppress
-                    jl.seval("Suppress = Vector{String}(Suppress)")
-                    julia_Suppress = jl.Suppress
-
-
-                Results_df = jl.MAGEMinCalc.path(
-                                    comp=comp_julia, T_start_C=T_start_C[i], T_end_C=T_end_C[i], dt_C=dt_C[i],
-                                    T_C=T_C[i], P_start_bar=P_start_bar[i], P_end_bar=P_end_bar[i], dp_bar=dp_bar[i],
-                                    P_bar=P_bar[i], T_path_C=T_path_C[i], P_path_bar=P_path_bar[i], frac_xtal=Frac_solid,
-                                    Model=Model, fo2_buffer=fO2_buffer, fo2_offset=fO2_offset[i], find_liquidus=find_liquidus,
-                                    suppress = julia_Suppress
-                                )
-                
-                Results = dict(Results_df)
-                
-                tr = True
-
+                if tr is False:
+                    break
+            except:
                 idx.append(i)
-                results[f"Run {i}"] = Results
-
-            if tr is False:
                 break
-        except:
-            idx.append(i)
-            break
 
-    if "MELTS" not in Model:
-        q.put([idx, results])
 
     return
 
@@ -896,7 +787,7 @@ def path(q, index, *, Model = None, comp = None, Frac_solid = None, Frac_fluid =
          P_bar = None, P_path_bar = None, P_start_bar = None, P_end_bar = None, dp_bar = None, 
          isenthalpic = None, isentropic = None, isochoric = None, find_liquidus = None, 
          fO2_buffer = None, fO2_offset = None, fluid_sat = None, Crystallinity_limit = None,
-         Suppress = None, Suppress_except = False, shared_dict=None):
+         Suppress = None, Suppress_except = False, shared_dict=None, quiet_engine = True):
     '''
     Crystallisation calculations to be performed in parallel. Calculations may be either isobaric or isochoric.
 
@@ -909,7 +800,7 @@ def path(q, index, *, Model = None, comp = None, Frac_solid = None, Frac_fluid =
         index of the calculation in the master code (e.g., position within a for loop) to aid indexing results after calculations are complete.
 
     Model: string
-        "MELTS" or "Holland". Dictates whether MELTS or MAGEMin calculations are performed. Default "MELTS".
+        "MELTS" or a MAGEMin variant ("Green2025", "Weller2024"). Dictates whether MELTS or MAGEMin calculations are performed. Default "MELTS".
         Version of melts can be specified "MELTSv1.0.2", "MELTSv1.1.0", "MELTSv1.2.0", or "pMELTS". Default "v.1.0.2".
 
     comp: Dict
@@ -975,6 +866,10 @@ def path(q, index, *, Model = None, comp = None, Frac_solid = None, Frac_fluid =
     fO2_offset: float
         Offset from the buffer spcified in fO2_buffer (log units).
 
+    quiet_engine: bool, default=True
+        If True, redirects the MELTS engine's own stderr output to the null device for speed
+        (set to False from `multi_path` for debugging; overrides the Jupyter wurlitzer capture).
+
     Returns:
     ----------
     Results: Dict
@@ -989,112 +884,26 @@ def path(q, index, *, Model = None, comp = None, Frac_solid = None, Frac_fluid =
         # try:
             # Results = path_MELTS(Model = Model, comp = comp, Frac_solid = Frac_solid, Frac_fluid = Frac_fluid, T_C = T_C, T_path_C = T_path_C, T_start_C = T_start_C, T_end_C = T_end_C, dt_C = dt_C, P_bar = P_bar, P_path_bar = P_path_bar, P_start_bar = P_start_bar, P_end_bar = P_end_bar, dp_bar = dp_bar, isenthalpic = isenthalpic, isentropic = isentropic, isochoric = isochoric, find_liquidus = find_liquidus, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, fluid_sat = fluid_sat, Crystallinity_limit = Crystallinity_limit)
             
-        if pipes is not None:
-            with pipes():
-                Results = path_MELTS(Model = Model, comp = comp, Frac_solid = Frac_solid, Frac_fluid = Frac_fluid, 
-                                        T_C = T_C, T_path_C = T_path_C, T_start_C = T_start_C, T_end_C = T_end_C, 
-                                        dt_C = dt_C, P_bar = P_bar, P_path_bar = P_path_bar, P_start_bar = P_start_bar, 
-                                        P_end_bar = P_end_bar, dp_bar = dp_bar, isenthalpic = isenthalpic, 
-                                        isentropic = isentropic, isochoric = isochoric, find_liquidus = find_liquidus, 
-                                        fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, fluid_sat = fluid_sat, 
-                                        Crystallinity_limit = Crystallinity_limit, Suppress = Suppress, Suppress_except = Suppress_except, q = q, index = 0)
+        # quiet_engine (default) always wins over the Jupyter wurlitzer pipes() capture below: showing the
+        # engine's raw text nicely in a notebook cell and suppressing it for speed are mutually exclusive
+        # goals, and the speed one is the default. Set quiet_engine=False to get today's old behaviour back
+        # (pipes() in a Jupyter/qtconsole kernel, plain/unsuppressed everywhere else) for debugging.
+        if quiet_engine:
+            output_ctx = _quiet_engine_output()
+        elif pipes is not None:
+            output_ctx = pipes()
         else:
-            Results = path_MELTS(Model = Model, comp = comp, Frac_solid = Frac_solid, Frac_fluid = Frac_fluid, 
-                                    T_C = T_C, T_path_C = T_path_C, T_start_C = T_start_C, T_end_C = T_end_C, 
-                                    dt_C = dt_C, P_bar = P_bar, P_path_bar = P_path_bar, P_start_bar = P_start_bar, 
-                                    P_end_bar = P_end_bar, dp_bar = dp_bar, isenthalpic = isenthalpic, 
-                                    isentropic = isentropic, isochoric = isochoric, find_liquidus = find_liquidus, 
-                                    fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, fluid_sat = fluid_sat, 
+            output_ctx = contextlib.nullcontext()
+
+        with output_ctx:
+            Results = path_MELTS(Model = Model, comp = comp, Frac_solid = Frac_solid, Frac_fluid = Frac_fluid,
+                                    T_C = T_C, T_path_C = T_path_C, T_start_C = T_start_C, T_end_C = T_end_C,
+                                    dt_C = dt_C, P_bar = P_bar, P_path_bar = P_path_bar, P_start_bar = P_start_bar,
+                                    P_end_bar = P_end_bar, dp_bar = dp_bar, isenthalpic = isenthalpic,
+                                    isentropic = isentropic, isochoric = isochoric, find_liquidus = find_liquidus,
+                                    fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, fluid_sat = fluid_sat,
                                     Crystallinity_limit = Crystallinity_limit, Suppress = Suppress, Suppress_except = Suppress_except, q = q, index = 0)
-        
-        # if shared_dict[0]:
-        #     results = shared_dict[0]
-        #     q.put([results, index])
-        # else:
-        #     q.put([])
-        # try:
-        #     q.put([Results,index])
-        # except:
-        #     q.put([])
 
         return
 
-    if "MELTS" not in Model:
-        # import julia
-        # from julia.api import Julia
-        # jl = Julia(compiled_modules=False)
-        # from julia import MAGEMinCalc
-        # # import pyMAGEMINcalc as MM
-        # # try:
-        #     # Results = MM.path(Model = Model, comp = comp, Frac_solid = Frac_solid, Frac_fluid = Frac_fluid, T_C = T_C, T_path_C = T_path_C, T_start_C = T_start_C, T_end_C = T_end_C, dt_C = dt_C, P_bar = P_bar, P_path_bar = P_path_bar, P_start_bar = P_start_bar, P_end_bar = P_end_bar, dp_bar = dp_bar, find_liquidus = find_liquidus, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset)
-        # if Frac_solid is None:
-        #     Frac_solid = False
-            
-        # Results = MAGEMinCalc.path(comp = comp, T_start_C = T_start_C, T_end_C = T_end_C, dt_C = dt_C,
-        #                             T_C = T_C, P_start_bar = P_start_bar, P_end_bar = P_end_bar, dp_bar = dp_bar,
-        #                             P_bar = P_bar, T_path_C = T_path_C, P_path_bar = P_path_bar, frac_xtal = Frac_solid,
-        #                             Model = Model, fo2_buffer = fO2_buffer, fo2_offset = fO2_offset, find_liquidus = find_liquidus)
-        # q.put([Results, index])
-
-        # import julia
-        from juliacall import Main as jl, convert as jlconvert
-        env_dir = Path.home() / ".petthermotools_julia_env"
-        jl_env_path = env_dir.as_posix()
-
-        jl.seval(f"""
-            import Pkg
-            Pkg.activate("{jl_env_path}")
-            """)
-        # import os, pathlib
-
-        # # 1. Where to install Julia + MAGEMin environment (user home dir, persistent)
-        # home = str(pathlib.Path.home())
-        # env_path = os.path.join(home, ".MAGEMinEnv")
-
-        # jl.seval(f"""
-        # import Pkg
-        # Pkg.activate("{env_path}")
-        # """)
-
-        jl.seval("using MAGEMinCalc")
-
-        if Frac_solid is None:
-            Frac_solid = False
-
-        comp_julia = jl.seval("Dict")(comp)
-        # T_path_C = T_path_C.tolist()
-        if T_path_C is not None: 
-            T_path_C_julia = jlconvert(jl.Vector[jl.Float64], T_path_C)
-        else:
-            T_path_C_julia = T_path_C
-
-        if P_path_bar is not None:
-            P_path_bar_julia = jlconvert(jl.Vector[jl.Float64], P_path_bar)
-        else:
-            P_path_bar_julia = P_path_bar
-
-        julia_Suppress = None
-        if Suppress == ['rutile', 'tridymite']:
-            Suppress = None
-            julia_Suppress = None
-
-        if Suppress is not None:
-            jl.Suppress = Suppress
-            jl.seval("Suppress = Vector{String}(Suppress)")
-            julia_Suppress = jl.Suppress
-
-
-        Results = jl.MAGEMinCalc.path(
-            comp=comp_julia, T_start_C=T_start_C, T_end_C=T_end_C, dt_C=dt_C,
-            T_C=T_C, P_start_bar=P_start_bar, P_end_bar=P_end_bar, dp_bar=dp_bar,
-            P_bar=P_bar, T_path_C=T_path_C_julia, P_path_bar=P_path_bar_julia, frac_xtal=Frac_solid,
-            Model=Model, fo2_buffer=fO2_buffer, fo2_offset=fO2_offset, find_liquidus=find_liquidus,
-            suppress = julia_Suppress
-        )
-        # Results = jl.pyconvert(dict, Results)
-        Results_df = dict(Results)
-        q.put([Results_df, index])
-        # except:
-        #     q.put([])
-        # return
 

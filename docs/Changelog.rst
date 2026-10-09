@@ -2,6 +2,21 @@
 Change Log
 ================================================
 
+Version 1.2.0 (Oct 2026)
+====================================
+New quiet_engine keyword (default True) on multi_path, the crystallisation/decompression wrapper functions, equilibrate_multi, findCO2_multi, findLiq_multi, supCalc, mineral_cosaturation, saturation_pressure, phaseDiagram_calc and AdiabaticDecompressionMelting: suppresses the MELTS engine's console output for a sizeable speed-up in batch calculations. Set quiet_engine=False to see the raw engine output for debugging.
+Faster package import: the nGibbs/torch dependency is now only loaded the first time an nGibbs model is actually used.
+Repeated import banner messages (e.g. "alphaMELTS for Python files successfully located") no longer print once per worker process during a batch calculation.
+Fixed a crash (IndexError) that could occur in later retry rounds of large phaseDiagram_calc calculations.
+Fixed the Fe2O3 molar mass used throughout the package (159.59 -> 159.69 g/mol); results shift slightly, mostly by less than 1e-3 relative.
+Progress bars no longer require ipywidgets to be installed.
+Fixed a Julia package precompilation failure (WeakRefStrings/Parsers version conflict) that could occur in ptt.install_MAGEMinCalc() / ptt.update_MAGEMinCalc(); installation failures now raise immediately rather than only showing up later when the environment is first used.
+findSatPressure and findSatPressure_multi now raise a DeprecationWarning pointing to saturation_pressure().
+
+Version 1.1.9 (Sept 2026)
+====================================
+Fixed bug that was appearing for fluid saturated models.
+
 Version 1.1.6 (Aug 2026)
 ====================================
 Updated installation script to automatically download alphaMELTS v2.3.2 files.

@@ -1,6 +1,8 @@
 import numpy as np
 import pandas as pd
 from petthermotools.GenFuncs import *
+from petthermotools.GenFuncs import _quiet_engine_output
+import contextlib
 from petthermotools.Plotting import *
 from petthermotools.MELTS import *
 from petthermotools.core_config import MAX_WORKERS
@@ -9,12 +11,13 @@ from multiprocessing import Queue
 from multiprocessing import Process
 import time
 import sys, os
+import warnings
 from tqdm.auto import tqdm, trange
 import tempfile # use to create unique temp directories for each specific process
 
-def findSatPressure_multi(cores = multiprocessing.cpu_count(), Model = "MELTSv1.2.0", bulk = None, T_fixed_C = None, 
-                          P_bar_init = None, Fe3Fet_Liq = None, H2O_Liq = None, CO2_Liq = None, 
-                          fO2_buffer = None, fO2_offset = None, copy_columns = None):
+def findSatPressure_multi(cores = multiprocessing.cpu_count(), Model = "MELTSv1.2.0", bulk = None, T_fixed_C = None,
+                          P_bar_init = None, Fe3Fet_Liq = None, H2O_Liq = None, CO2_Liq = None,
+                          fO2_buffer = None, fO2_offset = None, copy_columns = None, quiet_engine = True):
     '''
     Performs multiple volatile saturation pressure ($P_{\text{sat}}$) calculations in parallel 
     for a batch of melt compositions at a fixed temperature.
@@ -44,11 +47,16 @@ def findSatPressure_multi(cores = multiprocessing.cpu_count(), Model = "MELTSv1.
         Offset from the specified $\text{f}\text{O}_2$ buffer (in log units).
     copy_columns : list of str, optional
         Placeholder argument (currently not explicitly used in the exposed code).
+    quiet_engine : bool, default True
+        If True, redirects the MELTS engine's stdout/stderr to the null device for the duration of
+        each calculation, which can give a significant speed-up by avoiding large volumes of text
+        being written to the console/notebook. Set to False to inspect the raw engine output for
+        debugging purposes.
 
     Returns:
     ----------
     Results : pd.DataFrame
-        DataFrame containing the calculated saturation pressure ($P_{\text{sat}}$), the 
+        DataFrame containing the calculated saturation pressure ($P_{\text{sat}}$), the
         corresponding melt composition, and the initial system parameters.
     
     Raises:
@@ -57,6 +65,8 @@ def findSatPressure_multi(cores = multiprocessing.cpu_count(), Model = "MELTSv1.
         - If $\text{H}_2\text{O}$ is zero in a MELTS model (may affect oxide/apatite saturation).
         - If $\text{Fe}^{3+}/\\Sigma\text{Fe}$ is zero without an $\text{f}\text{O}_2$ buffer in a MELTS model (may cause calculation failure).
     '''
+    warnings.warn("findSatPressure_multi() is deprecated and will be removed in a future release; use "
+                  "saturation_pressure() instead.", DeprecationWarning, stacklevel=2)
     comp = bulk.copy()
 
     # if T_fixed_C is None:
@@ -103,7 +113,7 @@ def findSatPressure_multi(cores = multiprocessing.cpu_count(), Model = "MELTSv1.
         df = splits[i].reset_index(drop=True)
         p = Process(target = satP_multi, args = (q, i),
                         kwargs = {'Model': Model, 'comp': df,
-                                'fO2_buffer': fO2_buffer})
+                                'fO2_buffer': fO2_buffer, 'quiet_engine': quiet_engine})
 
         ps.append(p)
         p.start()
@@ -157,9 +167,9 @@ def findSatPressure_multi(cores = multiprocessing.cpu_count(), Model = "MELTSv1.
 
     return Results
 
-def findSatPressure(cores = None, Model = None, bulk = None, T_C_init = None, T_fixed_C = None, 
-                    P_bar_init = None, Fe3Fet_Liq = None, H2O_Liq = None, CO2_Liq = None, 
-                    fO2_buffer = None, fO2_offset = None, copy_columns = None):
+def findSatPressure(cores = None, Model = None, bulk = None, T_C_init = None, T_fixed_C = None,
+                    P_bar_init = None, Fe3Fet_Liq = None, H2O_Liq = None, CO2_Liq = None,
+                    fO2_buffer = None, fO2_offset = None, copy_columns = None, quiet_engine = True):
     """
     Calculates the saturation pressure of a specified composition in the liquid or melt phase. The function will return the saturation pressure of the liquid or melt as a pandas dataframe. If the saturation pressure cannot be calculated, the function will return an empty dataframe.
 
@@ -173,6 +183,7 @@ def findSatPressure(cores = None, Model = None, bulk = None, T_C_init = None, T_
     H2O_Liq (float): The initial concentration of water in the liquid or melt in weight percent. If left as None, the value will be taken from the bulk composition.
     fO2_buffer (float): The  oxygen fugacity buffer to be used in the calculation. If left as None, no buffer will be applied
     fO2_offset (float, int, or np.ndarray): The oxygen fugacity offset (log units) from the specified buffer to be applied to the calculation. If left as None, no offset will be applied. If a list is provided, each offset will be applied to the corresponding element in the bulk composition.
+    quiet_engine (bool, optional, default True): If True, redirects the MELTS engine's stdout/stderr to the null device for the duration of each calculation, which can give a significant speed-up by avoiding large volumes of text being written to the console/notebook. Set to False to inspect the raw engine output for debugging purposes.
 
     Returns:
     Res (dict or pandas.core.frame.DataFrame): A dict or dataframe containing the chemical composition of the melt phase and the saturation pressure and temperature of the melt.
@@ -183,6 +194,8 @@ def findSatPressure(cores = None, Model = None, bulk = None, T_C_init = None, T_
     >>> findSatPressure(bulk = {'SiO2_Liq': 50, 'TiO2_Liq': 1, 'Al2O3_Liq': 15, 'FeOt_Liq': 10, 'MnO_Liq': 0.5, 'MgO_Liq': 8, 'CaO_Liq': 10, 'Na2O_Liq': 2, 'K2O_Liq': 1, 'P2O5_Liq': 0.5, 'H2O_Liq': 0.5, 'Fe3Fet_Liq': 0.15}, T_C_init = 1200, P_bar_init = 10000)
 
     """
+    warnings.warn("findSatPressure() is deprecated and will be removed in a future release; use "
+                  "saturation_pressure() instead.", DeprecationWarning, stacklevel=2)
 
     # set default values if required
     if Model is None:
@@ -221,7 +234,8 @@ def findSatPressure(cores = None, Model = None, bulk = None, T_C_init = None, T_
         p = Process(target = satP, args = (q, 0),
                     kwargs = {'Model': Model, 'comp': comp, 'T_C_init': T_C_init,
                               'T_fixed_C': T_fixed_C, 'P_bar_init': P_bar_init,
-                            'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset})
+                            'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset,
+                            'quiet_engine': quiet_engine})
 
         p.start()
         try:
@@ -285,9 +299,10 @@ def findSatPressure(cores = None, Model = None, bulk = None, T_C_init = None, T_
 
             for i in range(int(cores*j), int(cores*j + Group[j])):
                 p = Process(target = satP, args = (q, i),
-                            kwargs = {'Model': Model, 'comp': comp.loc[i].to_dict(), 'T_C_init': T_C_init[i], 
+                            kwargs = {'Model': Model, 'comp': comp.loc[i].to_dict(), 'T_C_init': T_C_init[i],
                                       'T_fixed_C': T_fixed_C[i], 'P_bar_init': P_bar_init[i],
-                                    'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset[i]})
+                                    'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset[i],
+                                    'quiet_engine': quiet_engine})
 
                 ps.append(p)
                 p.start()
@@ -350,7 +365,8 @@ def saturation_pressure(Model = "MELTSv1.2.0", cores = MAX_WORKERS,
                         bulk = None, T_init_C = None, T_fixed_C = None, P_init_bar = 5000,
                         Fe3Fet_Liq = None, Fe3Fet_init = None, H2O_Liq = None, H2O_init = None,
                         CO2_Liq = None, CO2_init = None, fO2_buffer = None, fO2_offset = None, 
-                        copy_columns = None, multi_processing = True, timeout = 20, max_retries = 2):
+                        copy_columns = None, multi_processing = True, timeout = 20, max_retries = 2,
+                        quiet_engine = True):
     """
     Estimates the pressure at which volatile saturation occurs for one or more melt compositions
     using MELTS thermodynamic models.
@@ -399,6 +415,11 @@ def saturation_pressure(Model = "MELTSv1.2.0", cores = MAX_WORKERS,
         Whether to parallelize the calculations across multiple cores.
     timeout : int, default 180
         Timeout for individual parallel processes, in seconds.
+    quiet_engine : bool, default True
+        If True, redirects the MELTS engine's stdout/stderr to the null device for the duration of
+        each calculation, which can give a significant speed-up by avoiding large volumes of text
+        being written to the console/notebook. Set to False to inspect the raw engine output for
+        debugging purposes.
 
     Returns
     -------
@@ -426,11 +447,6 @@ def saturation_pressure(Model = "MELTSv1.2.0", cores = MAX_WORKERS,
     T_C_init = T_init_C
     P_bar_init = P_init_bar
        
-    # if "MELTS" in Model:
-    #     try:
-    #         from meltsdynamic import MELTSdynamic
-    #     except:
-    #         Warning('alphaMELTS for Python files are not on the python path. \n Please add these files to the path running \n import sys \n sys.path.append(r"insert_your_path_to_melts_here") \n You are looking for the location of the meltsdynamic.py file')
 
     if bulk is not None:
         comp = bulk.copy()
@@ -496,14 +512,14 @@ def saturation_pressure(Model = "MELTSv1.2.0", cores = MAX_WORKERS,
     if B > 0:
         Group = np.append(Group, B)
 
-    qs = []
     q = Queue()
     if One == 1:
         if multi_processing:
             p = Process(target = satP, args = (q,0),
                         kwargs = {'Model': Model, 'comp': comp, 'T_C_init': T_C_init,
                                   'T_fixed_C': T_fixed_C, 'P_bar_init': P_bar_init,
-                                  'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset})
+                                  'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset,
+                                  'quiet_engine': quiet_engine})
             p.start()
             try:
                 ret = q.get(timeout = timeout)
@@ -533,9 +549,10 @@ def saturation_pressure(Model = "MELTSv1.2.0", cores = MAX_WORKERS,
 
             return Results
         else:
-            Results = findSatPressure_MELTS(Model = Model, T_C_init=T_C_init, T_fixed_C=T_fixed_C,
-                                            P_bar_init=P_bar_init, comp = comp, fO2_buffer=fO2_buffer,
-                                            fO2_offset=fO2_offset)
+            with (_quiet_engine_output() if quiet_engine else contextlib.nullcontext()):
+                Results = findSatPressure_MELTS(Model = Model, T_C_init=T_C_init, T_fixed_C=T_fixed_C,
+                                                P_bar_init=P_bar_init, comp = comp, fO2_buffer=fO2_buffer,
+                                                fO2_offset=fO2_offset)
             return Results
     else: # perform multiple crystallisation calculations
         # first make sure everything is the right length
@@ -582,8 +599,9 @@ def saturation_pressure(Model = "MELTSv1.2.0", cores = MAX_WORKERS,
                 q = Queue()
                 p = Process(target = saturationP_multi, args = (q, groups[i]),
                             kwargs = {'Model': Model, 'comp': comp, 'T_C_init': T_C_init,
-                                      'T_fixed_C': T_fixed_C, 'P_bar_init': P_bar_init, 
-                                      'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset})
+                                      'T_fixed_C': T_fixed_C, 'P_bar_init': P_bar_init,
+                                      'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset,
+                                      'quiet_engine': quiet_engine})
                 
                 processes.append([p, q, groups[i]])
                 p.start()
@@ -657,12 +675,6 @@ def saturation_pressure(Model = "MELTSv1.2.0", cores = MAX_WORKERS,
                 # We increase the timeout slightly for retries to handle edge-case convergence
                 retry_timeout = timeout * 1.5 
                 
-                # Extract subsets for failed indices
-                # retry_comp = bulk.iloc[failed_indices] if isinstance(bulk, pd.DataFrame) else bulk
-                # retry_T_C_init = np.array(T_C_init)[failed_indices]
-                # retry_T_fixed_C = np.array(T_fixed_C)[failed_indices]
-                # retry_P_bar_init = np.array(P_bar_init)[failed_indices]
-                # retry_fO2_offset = np.array(fO2_offset)[failed_indices]
 
                 # Use the same multi-processing logic but on the subset
                 # (You can encapsulate your while loop into a helper to keep this clean)
@@ -680,8 +692,9 @@ def saturation_pressure(Model = "MELTSv1.2.0", cores = MAX_WORKERS,
                         q = Queue()
                         p = Process(target=saturationP_multi, args=(q, groups[i]),
                                     kwargs={'Model': Model, 'comp': comp, 'T_C_init': T_C_init,
-                                            'T_fixed_C': T_fixed_C, 'P_bar_init': P_bar_init, 
-                                            'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset})
+                                            'T_fixed_C': T_fixed_C, 'P_bar_init': P_bar_init,
+                                            'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset,
+                                            'quiet_engine': quiet_engine})
                         processes.append([p, q, groups[i]])
                         p.start()
 
@@ -716,83 +729,84 @@ def saturation_pressure(Model = "MELTSv1.2.0", cores = MAX_WORKERS,
         return Results
 
 def saturationP_multi(q, index, *, Model = None, comp = None, T_C_init = None, T_fixed_C = None,
-               P_bar_init = None, fO2_buffer = None, fO2_offset = None):
+               P_bar_init = None, fO2_buffer = None, fO2_offset = None, quiet_engine = True):
     f = open(os.devnull, 'w')
     sys.stdout = f
 
     # with tempfile.TemporaryDirectory() as tempdir:
     #     original_dir = os.getcwd()
     #     os.chdir(tempdir)
-    
+
     #     try:
     results = {}
     idx = []
-    if "MELTS" in Model:
-        from meltsdynamic import MELTSdynamic
+    with (_quiet_engine_output() if quiet_engine else contextlib.nullcontext()):
+        if "MELTS" in Model:
+            from meltsdynamic import MELTSdynamic
 
-        if Model is None or Model == "MELTSv1.0.2":
-            melts = MELTSdynamic(1)
-        elif Model == "pMELTS":
-            melts = MELTSdynamic(2)
-        elif Model == "MELTSv1.1.0":
-            melts = MELTSdynamic(3)
-        elif Model == "MELTSv1.2.0":
-            melts = MELTSdynamic(4)
+            if Model is None or Model == "MELTSv1.0.2":
+                melts = MELTSdynamic(1)
+            elif Model == "pMELTS":
+                melts = MELTSdynamic(2)
+            elif Model == "MELTSv1.1.0":
+                melts = MELTSdynamic(3)
+            elif Model == "MELTSv1.2.0":
+                melts = MELTSdynamic(4)
 
-        melts.engine.setSystemProperties("Output",  "none")
-        
-        melts.engine.pressure = P_bar_init[0]
-        if T_fixed_C[0] is not None:
-            melts.engine.temperature = T_fixed_C[0] + 500
-        else:
-            melts.engine.temperature = T_C_init[0] + 500
+            melts.engine.setSystemProperties("Output",  "none")
 
-        if type(comp) == dict:
-            bulk = [comp['SiO2_Liq'], comp['TiO2_Liq'], comp['Al2O3_Liq'], 
-                    comp['Fe3Fet_Liq']*((159.69/2)/71.844)*comp['FeOt_Liq'], 
-                    comp['Cr2O3_Liq'], (1- comp['Fe3Fet_Liq'])*comp['FeOt_Liq'], 
-                    comp['MnO_Liq'], comp['MgO_Liq'], 0.0, 0.0, comp['CaO_Liq'], 
-                    comp['Na2O_Liq'], comp['K2O_Liq'], comp['P2O5_Liq'], 
-                    comp['H2O_Liq'], comp['CO2_Liq'], 0.0, 0.0, 0.0]
-        else:
-            bulk = [comp.loc[0,'SiO2_Liq'], comp.loc[0,'TiO2_Liq'], comp.loc[0,'Al2O3_Liq'], 
-                    comp.loc[0,'Fe3Fet_Liq']*((159.69/2)/71.844)*comp.loc[0,'FeOt_Liq'], 
-                    comp.loc[0,'Cr2O3_Liq'], (1- comp.loc[0,'Fe3Fet_Liq'])*comp.loc[0,'FeOt_Liq'], 
-                    comp.loc[0,'MnO_Liq'], comp.loc[0,'MgO_Liq'], 0.0, 0.0, comp.loc[0,'CaO_Liq'], 
-                    comp.loc[0,'Na2O_Liq'], comp.loc[0,'K2O_Liq'], comp.loc[0,'P2O5_Liq'], 
-                    comp.loc[0,'H2O_Liq'], comp.loc[0,'CO2_Liq'], 0.0, 0.0, 0.0]
-            
-        melts.engine.setBulkComposition(bulk)
-        PL = melts.engine.calcSaturationState()
-        if T_fixed_C[0] is not None:
-            for p in PL:
-                if p != "fluid":
-                    if p != "water":
-                        melts.engine.setSystemProperties("Suppress", p)
-        else:
-            Suppress = ['rutile', 'tridymite']
-            for p in Suppress:
-                melts.engine.setSystemProperties("Suppress", p)
-
-    for i in index:
-        melts = melts.addNodeAfter()
-        try:
-            if type(comp) == dict:
-                Results, tr = findSatPressure_MELTS(Model = Model, T_C_init=T_C_init[i], T_fixed_C=T_fixed_C[i],
-                                            P_bar_init=P_bar_init[i], comp = comp, fO2_buffer=fO2_buffer,
-                                            fO2_offset=fO2_offset[i], trial = True, melts = melts, suppressed = True)
+            melts.engine.pressure = P_bar_init[0]
+            if T_fixed_C[0] is not None:
+                melts.engine.temperature = T_fixed_C[0] + 500
             else:
-                Results, tr = findSatPressure_MELTS(Model = Model, T_C_init=T_C_init[i], T_fixed_C=T_fixed_C[i],
-                                            P_bar_init=P_bar_init[i], comp = comp.loc[i].to_dict(), fO2_buffer=fO2_buffer,
-                                            fO2_offset=fO2_offset[i], trial = True, melts = melts, suppressed = True)
+                melts.engine.temperature = T_C_init[0] + 500
 
-            results[f"Run {i}"] = Results
-            idx.append(i)
-            if tr is False:
+            if type(comp) == dict:
+                bulk = [comp['SiO2_Liq'], comp['TiO2_Liq'], comp['Al2O3_Liq'],
+                        comp['Fe3Fet_Liq']*((159.69/2)/71.844)*comp['FeOt_Liq'],
+                        comp['Cr2O3_Liq'], (1- comp['Fe3Fet_Liq'])*comp['FeOt_Liq'],
+                        comp['MnO_Liq'], comp['MgO_Liq'], 0.0, 0.0, comp['CaO_Liq'],
+                        comp['Na2O_Liq'], comp['K2O_Liq'], comp['P2O5_Liq'],
+                        comp['H2O_Liq'], comp['CO2_Liq'], 0.0, 0.0, 0.0]
+            else:
+                bulk = [comp.loc[0,'SiO2_Liq'], comp.loc[0,'TiO2_Liq'], comp.loc[0,'Al2O3_Liq'],
+                        comp.loc[0,'Fe3Fet_Liq']*((159.69/2)/71.844)*comp.loc[0,'FeOt_Liq'],
+                        comp.loc[0,'Cr2O3_Liq'], (1- comp.loc[0,'Fe3Fet_Liq'])*comp.loc[0,'FeOt_Liq'],
+                        comp.loc[0,'MnO_Liq'], comp.loc[0,'MgO_Liq'], 0.0, 0.0, comp.loc[0,'CaO_Liq'],
+                        comp.loc[0,'Na2O_Liq'], comp.loc[0,'K2O_Liq'], comp.loc[0,'P2O5_Liq'],
+                        comp.loc[0,'H2O_Liq'], comp.loc[0,'CO2_Liq'], 0.0, 0.0, 0.0]
+
+            melts.engine.setBulkComposition(bulk)
+            PL = melts.engine.calcSaturationState()
+            if T_fixed_C[0] is not None:
+                for p in PL:
+                    if p != "fluid":
+                        if p != "water":
+                            melts.engine.setSystemProperties("Suppress", p)
+            else:
+                Suppress = ['rutile', 'tridymite']
+                for p in Suppress:
+                    melts.engine.setSystemProperties("Suppress", p)
+
+        for i in index:
+            melts = melts.addNodeAfter()
+            try:
+                if type(comp) == dict:
+                    Results, tr = findSatPressure_MELTS(Model = Model, T_C_init=T_C_init[i], T_fixed_C=T_fixed_C[i],
+                                                P_bar_init=P_bar_init[i], comp = comp, fO2_buffer=fO2_buffer,
+                                                fO2_offset=fO2_offset[i], trial = True, melts = melts, suppressed = True)
+                else:
+                    Results, tr = findSatPressure_MELTS(Model = Model, T_C_init=T_C_init[i], T_fixed_C=T_fixed_C[i],
+                                                P_bar_init=P_bar_init[i], comp = comp.loc[i].to_dict(), fO2_buffer=fO2_buffer,
+                                                fO2_offset=fO2_offset[i], trial = True, melts = melts, suppressed = True)
+
+                results[f"Run {i}"] = Results
+                idx.append(i)
+                if tr is False:
+                    break
+            except:
+                idx.append(i)
                 break
-        except:
-            idx.append(i)
-            break
 
     q.put([idx, results])
 
@@ -800,8 +814,8 @@ def saturationP_multi(q, index, *, Model = None, comp = None, T_C_init = None, T
         #     os.chdir(original_dir)
         #     q.put([idx, results])
 
-def satP(q, index, *, Model = None, comp = None, T_C_init = None, T_fixed_C = None, 
-         P_bar_init = None, fO2_buffer = None, fO2_offset = None):
+def satP(q, index, *, Model = None, comp = None, T_C_init = None, T_fixed_C = None,
+         P_bar_init = None, fO2_buffer = None, fO2_offset = None, quiet_engine = True):
     """Find the saturation pressure for a given composition and temperature.
 
     This function calculates the volatile saturation pressure for a given composition using the MELTS models. The results are returned in the form of a tuple and added to the specified queue.
@@ -815,21 +829,29 @@ def satP(q, index, *, Model = None, comp = None, T_C_init = None, T_fixed_C = No
         P_bar_init (float, optional): The initial pressure in bar.
         fO2_buffer (float, optional): The fO2 buffer.
         fO2_offset (float, optional): The fO2 offset.
+        quiet_engine (bool, optional, default True): If True, redirects the MELTS engine's stdout/stderr
+            to the null device for the duration of the calculation. Set to False to inspect the raw
+            engine output for debugging purposes.
 
     Returns:
         None
     """
 
     if "MELTS" in Model:
-        Results = findSatPressure_MELTS(Model = Model, T_C_init = T_C_init, T_fixed_C=T_fixed_C, P_bar_init = P_bar_init, comp = comp, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset)
+        with (_quiet_engine_output() if quiet_engine else contextlib.nullcontext()):
+            Results = findSatPressure_MELTS(Model = Model, T_C_init = T_C_init, T_fixed_C=T_fixed_C, P_bar_init = P_bar_init, comp = comp, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset)
         q.put([Results, index])
         return
-    
-def satP_multi(q, index, *, Model = None, comp = None, fO2_buffer = None):
+
+def satP_multi(q, index, *, Model = None, comp = None, fO2_buffer = None, quiet_engine = True):
+    warnings.warn("satP_multi() has no callers left in petthermotools (it only ever served the deprecated "
+                  "findSatPressure_multi()) and is a candidate for removal in a future release.",
+                  DeprecationWarning, stacklevel=2)
     if "MELTS" in Model:
-        Results = findSatPressure_MELTS_multi(Model = Model, comp = comp, fO2_buffer=fO2_buffer, 
-                                              fO2_offset=comp['fO2_offset'],
-                                              P_bar = comp['P_bar'], T_fixed_C=comp['T_fixed_C'])
+        with (_quiet_engine_output() if quiet_engine else contextlib.nullcontext()):
+            Results = findSatPressure_MELTS_multi(Model = Model, comp = comp, fO2_buffer=fO2_buffer,
+                                                  fO2_offset=comp['fO2_offset'],
+                                                  P_bar = comp['P_bar'], T_fixed_C=comp['T_fixed_C'])
         q.put([Results, index])
         return
     

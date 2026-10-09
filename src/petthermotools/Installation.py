@@ -47,11 +47,26 @@ def install_MAGEMinCalc_VICTOR():
         println("Installing MAGEMinCalc from GitHub...")
         Pkg.add(url="https://github.com/gleesonm1/MAGEMinCalc.git", rev="v0.6.2")
 
+        # Pin Parsers to the 2.x line. CSV 0.10.x (pulled in transitively via
+        # MAGEMin_C) still depends on WeakRefStrings, which does not yet support
+        # Parsers 3.x (released alongside CSV.jl 1.0 in Sept 2026) -- see
+        # https://github.com/JuliaData/WeakRefStrings.jl/issues/101. Without this
+        # pin, the resolver can pick an unsatisfiable WeakRefStrings/Parsers
+        # combination and precompilation fails with "PosLen not defined".
+        println("Pinning Parsers to the 2.x line (WeakRefStrings/CSV compatibility)...")
+        Pkg.add(name="Parsers", version="2")
+
         # 4. Finalize and Precompile
         println("Resolving and Precompiling... (This may take several minutes)")
         Pkg.resolve()
-        Pkg.precompile()
-        
+        # strict=true: Pkg.precompile() does NOT raise by default when a package
+        # fails to precompile -- it just prints a "✗" and returns normally, so a
+        # broken install would otherwise be reported as ready here and only fail
+        # later, confusingly, the first time something actually does `using
+        # MAGEMinCalc`. strict=true raises Base.Precompilation.PkgPrecompileError
+        # immediately so the real error is caught at install time.
+        Pkg.precompile(strict=true)
+
         println("SUCCESS: MAGEMin environment is ready.")
     catch e
         @error "Installation failed" exception=e
@@ -149,10 +164,18 @@ def install_MAGEMinCalc():
         end
             
         Pkg.add(name = "MAGEMin_C", version="2.2.6")
-            
-        Pkg.resolve()   
-        Pkg.precompile()
-            
+
+        # Pin Parsers to the 2.x line. CSV 0.10.x (pulled in transitively via
+        # MAGEMin_C) still depends on WeakRefStrings, which does not yet support
+        # Parsers 3.x (released alongside CSV.jl 1.0 in Sept 2026) -- see
+        # https://github.com/JuliaData/WeakRefStrings.jl/issues/101. Without this
+        # pin, the resolver can pick an unsatisfiable WeakRefStrings/Parsers
+        # combination and precompilation fails with "PosLen not defined".
+        Pkg.add(name = "Parsers", version = "2")
+
+        Pkg.resolve()
+        Pkg.precompile(strict=true)
+
         println("MAGEMin environment ready at {jl_env_path}")
         """)
 
@@ -186,9 +209,17 @@ def update_MAGEMinCalc():
         end
              
         Pkg.add(name = "MAGEMin_C", version="2.2.6")
-             
-        Pkg.resolve()   
-        Pkg.precompile()
+
+        # Pin Parsers to the 2.x line. CSV 0.10.x (pulled in transitively via
+        # MAGEMin_C) still depends on WeakRefStrings, which does not yet support
+        # Parsers 3.x (released alongside CSV.jl 1.0 in Sept 2026) -- see
+        # https://github.com/JuliaData/WeakRefStrings.jl/issues/101. Without this
+        # pin, the resolver can pick an unsatisfiable WeakRefStrings/Parsers
+        # combination and precompilation fails with "PosLen not defined".
+        Pkg.add(name = "Parsers", version = "2")
+
+        Pkg.resolve()
+        Pkg.precompile(strict=true)
         println("MAGEMin environment updated at {jl_env_path}")
     """)
 

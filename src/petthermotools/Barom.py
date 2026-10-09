@@ -1,13 +1,11 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-# try:
-#     import Thermobar as pt
-# except:
-#     print('Thermobar cannot be imported, please check your numpy version')
 
 from petthermotools.GenFuncs import *
 from petthermotools.GenFuncs import _ensure_julia_ready
+from petthermotools.GenFuncs import _quiet_engine_output
+import contextlib
 from petthermotools.Plotting import *
 from petthermotools.Liq import *
 from petthermotools.MELTS import *
@@ -20,14 +18,10 @@ import time
 from scipy import interpolate
 # from shapely.geometry import MultiPoint, Point, Polygon
 
-import numpy as np
-import pandas as pd
-import multiprocessing
-import time
 from pathlib import Path
 
 def path_4_saturation_multi(q, index, *, Model = None, P_bar = None, comp = None, T_maxdrop_C = None, dt_C = None, T_initial_C = None, fO2_buffer = None,
-                      fO2_offset = 0.0, H2O_Sat = None, phases = None):
+                      fO2_offset = 0.0, H2O_Sat = None, phases = None, quiet_engine = True):
     """
     Worker function to run crystallization simulations at a subset of pressures in parallel
     using alphaMELTS for Python or MAGEMinCalc to determine mineral co-saturations.
@@ -80,68 +74,39 @@ def path_4_saturation_multi(q, index, *, Model = None, P_bar = None, comp = None
             melts = MELTSdynamic(3)
         elif Model == "MELTSv1.2.0":
             melts = MELTSdynamic(4)
-    else:
-        from juliacall import Main as jl, convert as jlconvert
-        env_dir = Path.home() / ".petthermotools_julia_env"
-        jl_env_path = env_dir.as_posix()
 
-        jl.seval(f"""
-            import Pkg
-            Pkg.activate("{jl_env_path}")
-            """)
+    with (_quiet_engine_output() if quiet_engine else contextlib.nullcontext()):
+        for i in index:
+            # try:
+            if "MELTS" in Model:
+                q.put([i, -1, "Start"])
+                Results, tr = path_MELTS(P_bar = P_bar[i],
+                        Model=Model,
+                        comp=comp,
+                        T_maxdrop_C=T_maxdrop_C,
+                        dt_C=dt_C,
+                        T_initial_C=T_initial_C,
+                        find_liquidus=True,
+                        fO2_buffer=fO2_buffer,
+                        fO2_offset=fO2_offset,
+                        fluid_sat=H2O_Sat,
+                        Suppress=['rutile', 'tridymite'],
+                        phases=phases,
+                        trail = True,
+                        melts = melts,
+                        q = q,
+                        index = i
+                    )
 
-        jl.seval("using MAGEMinCalc")
-
-        comp_julia = jl.seval("Dict")(comp)   
-
-    for i in index:
-        # try:
-        if "MELTS" in Model:
-            q.put([i, -1, "Start"])
-            Results, tr = path_MELTS(P_bar = P_bar[i],
-                    Model=Model,
-                    comp=comp,
-                    T_maxdrop_C=T_maxdrop_C,
-                    dt_C=dt_C,
-                    T_initial_C=T_initial_C,
-                    find_liquidus=True,
-                    fO2_buffer=fO2_buffer,
-                    fO2_offset=fO2_offset,
-                    fluid_sat=H2O_Sat,
-                    Suppress=['rutile', 'tridymite'],
-                    phases=phases,
-                    trail = True,
-                    melts = melts,
-                    q = q,
-                    index = i
-                )
-        else:
-            if fO2_offset is None:
-                fO2_offset = 0.0
-
-            Results_df = jl.MAGEMinCalc.path(
-                                    comp=comp_julia, dt_C=dt_C,
-                                    P_bar=P_bar[i], T_min_C = T_maxdrop_C,            
-                                    Model=Model, fo2_buffer=fO2_buffer, 
-                                    fo2_offset=fO2_offset, find_liquidus=True,
-                                    frac_xtal = False
-                                    )
-            
-            Results = dict(Results_df)
-            
-            tr = True
-
-        idx.append(i)
+            idx.append(i)
 
 
-        results[f"Run {i}"] = Results
+            results[f"Run {i}"] = Results
 
-        if tr is False:
-            break
-        # except:
+            if tr is False:
+                break
+            # except:
         #     idx.append(i)
-    if "MELTS" not in Model:
-        q.put([idx, results])
     return
 
 def mineral_cosaturation(Model="MELTSv1.0.2", cores=int(np.floor(multiprocessing.cpu_count())), bulk=None,
@@ -149,7 +114,8 @@ def mineral_cosaturation(Model="MELTSv1.0.2", cores=int(np.floor(multiprocessing
                          P_bar=np.linspace(250, 5000, 32), Fe3Fet_init=None, H2O_init=None,
                          CO2_init=None, H2O_Sat=False, T_initial_C=None, dt_C=2,
                          T_maxdrop_C=50, T_cut_C=20, find_range=True,
-                         find_min=True, fO2_buffer=None, fO2_offset=0.0, timeout = 90, multi_processing = True):
+                         find_min=True, fO2_buffer=None, fO2_offset=0.0, timeout = 90, multi_processing = True,
+                         quiet_engine = True):
     """
     Determines the pressure at which two or more minerals co-saturate (following the method of Gualda et al. 2014).
 
@@ -197,6 +163,9 @@ def mineral_cosaturation(Model="MELTSv1.0.2", cores=int(np.floor(multiprocessing
         Timeout (in seconds) for each process.
     multi_processing : bool
         If True, run simulations in parallel using multiprocessing.
+    quiet_engine : bool, optional
+        If True (default), the MELTS engine's own progress text is suppressed for speed. Set to
+        False to see its raw per-step output for debugging.
 
     Returns
     -------
@@ -267,68 +236,44 @@ def mineral_cosaturation(Model="MELTSv1.0.2", cores=int(np.floor(multiprocessing
                                 kwargs = {'Model': Model, 'comp': comp,
                                 'T_initial_C': T_initial_C, 'T_maxdrop_C': T_maxdrop_C,
                                 'dt_C': dt_C, 'P_bar': P_bar, 'phases': phases,
-                                'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset})
+                                'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset,
+                                'quiet_engine': quiet_engine})
                     
                     processes.append((p, q, groups[i]))
                     p.start()
 
-                if "MELTS" not in Model:
-                    for p, q, group in processes:
+                for p, q, group in processes:
+                    while True:
                         try:
-                            if time.time() - Start > timeout + 10:
-                                res = q.get(timeout = 10)
-                            else:
-                                res = q.get(timeout=timeout)
-                        except:
-                            if "MELTS" not in Model:
-                                print(f"Timeout warning reached. Calculation P_bar = {P_bar[group[0]]} will not be returned. Try increasing the timeout.")
-                            res = []
-                            idx_chunks = np.array([group[0]], dtype = int)
-                            mask = np.ones(len(P_bar), dtype=bool)
-                            mask[idx_chunks] = False
-                            P_bar = P_bar[mask]
+                            item = q.get(timeout=0.1)
 
-                        p.join(timeout = 2)
-                        p.terminate()
+                            run_index, step_i, data = item
+                            combined_results.setdefault(run_index, {})[step_i] = data
 
-                        if len(res) > 0.0:
-                            idx_chunks, results = res
-                            combined_results.update(results)
+                        except Empty:
+                            time.sleep(0.001)
+                            pass
 
-                        index_out = np.hstack((index_out, idx_chunks))
-                else:
-                    for p, q, group in processes:
-                        while True:
+                        # Timeout condition
+                        if time.time() - Start > timeout:
+                            print("Timeout — terminating process")
+                            p.terminate()
+                            break
+
+                    # If process finished and queue empty → break
+                        if not p.is_alive():
                             try:
-                                item = q.get(timeout=0.1)
-
-                                run_index, step_i, data = item
-                                combined_results.setdefault(run_index, {})[step_i] = data
-
+                                # Drain remaining items
+                                while True:
+                                    item = q.get_nowait()
+                                    run_index, step_i, data = item
+                                    combined_results.setdefault(run_index, {})[step_i] = data
                             except Empty:
                                 time.sleep(0.001)
                                 pass
+                            break
 
-                            # Timeout condition
-                            if time.time() - Start > timeout:
-                                print("Timeout — terminating process")
-                                p.terminate()
-                                break
-
-                        # If process finished and queue empty → break
-                            if not p.is_alive():
-                                try:
-                                    # Drain remaining items
-                                    while True:
-                                        item = q.get_nowait()
-                                        run_index, step_i, data = item
-                                        combined_results.setdefault(run_index, {})[step_i] = data
-                                except Empty:
-                                    time.sleep(0.001)
-                                    pass
-                                break
-
-                    index_out = np.array(list(combined_results.keys()))
+                index_out = np.array(list(combined_results.keys()))
 
         else:
             if "MELTS" in Model:
@@ -342,24 +287,11 @@ def mineral_cosaturation(Model="MELTSv1.0.2", cores=int(np.floor(multiprocessing
                     melts = MELTSdynamic(3)
                 elif Model == "MELTSv1.2.0":
                     melts = MELTSdynamic(4)
-            else:
-                from juliacall import Main as jl, convert as jlconvert
-                env_dir = Path.home() / ".petthermotools_julia_env"
-                jl_env_path = env_dir.as_posix()
-
-                jl.seval(f"""
-                    import Pkg
-                    Pkg.activate("{jl_env_path}")
-                    """)
-
-                jl.seval("using MAGEMinCalc")
-
-                comp_julia = jl.seval("Dict")(comp) 
-
             if "MELTS" in Model:
                 for i in range(len(P_bar)):
                     results = {}
-                    Results = path_MELTS(P_bar = P_bar[i],
+                    with (_quiet_engine_output() if quiet_engine else contextlib.nullcontext()):
+                        Results = path_MELTS(P_bar = P_bar[i],
                             Model=Model,
                             comp=comp,
                             T_maxdrop_C=T_maxdrop_C,
@@ -424,12 +356,6 @@ def mineral_cosaturation(Model="MELTSv1.0.2", cores=int(np.floor(multiprocessing
                     new_results = compile_results(Results)
 
                     full_results[f"Run {run}"] = new_results
-                # if results[run][-1]:
-                #     del results[run][-1]
-                # res = results[run]
-                # new_results = compile_results(res)
-
-                # full_results[f"Run {run}"] = new_results
 
         Results = stich(Res=full_results, multi=True, Model=Model)
     else:

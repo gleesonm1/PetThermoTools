@@ -13,10 +13,6 @@ import random
 import time
 import psutil
 
-# try:
-#    from petthermotools.nGibbs_bridge import _nGibbs_models, build_PT_vectors, nGibbsAPI, grid_sample
-# except: 
-#     pass # Installation hint in module __init__.py
 
 
 
@@ -70,7 +66,7 @@ def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar
                       Fe3Fet_Liq = None, H2O_Liq = None, CO2_Liq = None,
                       Fe3Fet_init = None, H2O_init = None, CO2_init = None,
                       fO2_buffer = None, fO2_offset = None, i_max = 15, grid = True, refine = None,
-                      Suppress = ['rutile', 'tridymite']):
+                      Suppress = ['rutile', 'tridymite'], quiet_engine = True):
     """
     Calculates a Phase Diagram (P-T grid) for a given bulk composition using MELTS or MAGEMinCalc 
     via parallel processing.
@@ -107,8 +103,13 @@ def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar
     grid : bool, optional, default True
         If True, a full 2D T-P meshgrid is created. If False, T\\_C and P\\_bar must be 1D arrays of the same length.
     refine : int, optional
-        The number of times to run `phaseDiagram_refine` after the initial calculation to improve 
+        The number of times to run `phaseDiagram_refine` after the initial calculation to improve
         phase boundary resolution.
+    quiet_engine : bool, default True
+        If True, redirects the MELTS engine's stdout/stderr to the null device for the duration of
+        each calculation, which can give a significant speed-up by avoiding large volumes of text
+        being written to the console/notebook. Set to False to inspect the raw engine output for
+        debugging purposes.
 
     Returns:
     --------
@@ -381,23 +382,40 @@ def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar
                         P_path_bar = P_path_bar[:499]
 
                 if "MELTS" in Model:
-                    if j % 3 == 0:
+                    if j % 3 == 0 and len(T_path_C) > 0:
                         ed = (5*np.random.random())
-                        T_path_C = T_path_C[round(len(T_path_C)/ed):]
-                        P_path_bar = P_path_bar[round(len(P_path_bar)/ed):]
+                        # ed can land arbitrarily close to 0 (np.random.random() can even
+                        # return exactly 0.0), which used to make len(...)/ed blow past the
+                        # array length (or divide by zero outright) and leave an empty slice.
+                        # Clamp the cut point into [0, len-1] so at least one point survives.
+                        cut = round(len(T_path_C)/ed) if ed > 0 else 0
+                        cut = min(cut, len(T_path_C)-1)
+                        T_path_C = T_path_C[cut:]
+                        P_path_bar = P_path_bar[cut:]
 
                 if j % 2 > 0:
                     T_path_C = np.flip(T_path_C)
                     P_path_bar = np.flip(P_path_bar)
 
+                # Once the number of still-missing points drops below `cores` (common in
+                # later retry rounds as the grid fills in), the fixed-size i*A:(i+1)*A share
+                # below leaves nothing for the higher-index workers -- T_path_C/P_path_bar end
+                # up empty, and path_MELTS's `T[0]` then raises IndexError. Skip spawning a
+                # worker with no points instead of crashing; the next round still has the full
+                # set of not-yet-calculated points to retry (nothing here is deleted from
+                # `flat`), so no points are silently dropped.
+                if len(T_path_C) == 0:
+                    continue
+
                 q = Queue()
-                p = Process(target = path, args = (q,i), kwargs = {'Model': Model, 'comp': comp, 
-                                                                'T_path_C': T_path_C, 
-                                                                'P_path_bar': P_path_bar, 
-                                                                'fO2_buffer': fO2_buffer, 
+                p = Process(target = path, args = (q,i), kwargs = {'Model': Model, 'comp': comp,
+                                                                'T_path_C': T_path_C,
+                                                                'P_path_bar': P_path_bar,
+                                                                'fO2_buffer': fO2_buffer,
                                                                 'fO2_offset': fO2_offset,
                                                                 'Suppress': Suppress,
-                                                                'find_liquidus': False})
+                                                                'find_liquidus': False,
+                                                                'quiet_engine': quiet_engine})
 
                 ps.append([p,q, i])
                 p.start()
@@ -554,12 +572,13 @@ def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar
     if refine is not None:
         for i in range(refine):
             Combined = phaseDiagram_refine(Data = Combined, Model = Model, bulk = bulk, Fe3Fet_Liq=Fe3Fet_init, cores = cores,
-                                        H2O_Liq=H2O_init, CO2_Liq=CO2_init, fO2_buffer=fO2_buffer, fO2_offset=fO2_offset, i_max = i_max)
+                                        H2O_Liq=H2O_init, CO2_Liq=CO2_init, fO2_buffer=fO2_buffer, fO2_offset=fO2_offset, i_max = i_max,
+                                        quiet_engine = quiet_engine)
 
     return Combined
 
-def phaseDiagram_refine(Data = None, Model = None, bulk = None, Fe3Fet_Liq = None, H2O_Liq = None, CO2_Liq = None, 
-                        fO2_buffer = None, fO2_offset = None, i_max = 15, cores = None):
+def phaseDiagram_refine(Data = None, Model = None, bulk = None, Fe3Fet_Liq = None, H2O_Liq = None, CO2_Liq = None,
+                        fO2_buffer = None, fO2_offset = None, i_max = 15, cores = None, quiet_engine = True):
     """
     Refines an existing Phase Diagram calculation by identifying and calculating new P-T points 
     near inferred phase boundaries.
@@ -585,12 +604,16 @@ def phaseDiagram_refine(Data = None, Model = None, bulk = None, Fe3Fet_Liq = Non
         Offset to the $\text{f}\text{O}_2$ buffer value (log units).
     i_max : int, optional, default 15
         The maximum number of attempts for the sub-call to `phaseDiagram_calc` to resolve new points.
+    quiet_engine : bool, default True
+        Passed through to the `phaseDiagram_calc` sub-call; if True, redirects the MELTS engine's
+        stdout/stderr to the null device for the duration of each calculation. Set to False to
+        inspect the raw engine output for debugging purposes.
 
     Returns:
     --------
     pandas.DataFrame
-        A consolidated DataFrame containing the original data, the newly interpolated data (for 
-        homogeneous regions), and the newly calculated data (for phase boundary regions), 
+        A consolidated DataFrame containing the original data, the newly interpolated data (for
+        homogeneous regions), and the newly calculated data (for phase boundary regions),
         providing a refined P-T phase diagram.
     """
     
@@ -625,8 +648,6 @@ def phaseDiagram_refine(Data = None, Model = None, bulk = None, Fe3Fet_Liq = Non
     flattened_P = np.round(P.flatten(), 2)
 
     # Check for matches and print them
-    matching_values_T = [value for value in flattened_T if value in unique_combined_T_C]
-    matching_values_P = [value for value in flattened_P if value in unique_combined_P_bar]
 
     matching_df = Data.copy()
     # matching_df = matching_df.drop(columns = 'Phase List')
@@ -740,9 +761,10 @@ def phaseDiagram_refine(Data = None, Model = None, bulk = None, Fe3Fet_Liq = Non
         matching_df = matching_df.reset_index(drop = True)
 
     New = phaseDiagram_calc(cores = cores,
-                            Model = Model, bulk = bulk, T_C = T_C, P_bar = P_bar, 
-                            Fe3Fet_init = Fe3Fet_Liq, H2O_init = H2O_Liq, CO2_init = CO2_Liq, 
-                            fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, i_max = i_max, grid = False)
+                            Model = Model, bulk = bulk, T_C = T_C, P_bar = P_bar,
+                            Fe3Fet_init = Fe3Fet_Liq, H2O_init = H2O_Liq, CO2_init = CO2_Liq,
+                            fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, i_max = i_max, grid = False,
+                            quiet_engine = quiet_engine)
     
 
     # A = New.values
@@ -759,27 +781,6 @@ def phaseDiagram_refine(Data = None, Model = None, bulk = None, Fe3Fet_Liq = Non
     out = out.dropna(subset = ['T_C'])
 
     return out
-
-def tidy_phaseDiagram(Data = None, Model = None, bulk = None, Fe3Fet_Liq = None, H2O_Liq = None, fO2_buffer = None, fO2_offset = None, i_max = 25):
-    Combined = Data.copy()
-    T_C = Combined.loc[np.where(Combined['h'] != 0.0)[0], 'T_C'].values
-    P_bar = Combined.loc[np.where(Combined['h'] != 0.0)[0], 'P_bar'].values
-
-    Combined = Combined.loc[np.where(Combined['h'] != 0.0)[0],:]
-    Combined = Combined.reset_index(drop = True)
-
-    New = phaseDiagram_calc(cores = 1, Model = Model, bulk = bulk, T_C = T_C, P_bar = P_bar, Fe3Fet_Liq = Fe3Fet_Liq, H2O_Liq = H2O_Liq, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, i_max = i_max, grid = False)
-
-    out = pd.concat([New,Combined])
-
-    out['T_C'] = np.round(out['T_C'], 2)
-    out['P_bar'] = np.round(out['P_bar'], 2)
-    out = out.sort_values(['T_C', 'P_bar'])
-    out = out.reset_index(drop = True)
-    out = out.dropna(subset = ['T_C'])
-
-    return out
-
 
 def animate_phaseDiagram(base_kwargs, frame_kwargs, P_units="bar", T_units="C",
                          label=True, colormap=None, interval=500):

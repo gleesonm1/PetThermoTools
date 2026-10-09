@@ -139,7 +139,6 @@
 "test_MAGEMinCalc": {"kind": "function", "package": "petthermotools", "origin": "own", "parameters": []},
 "test_alphaMELTS": {"kind": "function", "package": "petthermotools", "origin": "own", "parameters": ["path="]},
 "test_nGibbs": {"kind": "function", "package": "petthermotools", "origin": "own", "parameters": []},
-"tidy_phaseDiagram": {"kind": "function", "package": "petthermotools", "origin": "own", "parameters": ["Data=", "Model=", "bulk=", "Fe3Fet_Liq=", "H2O_Liq=", "fO2_buffer=", "fO2_offset=", "i_max="]},
 "time": {"kind": "module", "package": "time", "origin": "external"},
 "to_float": {"kind": "function", "package": "petthermotools", "origin": "own", "parameters": ["x"]},
 "tqdm": {"kind": "class", "package": "tqdm", "origin": "external"},

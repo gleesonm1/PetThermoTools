@@ -102,14 +102,6 @@ def harker(Results=None, x_axis="MgO", y_axis=("SiO2", "TiO2", "Al2O3", "Cr2O3",
                         break
 
 
-        # for r in (Results.keys() if isinstance(Results, dict) else [Results]):
-        #     Res = Results[r] if isinstance(Results, dict) else Results
-        #     if "All" in Res:
-        #         cols = Res["All"].columns
-        #         if (y + Names[phase]) in cols or y in cols:
-        #             if np.nanmax(Res["All"][y + Names[phase]]) > 0.0:
-        #                 found = True
-        #             break
 
         # Check data (dict or DataFrame)
         if not found and data is not None:
@@ -225,10 +217,6 @@ def harker(Results=None, x_axis="MgO", y_axis=("SiO2", "TiO2", "Al2O3", "Cr2O3",
 
         # ax.set(xlabel=labelling[x_var], ylabel=labelling[y_var])
 
-        # if xlim:
-        #     ax.set_xlim(xlim)
-        # if ylim:
-        #     ax.set_ylim(ylim)
 
     # -------------------- main plotting --------------------
     for i, row in enumerate(rows):
@@ -402,7 +390,6 @@ def residualT_plot(Results = None, P_bar = None, phases = None, H2O_Liq = None, 
                         X, Y = np.meshgrid(P_bar, H2O_Liq)
                         Y = Results['H2O_melt'][:,0,:].copy()
 
-                        Y_save = Y.copy()
 
                         a[i][j].scatter(X, Y, A+1, marker = 'o', facecolor = 'red')
                         a[i][j].scatter(Results['CurveMin'][m[i,j]]['P_min'], Results['CurveMin'][m[i,j]]['H2O_min'], Results['CurveMin'][m[i,j]]['Res_min'], marker = '^', facecolor = 'yellow')
@@ -764,119 +751,6 @@ def phase_plot(Results, x_axis = None, y_axis = None, cmap = "Reds", lines = Fal
 
     return fig_list[0], axes_list[0] if len(fig_list) == 1 else (fig_list, axes_list)
 
-    # if x_axis is not None and y_axis is not None:
-    #     raise ValueError("Please provide either a x-axis or y-axis parameter to plot the mass fractions against")
-    
-    # def makeplot(Mass, Res, title = None):
-    #     # --- Identify whether _cumsum columns exist ---
-    #     use_cumsum = any(col.endswith("_cumsum") for col in Mass.columns)
-    #     suffix = "_cumsum" if use_cumsum else ""
-
-    #     # --- Identify phases ---
-    #     exclude_cols = {'T_C', None}
-    #     phases = [
-    #         col.replace(suffix, "")
-    #         for col in Mass.columns
-    #         if col.endswith(suffix) or (not use_cumsum and not col.endswith("_cumsum") and col not in exclude_cols)
-    #     ]
-
-    #     # --- Handle liquid phase ---
-    #     liquid_name = None
-    #     for liq_name in ["liq1", "liquid1"]:
-    #         if liq_name in Mass.columns:
-    #             liquid_name = liq_name
-    #             if liq_name in phases:
-    #                 phases.remove(liq_name)
-    #             break  # use the first match
-
-    #     # --- Create dictionary priority (order in Names/Names_MM) ---
-    #     phase_priority = {}
-    #     for order_dict in [Names, Names_MM]:
-    #         for i, key in enumerate(order_dict.keys()):
-    #             phase_priority[key] = i  # smaller i = higher priority in tie
-
-    #     # --- Sort crystalline phases ---
-    #     phase_first_index = {}
-    #     for p in phases:
-    #         col = p + suffix if (use_cumsum and p + suffix in Mass.columns) else p
-    #         vals = Mass[col].values
-    #         nz = np.flatnonzero(vals > 0)
-    #         phase_first_index[p] = nz[0] if len(nz) > 0 else np.inf
-
-    #     def sort_key(p):
-    #         return (phase_first_index[p], phase_priority.get(p, 1e6))
-
-    #     phases = sorted(phases, key=sort_key)
-
-    #     # --- Append liquid last ---
-    #     if liquid_name is not None:
-    #         phases.append(liquid_name)
-
-    #     # --- Assign colors ---
-    #     c = cm.get_cmap(cmap, len(phases))
-    #     PhaseColors = {p: c(i) for i, p in enumerate(phases)}
-
-    #     # --- Setup figure ---
-    #     if y_axis == "P_bar":
-    #         f, a = plt.subplots(figsize=(3.5, 5))
-    #     else:
-    #         f, a = plt.subplots(figsize=(4, 3.5))
-
-    #     # --- Determine orientation ---
-    #     coord = Res[y_axis] if y_axis else Res[x_axis]
-    #     horizontal = y_axis is not None
-
-    #     Stop = np.zeros(len(Mass))
-    #     for p in phases:
-    #         col = p + suffix if (use_cumsum and p + suffix in Mass.columns) else p
-    #         vals = Mass[col].values
-
-    #         # --- Legend label mapping ---
-    #         label = Names.get(p, Names_MM.get(p, p))
-    #         if '_' in label:
-    #             label = label[1:]
-
-    #         if horizontal:
-    #             a.fill_betweenx(coord, Stop, Stop + vals, color=PhaseColors[p], alpha=0.75, lw=0, label=label)
-    #         else:
-    #             a.fill_between(coord, Stop, Stop + vals, color=PhaseColors[p], alpha=0.75, lw=0, label=label)
-    #         Stop += vals
-
-    #     # --- Labels ---
-    #     if horizontal:
-    #         if y_axis == "P_bar":
-    #             a.set_ylabel("Pressure (bar)")
-    #             a.invert_yaxis()
-    #         else:
-    #             a.set_ylabel(y_axis)
-    #         a.set_xlabel("Mass fraction")
-    #     else:
-    #         a.set_xlabel(x_axis)
-    #         a.set_ylabel("Mass fraction")
-
-    #     if title is not None:
-    #         a.set_title(title)
-
-    #     # --- Remove whitespace ---
-    #     a.margins(0)
-    #     f.tight_layout()
-
-    #     a.legend(loc="center left", bbox_to_anchor=(1.02, 0.5))
-
-    #     return f, a
-    # fig = []
-    # axes = []
-
-    # if 'All' in Results.keys():
-    #     fig, axes = makeplot(Results['mass_g'], Results['All'])
-    # else:
-    #     for val in Results.keys():
-    #         f, a = makeplot(Results[val]['mass_g'],
-    #                         Results[val]['All'],
-    #                         title = val)
-    #         fig.append(f)
-    #         axes.append(a)
-    # return fig, axes
 
 
 def plot_phaseDiagram_multi(Combined_data, P_units="bar", T_units="C", colormap='Reds', label=True):

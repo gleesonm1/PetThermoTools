@@ -1,3 +1,4 @@
+import contextlib
 import numpy as np
 import pandas as pd
 import copy
@@ -6,11 +7,45 @@ import psutil
 import multiprocessing
 import os
 import re
+import sys
 import platform
 import subprocess
 from petthermotools.Compositions import *
-from petthermotools.core_config import MAX_WORKERS
+from petthermotools.core_config import MAX_WORKERS, get_performance_core_count
 from scipy.optimize import nnls
+
+
+@contextlib.contextmanager
+def _quiet_engine_output():
+    """Redirect fd 1/2 (stdout/stderr) to the null device for the duration of the block.
+
+    The alphaMELTS C engine writes its progress text to stderr (fd 2) as many small, unbuffered
+    writes -- about 400 KB for one small run. Where that lands determines the cost: in a real
+    Jupyter/VS Code kernel every worker's fd 2 funnels through one shared pipe, measured ~40%
+    slower than letting it go to the null device instead (see MAINTENANCE_NOTES.md). Used by the
+    worker functions behind `multi_path`, `equilibrate_multi`, `findLiq_multi`, `findCO2_multi`,
+    `mineral_cosaturation` and the melting calculations, each via their own `quiet_engine` kwarg.
+
+    Restores the original descriptors in a `finally`, including on an exception, so a worker's own
+    traceback (printed via fd 2 by the normal Python/multiprocessing machinery) is never silently
+    lost -- only the engine's own writes, made *inside* this block, are discarded.
+    """
+    sys.stdout.flush()
+    sys.stderr.flush()
+    saved = {fd: os.dup(fd) for fd in (1, 2)}
+    devnull = os.open(os.devnull, os.O_WRONLY)
+    try:
+        os.dup2(devnull, 1)
+        os.dup2(devnull, 2)
+        yield
+    finally:
+        sys.stdout.flush()
+        sys.stderr.flush()
+        for fd, dup in saved.items():
+            os.dup2(dup, fd)
+            os.close(dup)
+        os.close(devnull)
+
 
 Names = {'liquid1': '_Liq',
         'olivine1': '_Ol',
@@ -167,121 +202,6 @@ CATION_N = {
     "CO2": 1,
 }
 
-# def calculate_retained_masses(
-#     results: dict, residual: list[str] = ["liquid"]
-# ) -> tuple[pd.DataFrame, pd.DataFrame]:
-#     mass_df = results["mass_g"].copy()
-#     mass_df = mass_df.loc[:, ~mass_df.columns.str.contains('_cumsum')]
-#     phase_dict = results
-
-#     retained_mass_df = pd.DataFrame(0.0, index=mass_df.index[:-1], columns=mass_df.columns)
-#     retention_fraction_df = pd.DataFrame(0.0, index=mass_df.index[:-1], columns=mass_df.columns)
-
-#     # Columns that are never oxide wt% data and must be dropped outright
-#     exclude_pattern = r"^(FeO|Fe2O3)(_|\b)|^Fe3.*Fet|^X_.*_mol$"
-
-#     def base_oxide_name(col: str) -> str:
-#         """Strip known per-phase suffixes (_phase, _Fl, etc.) to get a common oxide key."""
-#         return re.sub(r"_(phase|Fl|Liq|Sol)$", "", col, flags=re.IGNORECASE)
-
-#     # --- Build one common set of oxide basenames across ALL phases up front ---
-#     common_cols = []
-#     seen = set()
-#     for p in mass_df.columns:
-#         if p not in phase_dict:
-#             continue
-#         df = phase_dict[p]
-#         for c in df.columns:
-#             if re.search(exclude_pattern, c, re.IGNORECASE):
-#                 continue
-#             base = base_oxide_name(c)
-#             if base not in seen:
-#                 seen.add(base)
-#                 common_cols.append(base)
-#     num_oxides = len(common_cols)
-
-#     def clean_phase_comp(phase_name: str, step: int) -> np.ndarray:
-#         """Extracts compositional vector, remapped onto the common oxide basenames."""
-#         df = phase_dict[phase_name]
-#         cols_to_use = [
-#             c for c in df.columns
-#             if not re.search(exclude_pattern, c, re.IGNORECASE)
-#         ]
-#         s = df.loc[step, cols_to_use].fillna(0.0)
-#         # rename this phase's columns to the shared basenames (e.g. H2O_Fl -> H2O)
-#         s.index = [base_oxide_name(c) for c in s.index]
-#         # collapse any accidental duplicate basenames (shouldn't normally happen)
-#         s = s.groupby(level=0).sum()
-#         # align onto the full common set; anything this phase doesn't track -> 0
-#         s = s.reindex(common_cols, fill_value=0.0)
-#         return s.values / 100.0
-
-#     def is_fixed_phase(phase_name: str) -> bool:
-#         name_lower = phase_name.lower()
-#         if "liquid" in residual and name_lower.startswith("liquid"):
-#             return True
-#         if "fluid" in residual and name_lower.startswith("fluid"):
-#             return True
-#         if "solid" in residual and not (
-#             name_lower.startswith("liquid") or name_lower.startswith("fluid")
-#         ):
-#             return True
-#         return False
-
-#     for t in range(len(mass_df) - 1):
-#         active_phases = [p for p in mass_df.columns if p in phase_dict and mass_df.loc[t, p] > 0]
-#         if not active_phases:
-#             continue
-
-#         fixed_phases = [p for p in active_phases if is_fixed_phase(p)]
-#         variable_phases = [p for p in active_phases if not is_fixed_phase(p)]
-
-#         active_next_phases = [p for p in mass_df.columns if p in phase_dict and mass_df.loc[t + 1, p] > 0]
-#         if not active_next_phases:
-#             continue
-
-#         C_next = np.zeros(num_oxides)
-#         for p in active_next_phases:
-#             p_mass = mass_df.loc[t + 1, p]
-#             p_comp = clean_phase_comp(p, t + 1)
-#             C_next += p_mass * p_comp
-
-#         C_fixed = np.zeros(num_oxides)
-#         for p in fixed_phases:
-#             orig_mass = mass_df.loc[t, p]
-#             p_comp = clean_phase_comp(p, t)
-#             retained_mass_df.loc[t, p] = orig_mass
-#             retention_fraction_df.loc[t, p] = 100.0
-#             C_fixed += orig_mass * p_comp
-
-#         if not variable_phases:
-#             continue
-
-#         A_var_list = [clean_phase_comp(p, t) for p in variable_phases]
-#         A_var = np.array(A_var_list).T
-
-#         C_target = C_next - C_fixed
-#         C_target = np.maximum(0.0, C_target)
-
-#         A_var = np.nan_to_num(A_var, nan=0.0, posinf=0.0, neginf=0.0)
-#         C_target = np.nan_to_num(C_target, nan=0.0, posinf=0.0, neginf=0.0)
-
-#         valid_rows = (np.abs(A_var).sum(axis=1) > 0) | (C_target > 0)
-#         A_var_clean = A_var[valid_rows]
-#         C_target_clean = C_target[valid_rows]
-
-#         if A_var_clean.size == 0 or np.all(C_target_clean == 0):
-#             continue
-
-#         retained_masses, _ = nnls(A_var_clean, C_target_clean)
-
-#         for idx, p in enumerate(variable_phases):
-#             r_mass = retained_masses[idx]
-#             orig_mass = mass_df.loc[t, p]
-#             retained_mass_df.loc[t, p] = r_mass
-#             retention_fraction_df.loc[t, p] = (r_mass / orig_mass) * 100.0 if orig_mass > 0 else 0.0
-
-#     return retained_mass_df, retention_fraction_df
 
 def calculate_retained_masses(
     results: dict, residual: list[str] = ["liquid"]
@@ -738,8 +658,6 @@ def _ensure_julia_workers():
         _ensure_julia_ready()
         
         import sys
-        import os
-        from pathlib import Path
         from juliacall import Main as jl
         
         env_dir = Path.home() / ".petthermotools_julia_env"
@@ -796,7 +714,6 @@ def activate_petthermotools_env():
     Public API: Smart Activator.
     Pre-loads Mac/Linux. Defers Windows to protect MELTS multiprocessing.
     """
-    import os
     import sys
 
     # 1. Set environment variables FIRST
@@ -832,9 +749,7 @@ def _ensure_julia_ready():
     global _JULIA_INITIALIZED
     
     if not _JULIA_INITIALIZED:
-        import os
         import juliapkg
-        from pathlib import Path
         
         env_path = Path.home() / ".petthermotools_julia_env"
         
@@ -846,38 +761,6 @@ def _ensure_julia_ready():
             print("Julia environment detected.")
         else:
             print("Julia environment not available. Please run the `install_MAGEMinCalc()` function first.")
-
-def get_performance_core_count():
-    system = platform.system()
-    arch = platform.machine() # 'arm64' or 'x86_64'
-    
-    # --- macOS Logic ---
-    if system == "Darwin":
-        if arch == "arm64":
-            try:
-                # Apple Silicon: perflevel0 is Performance
-                cmd = ["sysctl", "-n", "hw.perflevel0.physicalcpu"]
-                return int(subprocess.check_output(cmd).decode().strip())
-            except Exception:
-                return psutil.cpu_count(logical=False) or 1
-        else:
-            # Intel Mac: No E-cores, so all physical cores are P-cores
-            return psutil.cpu_count(logical=False) or 1
-
-    # --- Windows & Linux Logic (Intel Hybrid/AMD) ---
-    lt = psutil.cpu_count(logical=True) or 1
-    lf = psutil.cpu_count(logical=False) or 1
-
-    if lt > lf:
-        # Heuristic: P-cores have Hyper-threading, E-cores don't.
-        # Math: P = logical - physical
-        p_cores = lt - lf
-        # If calculation seems wrong (e.g., E-cores > P-cores), 
-        # fallback to physical core count.
-        return p_cores if p_cores > 0 else lf
-    
-    # Fallback for non-hyperthreaded or non-hybrid CPUs
-    return lf
 
 def to_float(x):
     '''
@@ -1363,11 +1246,11 @@ def stich(Res, multi = None, Model = None, Frac_fluid = None, Frac_solid = None)
             Order = ['SiO2', 'TiO2', 'Al2O3', 'Cr2O3', 'FeOt', 'MgO', 'CaO', 'Na2O', 'K2O', 'H2O', 'Fe3Fet']
 
         if multi is None:
-            Results = stich_work(Results = Results, Order = Order, Model = "Holland", Frac_fluid = Frac_fluid, Frac_solid = Frac_solid)
+            Results = stich_work(Results = Results, Order = Order, Model = "Green2025", Frac_fluid = Frac_fluid, Frac_solid = Frac_solid)
         else:
             for Ind in Res:
                 Result = Res[Ind].copy()
-                Result = stich_work(Results = Result, Order = Order, Model = "Holland", Frac_fluid = Frac_fluid, Frac_solid = Frac_solid)
+                Result = stich_work(Results = Result, Order = Order, Model = "Green2025", Frac_fluid = Frac_fluid, Frac_solid = Frac_solid)
                 Results[Ind] = Result.copy()
 
     return Results
@@ -1394,7 +1277,6 @@ def stich_work(Results = None, Order = None, Model = "MELTS", Frac_fluid = None,
     Results : dict
         The processed and cleaned result dictionary.
     '''
-    Res = Results.copy()
     if "MELTS" in Model:    
         Results['Conditions'] = Results['Conditions'].rename(columns = {'temperature':'T_C'})
         Results['Conditions'] = Results['Conditions'].rename(columns = {'pressure':'P_bar'})
@@ -1593,19 +1475,6 @@ def stich_work(Results = None, Order = None, Model = "MELTS", Frac_fluid = None,
                 Results['fluid1'] = fluid.add_suffix('_Fl')
 
             Results['All'] = pd.concat([Results['All'], Results['fluid1']], axis = 1)
-        # for R in Results.keys():
-        #     if 'fluid' in R:
-        #         El = ['SiO2', 'TiO2', 'Al2O3', 'Cr2O3', 'FeO', 'Fe2O3', 'FeOt', 'Fe3Fet',
-        #                 'MnO','MgO', 'CaO', 'Na2O', 'K2O', 'P2O5']
-        #         num = R[-1]
-        #         if num == "1":
-        #             for e in El:
-        #                 Results[R] = Results[R].drop(columns = [e+"_Fl"])
-        #         else:
-        #             for e in El:
-        #                 Results[R] = Results[R].drop(columns = [e+"_Fl"+num])
-        #         Results[R].loc[:,'X_H2O_mol'] = (Results[R].loc[:, 'H2O']/18)/(Results[R].loc[:, 'H2O']/18 + Results[R].loc[:, 'CO2']/44)
-        #         Results[R].loc[:,'X_CO2_mol'] = 1 - Results[R].loc[:, 'X_H2O_mol']
 
     if Results['mass_g'].sum(axis = 1).iloc[-1] == 0.0:
         for R in Results:
