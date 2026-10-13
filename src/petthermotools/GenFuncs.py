@@ -792,6 +792,11 @@ def activate_petthermotools_env():
     that use the Distributed pool this also boots.
 
     Pre-loads Mac/Linux. Defers Windows to protect MELTS multiprocessing.
+
+    Note: the Julia environment this activates (`~/.petthermotools_julia_env`) is a
+    single, shared location used by every Python environment (conda envs, venvs, ...)
+    on this machine -- not one per environment. See `install_MAGEMinCalc`'s docstring
+    for the full explanation.
     """
     # Environment variables that must be set before juliacall's first
     # import (JULIA_PYTHONCALL_EXE, JULIA_CONDAPKG_BACKEND,
@@ -914,6 +919,45 @@ def _ensure_julia_ready():
             # Register the project and version requirement
             os.environ["JULIA_PROJECT"] = str(env_path)
             juliapkg.require_julia("~1.11")
+
+            # Pins Parsers to the 2.x line in juliacall's OWN private
+            # bootstrap project (one per Python environment, e.g.
+            # <env>/julia_env on Windows, ~/anaconda3/julia_env-style on
+            # Mac/conda) -- a DIFFERENT project from ~/.petthermotools_
+            # julia_env above, which install_MAGEMinCalc()/update_
+            # MAGEMinCalc() already pin separately. Both pins are needed:
+            # whichever project's Parsers loads FIRST in this process wins
+            # for the rest of its life (Julia can't load two versions of
+            # one package), and juliacall's own project always loads
+            # first. Without this, a transitive, unconstrained pull of
+            # Parsers in juliacall's project (via CondaPkg -> JSON) can
+            # resolve to Parsers 3.0.0 (the registry's "latest" since
+            # ~Oct 2026, which dropped the PosLen/xparse API MAGEMin_C's
+            # own hard-pinned CSV dependency still needs), permanently
+            # breaking `using MAGEMinCalc` for the rest of the process
+            # with `UndefVarError: xparse not defined in Parsers` /
+            # `PosLen not defined in WeakRefStrings` -- confirmed directly
+            # on a fresh Windows install (petthermotools 1.2.1,
+            # MAGEMinCalc 0.6.4): a clean `pip install` + `install_
+            # MAGEMinCalc()` + `activate_petthermotools_env()` failed this
+            # way every time until this exact fix (juliapkg.add then
+            # juliapkg.resolve) was applied by hand, after which
+            # activate_petthermotools_env() completed and findLiq_multi
+            # converged 10/10. A file-based alternative (a package-shipped
+            # juliapkg.json declaring the same constraint, which juliapkg
+            # also auto-discovers) was tried first and reverted: it only
+            # reaches users on an editable/source install, since `setup.py`
+            # ships `*.jl` files but not `*.json`, so it silently protected
+            # no released install at all. This code-based call has no such
+            # gap -- it's live source, not packaging-dependent data. Only
+            # ever changes anything the FIRST time a given Python
+            # environment's juliacall project doesn't already have this
+            # pin (juliapkg.resolve() is then a one-time cost for that
+            # environment, not a per-call one -- see juliapkg's own
+            # content-hash change-detection).
+            juliapkg.add("Parsers", "69de0a69-1ddd-5017-9359-2bf0b02dc9f0", version="2")
+            juliapkg.resolve()
+
             _JULIA_INITIALIZED = True
             print("Julia environment detected.")
         else:

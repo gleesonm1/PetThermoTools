@@ -108,6 +108,14 @@ def install_MAGEMinCalc():
     '''
     Establish a new julia environment that will be used for any MAGEMin calculations performed through PetThermoTools.
     MAGEMinCalc and MAGEMin_C are added to this new environment. No other installation steps are required.
+
+    Note: this Julia environment (`~/.petthermotools_julia_env`) is a single, shared
+    location used by every Python environment (conda envs, venvs, ...) on this machine --
+    not one per environment. Running this from a different Python environment than usual
+    affects all of them, not just the one you're running it from. If MAGEMinCalc there is
+    currently a local development checkout (e.g. you've been developing MAGEMinCalc itself
+    and switched it to track a local path), this replaces it with the published release and
+    prints a warning before doing so.
     '''
 
     print("If you encounter issues with the installation process please contact me at gleesonm@berkeley.edu")
@@ -119,6 +127,13 @@ def install_MAGEMinCalc():
 
     import juliapkg
     juliapkg.require_julia("~1.11")
+    # Pins Parsers to 2.x in juliacall's OWN private bootstrap project (one per
+    # Python environment) -- separate from this project's own Parsers pin
+    # below, and needed for the same reason: see _ensure_julia_ready's
+    # (GenFuncs.py) full explanation of this exact fix. Without it, a fresh
+    # install can fail outright the first time any MAGEMin call imports
+    # juliacall, confirmed directly on a clean Windows install.
+    juliapkg.add("Parsers", "69de0a69-1ddd-5017-9359-2bf0b02dc9f0", version="2")
     juliapkg.resolve()
 
     # try:
@@ -153,7 +168,29 @@ def install_MAGEMinCalc():
         if Sys.iswindows()
             ENV["JULIA_SSL_CA_ROOTS_PATH"] = ""
         end
-            
+
+        # ~/.petthermotools_julia_env is ONE Julia environment shared by every
+        # Python environment on this machine (conda envs, venvs, ...), not one
+        # per environment -- so replacing MAGEMinCalc here affects all of them,
+        # not just whichever one called this function. Warn (don't silently
+        # proceed) if it's currently a local development dependency
+        # (Pkg.develop'd, e.g. by a `Pkg.develop(path=...)` workflow while
+        # iterating on MAGEMinCalc itself) -- confirmed directly this can
+        # happen invisibly: running install_MAGEMinCalc() in a fresh/different
+        # Python environment silently re-pointed an existing Pkg.develop'd
+        # checkout back to the published release, for every environment.
+        for (_, pkg) in Pkg.dependencies()
+            if pkg.name == "MAGEMinCalc" && pkg.is_tracking_path
+                @warn "MAGEMinCalc in ~/.petthermotools_julia_env is currently " *
+                      "a local development dependency, tracking $(pkg.source). " *
+                      "This will replace it with the published v0.6.4 release " *
+                      "from GitHub. Since this Julia environment is shared by " *
+                      "EVERY Python environment on this machine (not just the " *
+                      "one running this function), that change affects all of " *
+                      "them, not only this one."
+            end
+        end
+
         # Install MAGEMinCalc and dependencies
         try
             Pkg.add(url="https://github.com/gleesonm1/MAGEMinCalc.git", rev="v0.6.4")
@@ -162,7 +199,7 @@ def install_MAGEMinCalc():
             ENV["JULIA_SSL_CA_ROOTS_PATH"] = ""
             Pkg.add(url="https://github.com/gleesonm1/MAGEMinCalc.git", rev="v0.6.4")
         end
-            
+
         Pkg.add(name = "MAGEMin_C", version="2.2.6")
 
         # Pin Parsers to the 2.x line. CSV 0.10.x (pulled in transitively via
@@ -182,6 +219,11 @@ def install_MAGEMinCalc():
 def update_MAGEMinCalc():
     '''
     Update MAGEMinCalc and MAGEMin_C to the latest versions that are compatible with PetThermoTools. It is useful to run this function once following each upgrade of PetThermoTools to ensure compatibility.
+
+    Note: this Julia environment (`~/.petthermotools_julia_env`) is a single, shared
+    location used by every Python environment on this machine -- see `install_MAGEMinCalc`'s
+    docstring for the full explanation, including what happens if MAGEMinCalc there is
+    currently a local development checkout.
     '''
     import os, sys
     os.environ["JULIA_PYTHONCALL_EXE"] = sys.executable
@@ -189,6 +231,9 @@ def update_MAGEMinCalc():
     
     import juliapkg
     juliapkg.require_julia("~1.11")
+    # Same fix as install_MAGEMinCalc() above and _ensure_julia_ready()
+    # (GenFuncs.py) -- see that function's full explanation.
+    juliapkg.add("Parsers", "69de0a69-1ddd-5017-9359-2bf0b02dc9f0", version="2")
     juliapkg.resolve()
 
     from juliacall import Main as jl
@@ -199,6 +244,21 @@ def update_MAGEMinCalc():
         import Pkg
         Pkg.activate("{jl_env_path}")
 
+        # ~/.petthermotools_julia_env is ONE Julia environment shared by every
+        # Python environment on this machine, not one per environment -- see
+        # install_MAGEMinCalc()'s identical check for the full explanation.
+        for (_, pkg) in Pkg.dependencies()
+            if pkg.name == "MAGEMinCalc" && pkg.is_tracking_path
+                @warn "MAGEMinCalc in ~/.petthermotools_julia_env is currently " *
+                      "a local development dependency, tracking $(pkg.source). " *
+                      "This will replace it with the published v0.6.4 release " *
+                      "from GitHub. Since this Julia environment is shared by " *
+                      "EVERY Python environment on this machine (not just the " *
+                      "one running this function), that change affects all of " *
+                      "them, not only this one."
+            end
+        end
+
         # Install MAGEMinCalc and dependencies
         try
             Pkg.add(url="https://github.com/gleesonm1/MAGEMinCalc.git", rev="v0.6.4")
@@ -207,7 +267,7 @@ def update_MAGEMinCalc():
             ENV["JULIA_SSL_CA_ROOTS_PATH"] = ""
             Pkg.add(url="https://github.com/gleesonm1/MAGEMinCalc.git", rev="v0.6.4")
         end
-             
+
         Pkg.add(name = "MAGEMin_C", version="2.2.6")
 
         # Pin Parsers to the 2.x line. CSV 0.10.x (pulled in transitively via
