@@ -2,7 +2,11 @@ import numpy as np
 import pandas as pd
 from petthermotools.GenFuncs import *
 from petthermotools.GenFuncs import _ensure_julia_ready
+from petthermotools.GenFuncs import _ensure_julia_main_ready
 from petthermotools.GenFuncs import _quiet_engine_output
+from petthermotools.GenFuncs import _permanently_quiet_engine_output
+from petthermotools.core_config import MAX_WORKERS, resolve_cores
+from petthermotools.mp_utils import run_tasks, TaskStatus
 import contextlib
 from petthermotools.Plotting import *
 from petthermotools.MELTS import *
@@ -13,6 +17,8 @@ from tqdm.auto import tqdm, trange
 from pathlib import Path
 import time
 import warnings
+import platform
+from typing import NamedTuple
 
 def supCalc(Model = "MELTSv1.0.2", bulk = None, phase = None, T_C = None, P_bar = None,
              Fe3Fet_Liq = None, H2O_Liq = None, CO2_Liq = None, fO2_buffer = None, fO2_offset = None,
@@ -69,7 +75,7 @@ def supCalc(Model = "MELTSv1.0.2", bulk = None, phase = None, T_C = None, P_bar 
 
     return Results
 
-def equilibrate_multi(cores = multiprocessing.cpu_count(), Model = "MELTSv1.0.2", bulk = None, T_C = None, P_bar = None, 
+def equilibrate_multi(cores = MAX_WORKERS, Model = "MELTSv1.0.2", bulk = None, T_C = None, P_bar = None,
                       Fe3Fet_init = None, H2O_init = None, CO2_init = None, 
                       Fe3Fet_Liq = None, H2O_Liq = None, CO2_Liq = None, fO2_buffer = None, fO2_offset = None,
                       timeout = 20, copy_columns = None, Suppress = None, Suppress_except = None, quiet_engine = True):
@@ -82,7 +88,7 @@ def equilibrate_multi(cores = multiprocessing.cpu_count(), Model = "MELTSv1.0.2"
 
     Parameters
     ----------
-    cores : int, default multiprocessing.cpu_count()
+    cores : int, default petthermotools.core_config.MAX_WORKERS
         Number of parallel processes to use.
     Model : str, default "MELTSv1.0.2"
         The thermodynamic model to use (e.g., "MELTSv1.0.2", "pMELTS", or MAGEMin variant).
@@ -107,7 +113,12 @@ def equilibrate_multi(cores = multiprocessing.cpu_count(), Model = "MELTSv1.0.2"
         Column name(s) from the original `bulk` DataFrame to include in the final output 
         DataFrame (e.g., 'Sample_ID').
     Suppress : list of str, optional
-        List of phases (e.g., ['rutile']) to exclude from the calculation (MELTS only).
+        List of phases (e.g., ['rutile']) to exclude from the calculation. Works for both
+        MELTS and MAGEMin (wired through MAGEMin_C's `remove_phases` for a MAGEMin Model).
+    Suppress_except : bool, optional
+        MELTS only -- treat `Suppress` as a whitelist instead of a blacklist. Has no MAGEMin
+        equivalent (MAGEMin's suppress is always a blacklist); raises ValueError if set for a
+        MAGEMin Model rather than being silently ignored.
     quiet_engine : bool, optional
         If True (default), the MELTS engine's own progress text is suppressed for speed. Set to
         False to see its raw per-step output for debugging.
@@ -119,6 +130,7 @@ def equilibrate_multi(cores = multiprocessing.cpu_count(), Model = "MELTSv1.0.2"
         It contains stitched results (Conditions, phase compositions, and phase properties)
         and, for MELTS, the affinity values (suffix `_affinity`).
     '''
+    cores = resolve_cores(cores)
 
     T_C = to_float(T_C)
     T_C = check_array(T_C)
@@ -395,13 +407,21 @@ def equilibrate_multi(cores = multiprocessing.cpu_count(), Model = "MELTSv1.0.2"
 
             return Output
     else:
-        # _ensure_julia_ready()
+        # Loads MAGEMinCalc onto the main embedded Julia session (and sets
+        # PYTHON_JULIACALL_THREADS before juliacall's first import, so
+        # multi_point_minimization's internal threading actually runs) if
+        # not already done -- previously this call was commented out, so
+        # this branch only worked if the user had separately called
+        # activate_petthermotools_env() first; see _ensure_julia_main_ready's
+        # own docstring for why this is the lightweight, no-Distributed path.
+        _ensure_julia_main_ready()
         from juliacall import Main as jl, convert as jlconvert
-        # env_dir = Path.home() / ".petthermotools_julia_env"
-        # jl_env_path = env_dir.as_posix()
 
-
-        # jl.seval("using MAGEMinCalc")
+        if Suppress_except is not None:
+            raise ValueError("Suppress_except has no MAGEMin equivalent -- MAGEMinCalc's "
+                              "suppress (wired through MAGEMin_C's remove_phases) is always "
+                              "a blacklist of phases to remove, not a whitelist. Use Suppress "
+                              "alone for a MAGEMin Model.")
 
         comp['O'] = comp['Fe3Fet_Liq']*(((159.69/2)/71.844)*comp['FeOt_Liq'] - comp['FeOt_Liq'])
 
@@ -432,7 +452,15 @@ def equilibrate_multi(cores = multiprocessing.cpu_count(), Model = "MELTSv1.0.2"
         if type(fO2_offset) == np.ndarray:
             fO2_offset = jl.seval("collect")(fO2_offset)
 
-        Output = jl.MAGEMinCalc.equilibrate(bulk = bulk_jl, P_kbar = P_kbar, T_C = T_C, fo2_buffer = fO2_buffer, fo2_offset = fO2_offset, Model = Model)
+        # A plain Python list arrives in juliacall as a lazy PyList{Any},
+        # which does NOT satisfy the Julia Union{Nothing, Vector{String}}
+        # type -- confirmed directly (TypeError at the call below without
+        # this). jl.seval("Vector{String}") is the actual Julia type/
+        # constructor; calling it forces element-wise str -> String
+        # conversion, not just a Vector{Any} wrapper.
+        suppress_jl = jl.seval("Vector{String}")(Suppress) if Suppress is not None else None
+
+        Output = jl.MAGEMinCalc.equilibrate(bulk = bulk_jl, P_kbar = P_kbar, T_C = T_C, fo2_buffer = fO2_buffer, fo2_offset = fO2_offset, Model = Model, suppress = suppress_jl)
         Output = dict(Output)
         Combined = stich(Output, Model = Model)
 
@@ -516,6 +544,15 @@ def multi_equilibrate(q, index, *, Model = None, comp = None,
     if len(index) > 150:
         index = index[:150]
     
+    if quiet_engine:
+        _permanently_quiet_engine_output()   # one-way; see that function's docstring for why
+        # the old `with _quiet_engine_output():` here is intentionally gone, not just unused --
+        # it let the engine's own buffered banner/status text leak through after the block
+        # restored the real fd 1/2, confirmed directly (see MAINTENANCE_NOTES.md). MUST run
+        # before MELTSdynamic() is constructed below -- that construction itself is what
+        # prints the "alphaMELTS for Python version..." banner, confirmed directly (a version
+        # of this fix that called this AFTER construction still leaked the banner).
+
     if "MELTS" in Model:
         from meltsdynamic import MELTSdynamic
 
@@ -527,34 +564,31 @@ def multi_equilibrate(q, index, *, Model = None, comp = None,
             melts = MELTSdynamic(3)
         elif Model == "MELTSv1.2.0":
             melts = MELTSdynamic(4)
+    for i in index:
+        melts = melts.addNodeAfter()
+        try:
+            if "MELTS" in Model:
+                if type(comp) == dict:
+                    Results, Affinity, tr = equilibrate_MELTS(Model = Model, comp = comp,
+                                            T_C = T_C[i], P_bar = P_bar[i],
+                                            fO2_buffer = fO2_buffer, fO2_offset = fO2_offset[i],
+                                            Suppress = Suppress, Suppress_except=Suppress_except, trail = trail, melts = melts)
+                else:
+                    Results, Affinity, tr = equilibrate_MELTS(Model = Model, comp = comp.loc[i].to_dict(),
+                                            T_C = T_C[i], P_bar = P_bar[i],
+                                            fO2_buffer = fO2_buffer, fO2_offset = fO2_offset[i],
+                                            Suppress = Suppress, Suppress_except=Suppress_except, trail = trail, melts = melts)
 
-    with (_quiet_engine_output() if quiet_engine else contextlib.nullcontext()):
-        for i in index:
-            melts = melts.addNodeAfter()
-            try:
-                if "MELTS" in Model:
-                    if type(comp) == dict:
-                        Results, Affinity, tr = equilibrate_MELTS(Model = Model, comp = comp,
-                                                T_C = T_C[i], P_bar = P_bar[i],
-                                                fO2_buffer = fO2_buffer, fO2_offset = fO2_offset[i],
-                                                Suppress = Suppress, Suppress_except=Suppress_except, trail = trail, melts = melts)
-                    else:
-                        Results, Affinity, tr = equilibrate_MELTS(Model = Model, comp = comp.loc[i].to_dict(),
-                                                T_C = T_C[i], P_bar = P_bar[i],
-                                                fO2_buffer = fO2_buffer, fO2_offset = fO2_offset[i],
-                                                Suppress = Suppress, Suppress_except=Suppress_except, trail = trail, melts = melts)
-
-                    idx.append(i)
-
-                    results[f"Run {i}"] = Results
-                    affinity[f"Run {i}"] = Affinity
-
-                    if tr is False:
-                        break
-            except:
                 idx.append(i)
-                break
 
+                results[f"Run {i}"] = Results
+                affinity[f"Run {i}"] = Affinity
+
+                if tr is False:
+                    break
+        except:
+            idx.append(i)
+            break
 
     q.put([idx, results, affinity])
     return
@@ -664,8 +698,7 @@ def findCO2_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P
     if type(T_initial_C) == int or type(T_initial_C) == float:
         T_initial_C = np.array([T_initial_C])
 
-    if cores is None:
-        cores = multiprocessing.cpu_count()
+    cores = resolve_cores(cores)
 
     if type(P_bar) == np.ndarray:
         A = len(P_bar)//cores
@@ -757,247 +790,6 @@ def findCO2_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P
 
     return T_Liq_C, H2O, CO2
 
-def findLiq_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P_bar = None,
-                  Fe3Fet_Liq = None, H2O_Liq = None, CO2_Liq = None, fO2_buffer = None, fO2_offset = None, Affinity = False,
-                  quiet_engine = True):
-    '''
-    Performs multiple liquidus (`findLiq`) calculations for a batch of 
-    compositions and/or P-fO2-H2O conditions in parallel using the MELTS dynamic library.
-
-    It manages the creation of parallel processes, distributes the workload, collects 
-    results from the queue, and compiles them into a clean DataFrame.
-
-    Note: Currently, liquidus calculation is only fully implemented for MELTS models.
-
-    Parameters:
-    ----------
-    cores : int, optional
-        Number of processes to run in parallel. If not provided, uses all available CPU cores.
-    Model : str, optional
-        The thermodynamic model to use (e.g., "MELTSv1.0.2", "pMELTS"). Default is "MELTSv1.0.2".
-    bulk : pd.DataFrame or dict
-        A DataFrame (preferred for multiple runs) or dictionary containing oxide compositions (wt%).
-    T_initial_C : float or np.ndarray, optional
-        Initial guess temperature in Celsius for the liquidus search. Default is $1300\\,^{\\circ}\text{C}$.
-    P_bar : float or np.ndarray
-        Pressure(s) in bars for the calculations. If an array, the length must match the number of compositions 
-        if `bulk` is a DataFrame.
-    Fe3Fet_Liq, H2O_Liq, CO2_Liq : float or np.ndarray, optional
-        Overrides for initial liquid redox state and volatile contents (wt%).
-    fO2_buffer : str, optional
-        Oxygen fugacity buffer ("FMQ" or "NNO").
-    fO2_offset : float or np.ndarray, optional
-        Offset from the specified $\text{f}\text{O}_2$ buffer (in log units).
-    Affinity : bool, optional, default False
-        If True, returns additional DataFrame containing chemical **affinity** (driving force for crystallization)
-        data for all phases.
-    quiet_engine : bool, optional
-        If True (default), the MELTS engine's own progress text is suppressed for speed. Set to
-        False to see its raw per-step output for debugging.
-
-    Returns:
-    ----------
-    Res : pd.DataFrame
-        DataFrame containing the calculated liquidus temperature ($T_{\text{Liq}}$), the liquidus phase, 
-        fluid saturation status, and the normalized melt composition at the liquidus.
-    Af_Combined : pd.DataFrame, optional
-        Returned only if `Affinity=True`. Contains chemical affinity data for the liquidus phase.
-    '''
-    comp = bulk.copy()
-
-    if fO2_buffer is not None:
-        if fO2_buffer != "NNO":
-            if fO2_buffer != "FMQ":
-                if fO2_buffer != "IW":
-                    raise Warning("fO2 buffer specified is not an allowed input. This argument can only be 'FMQ' or 'NNO' \n if you want to offset from these buffers use the 'fO2_offset' argument.")
-
-    if "MELTS" not in Model:
-        if fO2_buffer == "FMQ":
-            fO2_buffer = "qfm"
-        if fO2_buffer == "NNO":
-            fO2_buffer = "nno"
-
-    if Model is None:
-        Model = "MELTSv1.0.2"
-
-    # if comp is entered as a pandas series, it must first be converted to a dict
-    if type(comp) == pd.core.series.Series:
-        comp = comp.to_dict()
-
-    # ensure the bulk composition has the correct headers etc.
-    comp = comp_fix(Model = Model, comp = comp, Fe3Fet_Liq = Fe3Fet_Liq, H2O_Liq = H2O_Liq, CO2_Liq = CO2_Liq)
-
-    if type(comp) != dict or type(P_bar) == np.ndarray:
-        if type(comp) != dict:
-            T_Liq_C = np.zeros(len(comp['SiO2_Liq'].values))
-            T_in = np.zeros(len(comp['SiO2_Liq'].values))
-            index = np.zeros(len(comp['SiO2_Liq'].values)) - 1
-        else:
-            T_Liq_C = np.zeros(len(P_bar))
-            T_in = np.zeros(len(P_bar))
-            index = np.zeros(len(P_bar)) - 1
-    else:
-        T_Liq_C = 0
-        index = 0
-
-    if T_initial_C is None:
-        if type(comp) != dict or type(P_bar) == np.ndarray:
-            T_initial_C = estimate_t(comp=comp, P_bar=P_bar).values+60.0
-        else:
-            T_initial_C = np.array([estimate_t(comp=comp, P_bar=P_bar)+60.0])
-    else:
-        if type(T_initial_C) == int or type(T_initial_C) == float:
-            if type(comp) != dict or type(P_bar) == np.ndarray:
-                if type(comp) != dict:
-                    T_initial_C = np.zeros(len(comp['SiO2_Liq'].values)) + T_initial_C
-                else:
-                    T_initial_C = np.zeros(len(P_bar)) + T_initial_C
-            else:
-                T_initial_C = np.array([T_initial_C])
-            
-    if "MELTS" in Model:
-        if cores is None:
-            cores = multiprocessing.cpu_count()
-
-        if type(P_bar) == np.ndarray:
-            A = len(P_bar)//cores
-            B = len(P_bar) % cores
-        elif type(P_bar) != np.ndarray and type(comp) == dict:
-            A = 0
-            B = 1
-        else:
-            A = len(comp['SiO2_Liq'])//cores
-            B = len(comp['SiO2_Liq']) % cores
-
-        if A > 0:
-            Group = np.zeros(A) + cores
-            if B > 0:
-                Group = np.append(Group, B)
-        else:
-            Group = np.array([B])
-
-        qs = []
-        q = Queue()
-        for j in tqdm(range(len(Group))):
-            ps = []
-            for i in range(int(cores*j), int(cores*j + Group[j])):
-                if type(comp) == dict:
-                    if type(P_bar) == np.ndarray:
-                        p = Process(target = findLiq, args = (q, i), kwargs = {'Model': Model, 'P_bar': P_bar[i], 'T_initial_C': T_initial_C[i], 'comp': comp, 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset, 'Affinity': Affinity, 'quiet_engine': quiet_engine})
-                    else:
-                        p = Process(target = findLiq, args = (q, i), kwargs = {'Model': Model, 'P_bar': P_bar, 'T_initial_C': T_initial_C[i], 'comp': comp, 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset, 'Affinity': Affinity, 'quiet_engine': quiet_engine})
-                else:
-                    if type(P_bar) == np.ndarray:
-                        if len(comp['SiO2_Liq']) != len(P_bar):
-                            raise Warning("The length of your composition and pressure variables are different. Please correct this before running the code.")
-
-                        p = Process(target = findLiq, args = (q, i), kwargs = {'Model': Model, 'P_bar': P_bar[i], 'T_initial_C': T_initial_C[i], 'comp': comp.loc[i].to_dict(), 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset, 'Affinity': Affinity, 'quiet_engine': quiet_engine})
-                    else:
-                        p = Process(target = findLiq, args = (q, i), kwargs = {'Model': Model, 'P_bar': P_bar, 'T_initial_C': T_initial_C[i], 'comp': comp.loc[i].to_dict(), 'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset, 'Affinity': Affinity, 'quiet_engine': quiet_engine})
-
-                ps.append(p)
-                p.start()
-
-            TIMEOUT = 60
-
-            start = time.time()
-            for p in ps:
-                if time.time() - start < TIMEOUT - 10:
-                    try:
-                        ret = q.get(timeout = TIMEOUT - (time.time()-start) + 10)
-                    except:
-                        ret = []
-                else:
-                    try:
-                        ret = q.get(timeout = 10)
-                    except:
-                        ret = []
-
-                qs.append(ret)
-
-            TIMEOUT = 5
-            start = time.time()
-            for p in ps:
-                if p.is_alive():
-                    while time.time() - start <= TIMEOUT:
-                        if not p.is_alive():
-                            p.join()
-                            p.terminate()
-                            break
-                        time.sleep(.1)
-                    else:
-                        p.terminate()
-                        p.join(5)
-                else:
-                    p.join()
-                    p.terminate()
-
-        Affin = {}
-        if type(comp) != dict or type(P_bar) == np.ndarray:
-            Results = pd.DataFrame(data = np.zeros((len(T_Liq_C), 17)), columns = ['T_Liq_C', 'liquidus_phase', 'fluid_saturated', 'SiO2', 'TiO2', 'Al2O3', 'Fe2O3', 'Cr2O3', 'FeO', 'MnO', 'MgO', 'CaO', 'Na2O', 'K2O', 'P2O5', 'H2O', 'CO2'])
-            Results[['liquidus_phase', 'fluid_saturated']] = (Results[['liquidus_phase', 'fluid_saturated']].astype("string"))
-            for i in range(len(qs)):
-                if len(qs[i])>0:
-                    if Affinity is True:
-                        Res, Af, index = qs[i]
-                        Affin[str(index)] = Af
-                    else:
-                        Res, index = qs[i]
-
-                    Results.loc[index,:] = Res
-        else:
-            if Affinity is True:
-                Results, Affin, index = qs[0]
-            else:
-                Results, index = qs[0]
-
-        Res = comp_fix(Model = Model, comp = Results, keep_columns=True)
-        if type(Res) == dict:
-            Res = pd.DataFrame.from_dict(Res, orient = "index").T
-
-        Res = Res[['T_Liq_C', 'liquidus_phase', 'fluid_saturated', 
-        'SiO2_Liq', 'TiO2_Liq', 'Al2O3_Liq', 'Cr2O3_Liq', 'FeOt_Liq','MnO_Liq', 'MgO_Liq', 'CaO_Liq',
-        'Na2O_Liq', 'K2O_Liq', 'P2O5_Liq', 'H2O_Liq', 'CO2_Liq', 
-        'Fe3Fet_Liq', 'Fe2O3', 'FeO', ]]
-        
-        Res = Res.drop(columns = ['Fe2O3',  'FeO']) # 'Cr2O3',
-
-        if Affinity is True:
-            # Affinity combined
-            int_keys = list(map(int, Affin.keys()))
-
-            # Determine the size of the resulting DataFrame
-            max_index = max(int_keys)
-
-            # Initialize an empty list to maintain column order
-            all_columns = []
-            seen_columns = set()
-
-            for d in Affin:
-                for col in Affin[d]:
-                    if col not in seen_columns:
-                        all_columns.append(col)
-                        seen_columns.add(col)
-                
-                Affin[d] = pd.Series(Affin[d])
-
-            Af_Combined = pd.DataFrame(np.nan, index=range(max_index + 1), columns=all_columns)
-
-            # Populate the result DataFrame
-            for d in Affin:
-                try:
-                    df = Affin[d].to_frame().transpose()
-                    Af_Combined.loc[int(d)] = df.iloc[0]
-                except:
-                    continue
-            
-            return Res, Af_Combined
-        else:
-            return Res
-    else:
-        # T_Liq_C = MM.findLiq_multi(P_bar = P_bar, T_initial_C = T_initial_C, comp = comp)
-        return "find liquidus calculations are currently not available through the MAGEMin models. This is an issue I'm working to fix as soon as possible."
-
 # TODO(phase 1/2): worker for findCO2_multi; see the note above that function.
 def findCO2(q, index, *, Model = None, P_bar = None, T_initial_C = None, comp = None, fO2_buffer = None, fO2_offset = None, quiet_engine = True):
     '''
@@ -1037,74 +829,702 @@ def findCO2(q, index, *, Model = None, P_bar = None, T_initial_C = None, comp = 
 
     if "MELTS" in Model:
         #try:
-        with (_quiet_engine_output() if quiet_engine else contextlib.nullcontext()):
-            T_Liq_C, H2O_Melt, CO2_Melt = findCO2_MELTS(P_bar = P_bar, Model = Model, T_C = T_initial_C, comp = comp, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset)
+        if quiet_engine:
+            _permanently_quiet_engine_output()   # one-way; see that function's own docstring
+        T_Liq_C, H2O_Melt, CO2_Melt = findCO2_MELTS(P_bar = P_bar, Model = Model, T_C = T_initial_C, comp = comp, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset)
         q.put([T_Liq_C, H2O_Melt, CO2_Melt, index])
         return
         #except:
         #    q.put([T_Liq_C, H2O_Melt, CO2_Melt, index])
         #    return
 
-def findLiq(q, index,*, Model = None, P_bar = None, T_initial_C = None, comp = None, fO2_buffer = None, fO2_offset = None, Affinity = False, quiet_engine = True):
+class _RowTask(NamedTuple):
+    """
+    One row's own data for findLiq_multi, carried through
+    mp_utils.run_tasks's `indices` (pickled ONCE per task, when it goes
+    onto the task queue) instead of through `task_kwargs` (a dict shared
+    by -- and re-pickled/re-transmitted to -- EVERY worker spawn).
+
+    This replaced passing the FULL batch's P_bar/T_initial_C/comp arrays
+    through task_kwargs, which worked fine at small N but was directly
+    confirmed (via instrumented p.start() timing, isolated from any other
+    load) to make every single spawn progressively, severely slower as N
+    grows -- ~0.01s/spawn at N=40, ~0.05-0.2s at N=300, ~1.1-1.5s at
+    N=1000 -- because `max_tasks_per_worker`'s default of 1 means EVERY
+    task pays that cost once. At N=1000 that alone adds roughly
+    1000 * 1.2s / cores of pure spawn overhead, on top of the actual MELTS
+    computation, and compounds with a separate mp_utils-level race
+    (see mp_utils.run_tasks's drain-loop comment) whose own cost scales
+    with how expensive a wasted spawn is -- together these fully explained
+    a batch that should take minutes instead projecting multiple hours.
+    Giving each task only its own row fixes this at the root: a `_RowTask`
+    is a few small scalars and one composition dict, not an O(n)-sized
+    structure, so spawn cost no longer depends on how many rows are in the
+    whole batch.
+    """
+    row_id: int
+    P_bar: float
+    T_initial_C: float
+    comp: dict
+
+    def __hash__(self):
+        # mp_utils.run_tasks uses `indices` entries as dict keys / set
+        # members (attempts, outstanding, results, tracked_by_pid lookups),
+        # which requires hashability -- a plain NamedTuple's default hash
+        # would hash every field, including `comp` (a dict, unhashable:
+        # confirmed live, `TypeError: unhashable type: 'dict'` straight out
+        # of mp_utils's `{i: 1 for i in indices}`). `row_id` alone is
+        # already a unique identity for a task within one run_tasks() call
+        # (never duplicated within a single round), so hashing/comparing on
+        # it alone is correct, not just a workaround.
+        return hash(self.row_id)
+
+    def __eq__(self, other):
+        return isinstance(other, _RowTask) and self.row_id == other.row_id
+
+
+_cached_melts = None         # per-worker-process cache of the last SUCCESSFULLY-used
+_cached_melts_model = None   # MELTSdynamic engine, see _findLiq_task's docstring.
+
+
+def _findLiq_task(q, task, *, Model = None,
+                   fO2_buffer = None, fO2_offset = None, Affinity = False, quiet_engine = True):
+    """
+    task_fn for findLiq_multi's mp_utils.run_tasks() call (see that
+    function's docstring for the full picture, and `_RowTask`'s docstring
+    for why `task` carries only this one row's own data instead of indexing
+    into full-batch arrays passed via task_kwargs).
+
+    Deliberately does NOT reuse findLiq()'s body: findLiq() itself, and
+    findLiq_MELTS() one level deeper, both swallow a non-converging search
+    with a bare `except:` and return an empty `{}` -- completely normal
+    behaviour for "the liquidus search didn't converge", not an exceptional
+    one, so it does NOT raise on the common failure path (confirmed by
+    reading findLiq_MELTS: every non-success branch does `return Results`
+    where `Results = {}` from the top, and `Results['T_Liq_C'] = ...` is
+    only ever set on the genuine success path). Reporting that as "OK"
+    here would defeat mp_utils.run_tasks's CRASHED detection and this
+    function's own "retry at a higher starting T" bookkeeping, so this
+    wrapper calls findLiq_MELTS directly and explicitly raises when it
+    comes back without a liquidus temperature.
+
+    Engine reuse: when this worker runs a SECOND (or later) task --
+    relevant only once max_tasks_per_worker > 1 -- this reuses the SAME
+    MELTSdynamic engine via `melts.addNodeAfter()`, the same pattern
+    multi_path/saturation_pressure already use, instead of (what this used
+    to do) constructing a brand-new MELTSdynamic() from scratch every
+    single call. The difference matters: a brand-new MELTSdynamic()
+    reinitialises the whole C library/engine (loading thermodynamic data
+    tables etc.), not just cheap Python-level state, so discarding and
+    rebuilding it on every task was paying that cost repeatedly even when
+    the whole point of reusing the worker PROCESS was to avoid repeated
+    initialisation. Confirmed safe to do here specifically because
+    _worker_loop retires (exits) this process immediately on ANY exception
+    -- so by the time a second task ever runs in this same process, the
+    FIRST one must have succeeded; this cache is only ever read (and only
+    ever written) on the success path, so reuse here is never reached
+    after an incomplete/failed search, which is the one case confirmed
+    UNSAFE earlier this session (a real crash: `TypeError: '>' not
+    supported between instances of 'MELTSstatus' and 'int'`, from reusing
+    a fresh MELTSdynamic right after a give-up). Reuse after success is
+    the one case separately confirmed SAFE (three successive successful
+    calculations in one process, all converging correctly).
+    """
+    global _cached_melts, _cached_melts_model
+
+    if quiet_engine:
+        _permanently_quiet_engine_output()   # one-way; see that function's docstring for why
+        # the old `with _quiet_engine_output():` here is intentionally gone, not just unused.
+
+    melts = None
+    if _cached_melts is not None and _cached_melts_model == Model:
+        melts = _cached_melts.addNodeAfter()
+
+    if Affinity is True:
+        Results, Affin, melts = findLiq_MELTS(P_bar = task.P_bar, Model = Model, T_C_init = task.T_initial_C,
+                                               comp = task.comp, melts = melts, fO2_buffer = fO2_buffer,
+                                               fO2_offset = fO2_offset, Affinity = True, bulk_return = True)
+    else:
+        Results, melts = findLiq_MELTS(P_bar = task.P_bar, Model = Model, T_C_init = task.T_initial_C,
+                                        comp = task.comp, melts = melts, fO2_buffer = fO2_buffer,
+                                        fO2_offset = fO2_offset, Affinity = False, bulk_return = True)
+        Affin = None
+
+    if not Results or 'T_Liq_C' not in Results:
+        raise RuntimeError(f"findLiq_MELTS did not converge at T_init={task.T_initial_C:.1f} C (empty result)")
+
+    # Only cache a melts object that just produced a genuine success -- see
+    # this function's own docstring for why that is also the only time
+    # this cache is ever read.
+    _cached_melts = melts
+    _cached_melts_model = Model
+
+    if Affinity is True:
+        q.put([Results, Affin, task.row_id])
+    else:
+        q.put([Results, task.row_id])
+
+
+def findLiq_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P_bar = None,
+                     Fe3Fet_Liq = None, H2O_Liq = None, CO2_Liq = None, fO2_buffer = None, fO2_offset = None,
+                     Affinity = False, quiet_engine = True,
+                     timeout = None, retry_T_offset_C = 25.0, max_domain_retries = 1,
+                     max_tasks_per_worker = 1, retry_timeout_multiplier = 1.5,
+                     retry_max_tasks_per_worker = 1, Suppress = None):
     '''
-    Worker function that executes the liquidus temperature search (`findLiq_MELTS`) for a single 
-    composition at a specified pressure.
+    Performs multiple liquidus calculations for a batch of compositions
+    and/or P-fO2-H2O conditions, using either MELTS (findLiq_MELTS, via the
+    persistent-worker supervisor in mp_utils.py) or MAGEMin
+    (MAGEMinCalc.findLiq_julia, via the main embedded Julia session) --
+    chosen from `Model` exactly as the rest of the package does ("MELTS" in
+    Model -> MELTS; otherwise MAGEMin). The two engines share this
+    function's input normalisation and 17-column output shape, but their
+    search algorithms, parallelism, and several kwargs below are specific
+    to one engine -- see the MAGEMin-specific caveats under `cores`,
+    `timeout`, the `retry_*`/`max_tasks_per_worker` family, `quiet_engine`
+    and `Affinity`.
 
-    This function is executed in a separate process by `findLiq_multi`.
+    This MELTS implementation replaced an earlier one (one fresh process per group per
+    round, round-barrier scheduling, no per-task timeout recovery) after a
+    full correctness/performance comparison on the real LiquidusTest_all
+    dataset (2048 rows, MAINTENANCE_NOTES.md 2026-10-10): this version is
+    2.6x faster (635.6s vs 1678.8s), converges on strictly more rows (2044
+    vs 2032 -- zero regressions), and was independently verified more
+    accurate on every row where the two disagreed (checked by equilibrating
+    at each reported T_Liq_C and confirming the liquid is actually near-
+    liquidus -- near-zero solid fraction -- whereas the old implementation's
+    disagreeing answers showed exactly zero crystallisation even several
+    degrees below their own reported "liquidus", i.e. nowhere near a real
+    phase boundary). Behaviourally:
 
-    Parameters:
+    1. A hung calculation (the C engine stuck inside calcEquilibriumState)
+       is killed after `timeout` seconds, but a worker that finishes early
+       immediately picks up the next not-yet-attempted composition instead
+       of idling until every worker in a fixed-size round has finished or
+       been killed -- a persistent pool of workers pulls from a shared
+       queue, rather than "spawn `cores` fresh processes, wait for the
+       slowest of them, repeat".
+    2. A calculation that fails -- either killed on timeout, or
+       findLiq_MELTS simply not converging, which (see _findLiq_task's
+       docstring) is the common, "successful-looking" failure mode, not an
+       exception -- is NOT retried immediately/individually. Every
+       still-pending index runs as one batch per round (one `run_tasks`
+       call per round, which blocks until that whole batch is done); only
+       once a round finishes are its failures collected and handed to the
+       NEXT round together. Each domain-retry round changes THREE things
+       at once, not just the starting temperature: `T_initial_C +
+       retry_T_offset_C` (compounding each round), the per-task `timeout`
+       multiplied by `retry_timeout_multiplier` (compounding each round --
+       a calculation that timed out may simply have needed more time, not
+       a different guess), and `max_tasks_per_worker` forced down to
+       `retry_max_tasks_per_worker` (full process isolation -- a
+       calculation that already failed once is more likely to be
+       genuinely slow/pathological, not just squeezed by contention, so
+       it gets a process with no neighbours competing for the same cores).
+       Up to `max_domain_retries` rounds. This is a liquidus-search-
+       specific heuristic, unrelated to mp_utils.run_tasks's own (disabled
+       here, max_retries=0) same-conditions retry.
+    3. A worker CAN run up to `max_tasks_per_worker` SUCCESSFUL calculations
+       before it is retired and replaced, reusing the same MELTS engine via
+       `melts.addNodeAfter()` rather than constructing a fresh one -- in
+       principle avoiding both the process-spawn cost AND the engine-init
+       cost of starting a new process per row. Both are confirmed safe for
+       successive successful calculations (bit-identical results to a
+       fresh process/engine) and a calculation that fails always retires
+       its worker immediately regardless of this setting, so a bad engine
+       state can never carry into the next calculation. HOWEVER: the
+       default is 1 (no reuse), because at real batch scale reuse measured
+       SLOWER and LESS reliable, not faster -- see `max_tasks_per_worker`'s
+       own entry below for the measurements, and MAINTENANCE_NOTES.md: raw
+       engine construction itself is cheap (~1.3ms), so the real driver is
+       CPU contention under sustained multi-core saturation, which reuse
+       makes worse, not process/engine-init overhead, which reuse avoids.
+       The knob is kept (not removed) for anyone on lightly-loaded/high-
+       core-count hardware where the isolated-test benefit might actually
+       materialise, but it is not the default trade-off for this workload.
+    4. With quiet_engine=True (the default), a worker's stdout/stderr are
+       redirected to the null device ONCE and never restored, rather than
+       per-call -- confirmed necessary: the MELTS engine buffers its own
+       stderr output internally and only flushes it at process exit (or
+       when a SIGTERM-triggered exit runs), which is AFTER a narrow
+       per-call redirect would already have put the real fd 2 back. That
+       delayed flush is also what let "Caught SIGTERM: a termination
+       request was sent to the program" through on every timeout-kill --
+       both are now fully suppressed (confirmed against 5/5 real SIGTERM
+       kills mid-calculation, zero leaked bytes). A tqdm progress bar
+       tracks overall completion (one tick per row that converges, or that
+       permanently fails after exhausting its domain retries) independent
+       of this -- the bar uses the parent process's own stdout, which is
+       never touched by the above.
+    5. Each task carries only its own row's data (a `_RowTask`: row id,
+       P_bar, T_initial_C, comp), not the whole batch, passed through
+       mp_utils.run_tasks's `indices` (pickled once per task) rather than
+       its shared `task_kwargs` (which would otherwise be re-pickled and
+       re-sent to every single worker spawn). Confirmed necessary: with the
+       whole batch in task_kwargs, measured spawn cost was ~0.01s at N=40
+       but ~1.1-1.5s at N=1000 -- a batch that should take minutes was
+       projecting multiple hours, purely from this. See `_RowTask`'s own
+       docstring for the full measurement and the mp_utils.run_tasks
+       drain-loop comment for a related race this also made much cheaper
+       (a worker that already succeeded could have its exit misread as a
+       crash before its success message was drained; harmless to the
+       returned data, since that goes through on_progress separately, but
+       it wasted a respawn every time -- cheap at small N, expensive at
+       large N before this fix).
+
+    Parameters
     ----------
-    q : multiprocessing.Queue
-        Output queue for placing the results.
-    index : int
-        Index of the calculation (row number) in the master code for result indexing.
+    cores : int, optional
+        MELTS only. Number of worker processes to run concurrently. If not
+        provided, uses all available CPU cores. Meaningless for MAGEMin
+        (findLiq_julia is one Julia call, internally thread-parallel across
+        every row from a single shared context -- no per-row processes).
     Model : str, optional
-        Thermodynamic model (e.g., "MELTSv1.0.2").
-    P_bar : float
-        Pressure of the calculation (bar).
-    T_initial_C : float
-        Initial 'guess' temperature in Celsius for the liquidus search.
-    comp : dict
-        Dictionary containing the oxide composition (wt%) for the calculation.
+        The thermodynamic model to use: a MELTS variant (e.g.,
+        "MELTSv1.0.2", "pMELTS") or a MAGEMin variant ("Green2025" or
+        "Weller2024"), matching the rest of the package's "MELTS" in Model
+        convention. Default is "MELTSv1.0.2".
+    bulk : pd.DataFrame or dict
+        A DataFrame (preferred for multiple runs) or dictionary containing
+        oxide compositions (wt%).
+    T_initial_C : float or np.ndarray, optional
+        Initial guess temperature in Celsius for the liquidus search.
+        Estimated from the composition (Putirka 2008 eq22, +60 C) if not
+        given.
+    P_bar : float or np.ndarray
+        Pressure(s) in bars for the calculations. If an array, the length
+        must match the number of compositions if `bulk` is a DataFrame.
+    Fe3Fet_Liq, H2O_Liq, CO2_Liq : float or np.ndarray, optional
+        Overrides for initial liquid redox state and volatile contents (wt%).
     fO2_buffer : str, optional
-        Oxygen fugacity buffer.
-    fO2_offset : float, optional
-        Offset from the specified $\text{f}\text{O}_2$ buffer (log units).
+        Oxygen fugacity buffer ("FMQ", "NNO" or "IW").
+    fO2_offset : float or np.ndarray, optional
+        Offset from the specified fO2 buffer (in log units).
+    Suppress : list of str, optional
+        MAGEMin only (findLiq_MELTS has no suppress support, unlike
+        equilibrate_MELTS -- raises ValueError if set for a MELTS Model
+        rather than being silently ignored). List of phases (e.g.,
+        ["ol"]) to exclude from the liquidus search, wired through
+        MAGEMin_C's `remove_phases`.
     Affinity : bool, optional, default False
-        If True, calculates and returns the chemical affinity of the liquidus phase.
+        MELTS only. If True, returns an additional DataFrame containing
+        chemical affinity (driving force for crystallisation) data for all
+        phases. Raises ValueError if True for a MAGEMin Model -- there is
+        no MAGEMin equivalent, so this is never silently ignored.
+    quiet_engine : bool, default True
+        MELTS only. If True, the MELTS engine's own progress text is
+        permanently redirected to the null device for each worker process
+        (see behavioural note 4 above). Set to False to see its raw
+        per-step output for debugging. Meaningless for MAGEMin.
+    timeout : float or None, default None
+        MELTS only (bounds the mp_utils worker supervisor; a MAGEMin call
+        has no comparable open-ended failure mode to bound -- it's one
+        deterministic, bounded bracket+bisection search, see
+        findLiq_julia's own docstring in Crystallisation.jl).
+        Per-calculation budget in seconds for the FIRST attempt, before a
+        stuck worker is killed. None (the default) resolves from the
+        platform: 20s on macOS/Linux, 45s on Windows (Windows's process
+        spawn and MELTS-engine start-up are both measurably slower -- see
+        the Round 5-7 Windows benchmarking in MAINTENANCE_NOTES.md; Linux
+        is defaulted the same as macOS since both are fork/spawn-cheap
+        POSIX platforms and no Linux measurement was taken specifically --
+        flag if that's wrong for your hardware). Each domain-retry round's
+        timeout is the previous round's multiplied by
+        `retry_timeout_multiplier`.
+    retry_T_offset_C : float, default 25.0
+        MELTS only. Added to a failed calculation's starting temperature
+        for each subsequent domain-retry round (compounding: round 2 is
+        +25, round 3 is +50, ...).
+    max_domain_retries : int, default 1
+        MELTS only. How many extra rounds (T_initial_C + retry_T_offset_C, timeout
+        * retry_timeout_multiplier, max_tasks_per_worker forced to
+        retry_max_tasks_per_worker -- all three change together, not just
+        temperature) to attempt for calculations still failing. Every
+        round is a single batch: one `run_tasks` call over everything
+        still pending, which blocks until that whole round is done; only
+        the round's failures (collected together, not retried one at a
+        time as they occur) are carried into the next round.
+    max_tasks_per_worker : int, default 1
+        MELTS only. How many successful calculations one worker process runs in the
+        FIRST round before it is retired and replaced with a fresh one --
+        in principle, the knob that trades process-spawn/engine-init
+        overhead against timeout risk under CPU contention. Raising it
+        reduces how often a new process has to be started, and in total
+        isolation (cores=1, zero contention, 10 identical fast
+        compositions) reuse measured a real 7.2x speedup (max=1 11.4s vs
+        max=10 1.6s). That benefit does NOT survive real multi-core
+        batches, though -- measured directly on a real 150-row batch
+        (retries disabled, so this is round-0-only, with no retry-round
+        cost mixed in):
 
-    Returns:
-    ----------
-    None
-        The function returns results via `q.put()`:
-        - If `Affinity=True`: `q.put([Results, Affin, index])`
-        - If `Affinity=False`: `q.put([Results, index])`
-        where `Results` is a dictionary/series of liquidus properties and `Affin` is the affinity data.
+          cores=8:  max=1 -> 38.4s, 150/150 converged
+                    max=2 -> 56.3s, 140/150 converged
+                    max=3 -> 56.1s, 136/150 converged
+          cores=4:  max=1 -> 61.0s, 150/150 converged
+                    max=2 -> 66.7s, 146/150 converged
+                    max=3 -> 59.1s, 142/150 converged
+                    max=5 -> 68.7s, 139/150 converged
+                    max=10-> 70.9s, 138/150 converged
+
+        At both core counts max=1 is both the fastest AND the most
+        reliable; every level of reuse above 1 is slower AND loses
+        conversions (to contention-driven timeouts -- confirmed spurious,
+        not a correctness issue: most re-converge fine on their own, and
+        WHICH rows fail changes when timeout is raised, the signature of
+        contention rather than a genuinely bad composition). Reducing
+        cores does not create a sweet spot for reuse either: it just makes
+        every setting slower across the board. So although the parameter
+        is kept (for anyone on hardware with enough headroom that
+        contention stops dominating), 1 -- i.e. no reuse -- is the measured
+        best default for real batches. Only applies to the first round --
+        every domain-retry round uses `retry_max_tasks_per_worker` instead,
+        regardless of this value.
+    retry_timeout_multiplier : float, default 1.5
+        MELTS only. Each domain-retry round's `timeout` is the previous round's
+        multiplied by this (compounding -- round 2 is 1.5x the first
+        round's timeout, round 3 is 2.25x, ...).
+    retry_max_tasks_per_worker : int, default 1
+        MELTS only. `max_tasks_per_worker` forced for every domain-retry round,
+        regardless of the first round's setting. A calculation that's
+        already failed once is more likely to be genuinely slow or
+        pathological rather than just squeezed by contention, so its
+        retry attempt(s) get a process with no neighbours competing for
+        the same cores -- the safety margin that matters most for exactly
+        the compositions most likely to need it.
+
+    Returns
+    -------
+    Res : pd.DataFrame
+        DataFrame containing the calculated liquidus temperature
+        (T_Liq_C), the liquidus phase, fluid saturation status, and the
+        normalised melt composition at the liquidus. Rows that never
+        converged even after all retries are NaN.
+    Af_Combined : pd.DataFrame, optional
+        Returned only if `Affinity=True`. Contains chemical affinity data
+        for the liquidus phase.
     '''
+    if timeout is None:
+        timeout = 45.0 if platform.system() == "Windows" else 20.0
 
+    comp = bulk.copy()
 
-    
+    if fO2_buffer is not None:
+        if fO2_buffer not in ("NNO", "FMQ", "IW"):
+            raise Warning("fO2 buffer specified is not an allowed input. This argument can only be 'FMQ' or 'NNO' \n if you want to offset from these buffers use the 'fO2_offset' argument.")
+
+    if Model is None:
+        Model = "MELTSv1.0.2"
+
+    if Affinity is True and "MELTS" not in Model:
+        raise ValueError("Affinity=True is MELTS-specific (chemical affinity has no MAGEMin "
+                          "equivalent here); it is meaningless for a MAGEMin Model and is not "
+                          "silently ignored.")
+
+    if Suppress is not None and "MELTS" in Model:
+        raise ValueError("Suppress is MAGEMin-only here -- findLiq_MELTS has no suppress "
+                          "support (unlike equilibrate_MELTS), so this is not silently "
+                          "ignored for a MELTS Model.")
+
+    if type(comp) == pd.core.series.Series:
+        comp = comp.to_dict()
+
+    comp = comp_fix(Model = Model, comp = comp, Fe3Fet_Liq = Fe3Fet_Liq, H2O_Liq = H2O_Liq, CO2_Liq = CO2_Liq)
+
+    # --- normalise T_initial_C / P_bar / n for either a single dict
+    # composition or a DataFrame batch ---
+    if type(comp) != dict or type(P_bar) == np.ndarray:
+        if type(comp) != dict:
+            n = len(comp['SiO2_Liq'])
+        else:
+            n = len(P_bar)
+    else:
+        n = 1
+
+    if T_initial_C is None:
+        if type(comp) != dict or type(P_bar) == np.ndarray:
+            T_initial_C = estimate_t(comp = comp, P_bar = P_bar).values + 60.0
+        else:
+            T_initial_C = np.array([estimate_t(comp = comp, P_bar = P_bar) + 60.0])
+    elif type(T_initial_C) == int or type(T_initial_C) == float:
+        T_initial_C = np.zeros(n) + T_initial_C
+    T_initial_C = np.asarray(T_initial_C, dtype = float)
+
+    if type(comp) == dict:
+        comps = [comp] * n
+    else:
+        comps = [comp.loc[i].to_dict() for i in range(n)]
+
+    if type(P_bar) == np.ndarray:
+        if len(P_bar) != n:
+            raise Warning("The length of your composition and pressure variables are different. Please correct this before running the code.")
+        P_list = list(P_bar)
+    else:
+        P_list = [P_bar] * n
+
     if "MELTS" in Model:
-        try:
-            with (_quiet_engine_output() if quiet_engine else contextlib.nullcontext()):
-                if Affinity is True:
-                    Results, Affin = findLiq_MELTS(P_bar = P_bar, Model = Model, T_C_init = T_initial_C, comp = comp, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, Affinity = Affinity)
-                else:
-                    Results = findLiq_MELTS(P_bar = P_bar, Model = Model, T_C_init = T_initial_C, comp = comp, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, Affinity = Affinity)
+        cores = resolve_cores(cores)
 
+        pending_tasks = [_RowTask(i, P_list[i], T_initial_C[i], comps[i]) for i in range(n)]
+        collected: dict = {}   # index -> (Results, Affin_or_None)
+        retry_log: list = []   # (index, round, status, error, T_used, timeout_used) -- for diagnostics/benchmarking
+
+        # One tick per row that is DONE, whether that's a converged result (ticked
+        # live, as soon as its _PROGRESS message arrives -- see mp_utils.run_tasks's
+        # on_progress) or a permanent failure (ticked only once max_domain_retries
+        # is exhausted for it -- a row still queued for another retry round isn't
+        # "done" yet, so it must not tick early). `ticked` guards against a rare
+        # but real race at the mp_utils level: a task that converges right at the
+        # timeout boundary can have its result message sent just before the
+        # supervisor's own bookkeeping kills it as a timeout anyway, so the
+        # domain-retry logic re-queues and re-runs an index that already
+        # succeeded -- harmless to the returned results (collected[idx] just gets
+        # overwritten with an equivalent value) but would otherwise double-tick
+        # the bar for that row.
+        pbar = tqdm(total = n, desc = "findLiq_multi")
+        ticked: set = set()
+
+        def _capture(item):
             if Affinity is True:
-                q.put([Results, Affin, index])
+                Results, Affin, idx = item
+                collected[idx] = (Results, Affin)
             else:
-                q.put([Results, index])
-            return
-        except:
-            Results = {} #pd.DataFrame(data = np.zeros((1, 17)), columns = ['T_Liq', 'liquidus_phase', 'fluid_saturated', 'SiO2', 'TiO2', 'Al2O3', 'Fe2O3', 'Cr2O3', 'FeO', 'MnO', 'MgO', 'CaO', 'Na2O', 'K2O', 'P2O5', 'H2O', 'CO2'])
-            Affin = {}
-            if Affinity is True:
-                q.put([Results, Affin, index])
+                Results, idx = item
+                collected[idx] = (Results, None)
+            if idx not in ticked:
+                ticked.add(idx)
+                pbar.update(1)
+
+        current_timeout = timeout
+        try:
+            for round_num in range(max_domain_retries + 1):
+                if not pending_tasks:
+                    break
+
+                # First round: the caller's own max_tasks_per_worker, at `timeout`.
+                # Every domain-retry round: full process isolation
+                # (retry_max_tasks_per_worker, default 1) at a timeout that's
+                # already been multiplied up for this round -- not just a
+                # different starting temperature. All of pending_tasks runs as
+                # ONE batch (one run_tasks call, blocking until the whole round is
+                # done); failures are collected and only handed to the NEXT round
+                # together, never retried individually/immediately.
+                round_max_tasks = max_tasks_per_worker if round_num == 0 else retry_max_tasks_per_worker
+
+                out = run_tasks(
+                    _findLiq_task,
+                    pending_tasks,  # list of _RowTask -- each carries only its own row's
+                                    # data, NOT the full batch (see _RowTask's docstring)
+                    task_kwargs = dict(Model = Model, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset,
+                                        Affinity = Affinity, quiet_engine = quiet_engine),
+                    cores = cores,
+                    timeout = current_timeout,
+                    max_retries = 0,           # domain-level retry (below) replaces this
+                    max_tasks_per_worker = round_max_tasks,  # see this function's own docstring
+                                                # for the throughput-vs-contention trade-off and the
+                                                # measurements behind the defaults.
+                    on_progress = _capture,
+                )
+
+                next_round = []
+                for task, res in out.items():
+                    if res.status is TaskStatus.OK:
+                        continue
+                    retry_log.append((task.row_id, round_num, res.status.value, res.error,
+                                       task.T_initial_C, current_timeout))
+                    if round_num < max_domain_retries:
+                        next_round.append(_RowTask(task.row_id, task.P_bar,
+                                                    task.T_initial_C + retry_T_offset_C, task.comp))
+                    elif task.row_id not in ticked:
+                        ticked.add(task.row_id)
+                        pbar.update(1)   # exhausted its retries -- permanently failed, now "done"
+
+                pending_tasks = next_round
+                current_timeout = current_timeout * retry_timeout_multiplier  # for the NEXT round, if any
+        finally:
+            pbar.close()
+
+        n_ok = len(collected)
+        n_failed = n - n_ok
+        print(f"findLiq_multi: {n_ok}/{n} converged, {n_failed} did not "
+              f"(after {max_domain_retries} retry round(s) at +{retry_T_offset_C} C and "
+              f"x{retry_timeout_multiplier} timeout each).")
+
+        Results_df = pd.DataFrame(
+            data = np.full((n, 17), np.nan),
+            columns = ['T_Liq_C', 'liquidus_phase', 'fluid_saturated', 'SiO2', 'TiO2', 'Al2O3',
+                       'Fe2O3', 'Cr2O3', 'FeO', 'MnO', 'MgO', 'CaO', 'Na2O', 'K2O', 'P2O5', 'H2O', 'CO2'],
+        )
+        Results_df[['liquidus_phase', 'fluid_saturated']] = Results_df[['liquidus_phase', 'fluid_saturated']].astype("string")
+
+        Affin = {}
+        for idx, (Res, Af) in collected.items():
+            Results_df.loc[idx, :] = Res
+            if Affinity is True and Af is not None:
+                Affin[str(idx)] = Af
+    else:
+        # --- MAGEMin branch: MAGEMinCalc.findLiq_julia, via the main
+        # embedded Julia session (no mp_utils/Distributed -- see that
+        # function's own docstring in Crystallisation.jl: multi_point_
+        # minimization is internally thread-parallel across all n points
+        # from a single Initialize_MAGEMin context, so a batch of
+        # thousands is one call, not one process per row). `cores`,
+        # `timeout`, `retry_*`, `max_tasks_per_worker`, `quiet_engine` and
+        # `Affinity` are MELTS-only knobs for the process-isolation-after-
+        # an-opaque-failure problem that doesn't exist here (a single
+        # synchronous, deterministic Julia call) -- silently ignored, not
+        # remapped onto anything.
+        _ensure_julia_main_ready()
+        from juliacall import Main as jl
+
+        fO2_buffer_jl = fO2_buffer
+        if fO2_buffer == "FMQ":
+            fO2_buffer_jl = "qfm"
+        elif fO2_buffer == "NNO":
+            fO2_buffer_jl = "nno"
+
+        # Same ferric-iron -> "O" placeholder convention as
+        # equilibrate_multi's existing MAGEMin branch (Liq.py, ~line 409):
+        # MAGEMin has no separate Fe2O3/FeO oxides, just a single "FeO"
+        # slot (total Fe as FeO) plus this "O" entry that encodes the
+        # ferric fraction.
+        fe_c = (159.69 / 2) / 71.844
+        if Model == "Weller2024":
+            bulk_rows = [[d['SiO2_Liq'], d['Al2O3_Liq'], d['CaO_Liq'], d['MgO_Liq'], d['FeOt_Liq'],
+                          d['K2O_Liq'], d['Na2O_Liq'], d['TiO2_Liq'],
+                          d['Fe3Fet_Liq'] * (fe_c * d['FeOt_Liq'] - d['FeOt_Liq']), d['Cr2O3_Liq']]
+                         for d in comps]
+        else:
+            bulk_rows = [[d['SiO2_Liq'], d['Al2O3_Liq'], d['CaO_Liq'], d['MgO_Liq'], d['FeOt_Liq'],
+                          d['K2O_Liq'], d['Na2O_Liq'], d['TiO2_Liq'],
+                          d['Fe3Fet_Liq'] * (fe_c * d['FeOt_Liq'] - d['FeOt_Liq']), d['Cr2O3_Liq'],
+                          d['H2O_Liq']]
+                         for d in comps]
+
+        bulk_jl = jl.seval("collect")(np.array(bulk_rows, dtype = float))
+        P_kbar_jl = jl.seval("collect")(np.asarray(P_list, dtype = float) / 1000.0)
+        T_start_jl = jl.seval("collect")(T_initial_C)
+
+        if fO2_offset is None:
+            fO2_offset_jl = 0.0
+        elif isinstance(fO2_offset, np.ndarray):
+            fO2_offset_jl = jl.seval("collect")(fO2_offset.astype(float))
+        else:
+            fO2_offset_jl = float(fO2_offset)
+
+        # See equilibrate_multi's identical conversion for why this can't
+        # just be the plain Python list -- juliacall passes that as a lazy
+        # PyList{Any}, which fails findLiq_julia's Vector{String} type.
+        suppress_jl = jl.seval("Vector{String}")(Suppress) if Suppress is not None else None
+
+        jl_result = jl.MAGEMinCalc.findLiq_julia(bulk = bulk_jl, P_kbar = P_kbar_jl, T_start_C = T_start_jl,
+                                                    Model = Model, fo2_buffer = fO2_buffer_jl, fo2_offset = fO2_offset_jl,
+                                                    suppress = suppress_jl)
+        jl_result = dict(jl_result)
+        T_Liq_C_out = list(jl_result["T_Liq_C"])
+        converged_out = list(jl_result["converged"])
+        liquidus_phase_out = list(jl_result["liquidus_phase"])
+        fluid_saturated_out = list(jl_result["fluid_saturated"])
+        liquid_oxides_out = list(jl_result["liquid_oxides"])
+        liquid_comp_out = [list(row) for row in jl_result["liquid_comp"]]
+        ox_idx = {name: j for j, name in enumerate(liquid_oxides_out)}
+
+        n_ok = sum(1 for c in converged_out if c)
+        print(f"findLiq_multi: {n_ok}/{n} converged (MAGEMin, {Model}).")
+
+        Results_df = pd.DataFrame(
+            data = np.full((n, 17), np.nan),
+            columns = ['T_Liq_C', 'liquidus_phase', 'fluid_saturated', 'SiO2', 'TiO2', 'Al2O3',
+                       'Fe2O3', 'Cr2O3', 'FeO', 'MnO', 'MgO', 'CaO', 'Na2O', 'K2O', 'P2O5', 'H2O', 'CO2'],
+        )
+        Results_df[['liquidus_phase', 'fluid_saturated']] = Results_df[['liquidus_phase', 'fluid_saturated']].astype("string")
+
+        for i in range(n):
+            if not converged_out[i]:
+                continue
+            row = liquid_comp_out[i]
+
+            def _ox(name):
+                return row[ox_idx[name]] * 100.0 if name in ox_idx else np.nan
+
+            # Invert the same ferric-iron <-> "O" formula used to build the
+            # input bulk, applied to the LIQUID's own converged composition
+            # (not the input bulk -- a buffer can shift the melt's
+            # oxidation state away from what was specified), to recover
+            # Fe2O3/FeO in the convention comp_fix/the shared tail below
+            # already expects (matching what MELTS's own engine returns).
+            FeOt_pct = _ox('FeO')
+            O_pct = _ox('O')
+            if FeOt_pct > 0.0 and not np.isnan(O_pct):
+                Fe3Fet_i = min(max(O_pct / (FeOt_pct * (fe_c - 1)), 0.0), 1.0)
             else:
-                q.put([Results, index])
-            return
+                Fe3Fet_i = 0.0
+            Fe2O3_pct = Fe3Fet_i * FeOt_pct / 0.8998
+            FeO_pct = FeOt_pct - 0.8998 * Fe2O3_pct
+
+            Results_df.loc[i, 'T_Liq_C'] = T_Liq_C_out[i]
+            Results_df.loc[i, 'liquidus_phase'] = liquidus_phase_out[i]
+            Results_df.loc[i, 'fluid_saturated'] = "Yes" if fluid_saturated_out[i] else "No"
+            Results_df.loc[i, 'SiO2'] = _ox('SiO2')
+            Results_df.loc[i, 'TiO2'] = _ox('TiO2')
+            Results_df.loc[i, 'Al2O3'] = _ox('Al2O3')
+            Results_df.loc[i, 'Fe2O3'] = Fe2O3_pct
+            Results_df.loc[i, 'Cr2O3'] = _ox('Cr2O3')
+            Results_df.loc[i, 'FeO'] = FeO_pct
+            Results_df.loc[i, 'MgO'] = _ox('MgO')
+            Results_df.loc[i, 'CaO'] = _ox('CaO')
+            Results_df.loc[i, 'Na2O'] = _ox('Na2O')
+            Results_df.loc[i, 'K2O'] = _ox('K2O')
+            Results_df.loc[i, 'H2O'] = _ox('H2O')
+            # MnO, P2O5, CO2 stay NaN -- MAGEMin has no such oxides.
+
+        Affin = {}
+
+    # comp_fix only renames MnO/P2O5/CO2 -> *_Liq for MELTS models (they're
+    # not in its "Columns_bad" list for a MAGEMin Model, confirmed by
+    # reading GenFuncs.py's comp_fix directly) -- do it ourselves so the
+    # column selection below works for both engines without branching.
+    # No-op for MELTS (comp_fix's own rename just finds nothing left to
+    # rename); for MAGEMin these 3 columns stay NaN either way (MAGEMin has
+    # no MnO/P2O5/CO2 oxides), just correctly named now.
+    Results_df = Results_df.rename(columns={'MnO': 'MnO_Liq', 'P2O5': 'P2O5_Liq', 'CO2': 'CO2_Liq'})
+
+    Res = comp_fix(Model = Model, comp = Results_df, keep_columns = True)
+    if type(Res) == dict:
+        Res = pd.DataFrame.from_dict(Res, orient = "index").T
+
+    Res = Res[['T_Liq_C', 'liquidus_phase', 'fluid_saturated',
+    'SiO2_Liq', 'TiO2_Liq', 'Al2O3_Liq', 'Cr2O3_Liq', 'FeOt_Liq','MnO_Liq', 'MgO_Liq', 'CaO_Liq',
+    'Na2O_Liq', 'K2O_Liq', 'P2O5_Liq', 'H2O_Liq', 'CO2_Liq',
+    'Fe3Fet_Liq', 'Fe2O3', 'FeO', ]]
+
+    Res = Res.drop(columns = ['Fe2O3', 'FeO'])
+
+    if Affinity is True:
+        int_keys = list(map(int, Affin.keys()))
+        if int_keys:
+            max_index = max(int_keys)
+            all_columns = []
+            seen_columns = set()
+            for d in Affin:
+                for col in Affin[d]:
+                    if col not in seen_columns:
+                        all_columns.append(col)
+                        seen_columns.add(col)
+                Affin[d] = pd.Series(Affin[d])
+
+            Af_Combined = pd.DataFrame(np.nan, index = range(max_index + 1), columns = all_columns)
+            for d in Affin:
+                try:
+                    df = Affin[d].to_frame().transpose()
+                    Af_Combined.loc[int(d)] = df.iloc[0]
+                except:
+                    continue
+        else:
+            Af_Combined = pd.DataFrame()
+
+        return Res, Af_Combined
+    else:
+        return Res
 
 
 def equilibrate(q, i,*, Model = None, P_bar = None, T_C = None, comp = None, fO2_buffer = None, fO2_offset = None, Suppress = None, Suppress_except=None, quiet_engine = True):
@@ -1142,7 +1562,8 @@ def equilibrate(q, i,*, Model = None, P_bar = None, T_C = None, comp = None, fO2
         `q.put([Res, i])`
         where `Res` is the raw output dictionary from the MELTS calculation.
     '''
-    with (_quiet_engine_output() if quiet_engine else contextlib.nullcontext()):
-        Res = equilibrate_MELTS(Model = Model, P_bar = P_bar, T_C = T_C, comp = comp, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, Suppress = Suppress, Suppress_except=Suppress_except)
+    if quiet_engine:
+        _permanently_quiet_engine_output()   # one-way; see that function's own docstring
+    Res = equilibrate_MELTS(Model = Model, P_bar = P_bar, T_C = T_C, comp = comp, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, Suppress = Suppress, Suppress_except=Suppress_except)
     q.put([Res, i])
     return

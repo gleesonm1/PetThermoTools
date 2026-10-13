@@ -4,6 +4,8 @@ import pandas as pd
 from petthermotools.GenFuncs import *
 from petthermotools.GenFuncs import _ensure_julia_ready
 from petthermotools.GenFuncs import _quiet_engine_output
+from petthermotools.GenFuncs import _permanently_quiet_engine_output
+from petthermotools.core_config import MAX_WORKERS, resolve_cores
 from petthermotools.Plotting import *
 from petthermotools.MELTS import *
 from petthermotools.Compositions import *
@@ -15,7 +17,7 @@ import sys
 from tqdm.auto import tqdm, trange
 from pathlib import Path
 
-def AdiabaticDecompressionMelting(cores = multiprocessing.cpu_count(), 
+def AdiabaticDecompressionMelting(cores = MAX_WORKERS,
                                   Model = "pMELTS", bulk = "KLB-1", comp_lith_1 = None, 
                                   comp_lith_2 = None, comp_lith_3 = None, T_start_C = None, Tp_C = 1350, Tp_Method = None,
                                   P_start_bar = 30000, P_end_bar = 2000, dp_bar = 200, 
@@ -92,7 +94,8 @@ def AdiabaticDecompressionMelting(cores = multiprocessing.cpu_count(),
     >>> results = AdiabaticDecompressionMelting(Model="pMELTS", comp_lith_1="KLB-1",
     ...                                        P_path_bar=P_path, Tp_C=1400)
     """
-    
+    cores = resolve_cores(cores)
+
     Tp_C        = to_float(Tp_C)
     Tp_C        = check_array(Tp_C)
     T_start_C        = to_float(T_start_C)
@@ -336,10 +339,11 @@ def AdiabaticMelt(q, index, *, Model = None, comp_1 = None, comp_2 = None, comp_
     Results = {}
     if "MELTS" in Model:
         try:
-            with (_quiet_engine_output() if quiet_engine else contextlib.nullcontext()):
-                Results = AdiabaticDecompressionMelting_MELTS(Model = Model, comp = comp_1, T_start_C = T_start_C, Tp_C = Tp_C, Tp_Method = Tp_Method,
-                                                          P_path_bar = P_path_bar, P_start_bar = P_start_bar, P_end_bar = P_end_bar, dp_bar = dp_bar,
-                                                          fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, s = s)
+            if quiet_engine:
+                _permanently_quiet_engine_output()   # one-way; see that function's own docstring
+            Results = AdiabaticDecompressionMelting_MELTS(Model = Model, comp = comp_1, T_start_C = T_start_C, Tp_C = Tp_C, Tp_Method = Tp_Method,
+                                                      P_path_bar = P_path_bar, P_start_bar = P_start_bar, P_end_bar = P_end_bar, dp_bar = dp_bar,
+                                                      fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, s = s)
             q.put([Results, index])
         except:
             q.put([])

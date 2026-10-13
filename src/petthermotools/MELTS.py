@@ -7,6 +7,7 @@ import copy
 import warnings
 from petthermotools.GenFuncs import estimate_t
 from petthermotools.GenFuncs import _quiet_engine_output
+from petthermotools.GenFuncs import _permanently_quiet_engine_output
 
 def equilibrate_MELTS(Model = None, P_bar = None, T_C = None, comp = None, 
                       fO2_buffer = None, fO2_offset = None, Suppress = None, Suppress_except=None,
@@ -1826,6 +1827,11 @@ def AdiabaticDecompressionMelting_MELTS(Model = None, comp = None, Tp_C = None, 
     return Results
 
 def s_search(q, *, Model = "pMELTS", comp = None, Tp_C = 1350, quiet_engine = True):
+    if quiet_engine:
+        _permanently_quiet_engine_output()   # one-way; see that function's own docstring --
+        # must run before MELTSdynamic() below, whose own construction is what prints the
+        # "alphaMELTS for Python version..." banner (confirmed directly).
+
     if comp is None:
         raise Exception("No composition specified")
     else:
@@ -1847,38 +1853,37 @@ def s_search(q, *, Model = "pMELTS", comp = None, Tp_C = 1350, quiet_engine = Tr
         melts = MELTSdynamic(4)
 
     try:
-        with (_quiet_engine_output() if quiet_engine else contextlib.nullcontext()):
-            melts.engine.setBulkComposition(bulk)
-            melts.engine.pressure = 1
-            melts.engine.temperature = Tp_C
+        melts.engine.setBulkComposition(bulk)
+        melts.engine.pressure = 1
+        melts.engine.temperature = Tp_C
 
-            melts.engine.setSystemProperties("Suppress", "rutile")
-            melts.engine.setSystemProperties("Suppress", "tridymite")
+        melts.engine.setSystemProperties("Suppress", "rutile")
+        melts.engine.setSystemProperties("Suppress", "tridymite")
 
-            melts.engine.calcEquilibriumState(1,0)
+        melts.engine.calcEquilibriumState(1,0)
 
-            melts.engine.setSystemProperties("Suppress", "liquid")
-            T_search = [1100,1000,950,900,850,800,750,700,650,600]
+        melts.engine.setSystemProperties("Suppress", "liquid")
+        T_search = [1100,1000,950,900,850,800,750,700,650,600]
 
-            for T in T_search:
-                melts = melts.addNodeAfter()
-                melts.engine.temperature = T
-                melts.engine.calcEquilibriumState(1,0)
-                if melts.engine.getProperty('mass', "liquid") > 0.0:
-                    a = 0
-                    continue
-                else:
-                    a = 1
-                    break
-            if a == 0:
-                raise Exception("Subsolidus assemblage not found so potential temperature cannot be determined. Use T_start_C instead.")
-
+        for T in T_search:
             melts = melts.addNodeAfter()
-
-            melts.engine.temperature = Tp_C
+            melts.engine.temperature = T
             melts.engine.calcEquilibriumState(1,0)
+            if melts.engine.getProperty('mass', "liquid") > 0.0:
+                a = 0
+                continue
+            else:
+                a = 1
+                break
+        if a == 0:
+            raise Exception("Subsolidus assemblage not found so potential temperature cannot be determined. Use T_start_C instead.")
 
-            s = melts.engine.getProperty('s', 'bulk')
+        melts = melts.addNodeAfter()
+
+        melts.engine.temperature = Tp_C
+        melts.engine.calcEquilibriumState(1,0)
+
+        s = melts.engine.getProperty('s', 'bulk')
 
         q.put(s)
     except:

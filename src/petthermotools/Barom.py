@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from petthermotools.GenFuncs import *
 from petthermotools.GenFuncs import _ensure_julia_ready
 from petthermotools.GenFuncs import _quiet_engine_output
+from petthermotools.GenFuncs import _permanently_quiet_engine_output
 import contextlib
 from petthermotools.Plotting import *
 from petthermotools.Liq import *
@@ -13,7 +14,7 @@ from petthermotools.Path import *
 import multiprocessing
 from multiprocessing import Queue
 from multiprocessing import Process
-from petthermotools.core_config import MAX_WORKERS
+from petthermotools.core_config import MAX_WORKERS, resolve_cores
 import time
 from scipy import interpolate
 # from shapely.geometry import MultiPoint, Point, Polygon
@@ -63,6 +64,11 @@ def path_4_saturation_multi(q, index, *, Model = None, P_bar = None, comp = None
     results = {}
     idx = []
     
+    if quiet_engine:
+        _permanently_quiet_engine_output()   # one-way; see that function's own docstring --
+        # must run before MELTSdynamic() below, whose own construction is what prints the
+        # "alphaMELTS for Python version..." banner (confirmed directly).
+
     if "MELTS" in Model:
         from meltsdynamic import MELTSdynamic
 
@@ -75,41 +81,40 @@ def path_4_saturation_multi(q, index, *, Model = None, P_bar = None, comp = None
         elif Model == "MELTSv1.2.0":
             melts = MELTSdynamic(4)
 
-    with (_quiet_engine_output() if quiet_engine else contextlib.nullcontext()):
-        for i in index:
-            # try:
-            if "MELTS" in Model:
-                q.put([i, -1, "Start"])
-                Results, tr = path_MELTS(P_bar = P_bar[i],
-                        Model=Model,
-                        comp=comp,
-                        T_maxdrop_C=T_maxdrop_C,
-                        dt_C=dt_C,
-                        T_initial_C=T_initial_C,
-                        find_liquidus=True,
-                        fO2_buffer=fO2_buffer,
-                        fO2_offset=fO2_offset,
-                        fluid_sat=H2O_Sat,
-                        Suppress=['rutile', 'tridymite'],
-                        phases=phases,
-                        trail = True,
-                        melts = melts,
-                        q = q,
-                        index = i
-                    )
+    for i in index:
+        # try:
+        if "MELTS" in Model:
+            q.put([i, -1, "Start"])
+            Results, tr = path_MELTS(P_bar = P_bar[i],
+                    Model=Model,
+                    comp=comp,
+                    T_maxdrop_C=T_maxdrop_C,
+                    dt_C=dt_C,
+                    T_initial_C=T_initial_C,
+                    find_liquidus=True,
+                    fO2_buffer=fO2_buffer,
+                    fO2_offset=fO2_offset,
+                    fluid_sat=H2O_Sat,
+                    Suppress=['rutile', 'tridymite'],
+                    phases=phases,
+                    trail = True,
+                    melts = melts,
+                    q = q,
+                    index = i
+                )
 
-            idx.append(i)
+        idx.append(i)
 
 
-            results[f"Run {i}"] = Results
+        results[f"Run {i}"] = Results
 
-            if tr is False:
-                break
-            # except:
-        #     idx.append(i)
+        if tr is False:
+            break
+        # except:
+    #     idx.append(i)
     return
 
-def mineral_cosaturation(Model="MELTSv1.0.2", cores=int(np.floor(multiprocessing.cpu_count())), bulk=None,
+def mineral_cosaturation(Model="MELTSv1.0.2", cores=MAX_WORKERS, bulk=None,
                          phases=['quartz1', 'alkali-feldspar1', 'plagioclase1'],
                          P_bar=np.linspace(250, 5000, 32), Fe3Fet_init=None, H2O_init=None,
                          CO2_init=None, H2O_Sat=False, T_initial_C=None, dt_C=2,
@@ -210,8 +215,7 @@ def mineral_cosaturation(Model="MELTSv1.0.2", cores=int(np.floor(multiprocessing
     comp = comp_fix(Model=Model, comp=comp, Fe3Fet_Liq=Fe3Fet_init,
                     H2O_Liq=H2O_init, CO2_Liq=CO2_init)
     
-    if cores is None:
-        cores = MAX_WORKERS #multiprocessing.cpu_count()
+    cores = resolve_cores(cores)
 
     if "MELTS" not in Model:
         cores = memory_limit(cores = cores)

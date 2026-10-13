@@ -47,6 +47,46 @@ def _quiet_engine_output():
         os.close(devnull)
 
 
+_quiet_redirect_done = False   # see _permanently_quiet_engine_output below; one flag per
+                                # WORKER PROCESS (spawn gives each worker a fresh copy of this
+                                # module, so this starts False in every worker and is only ever
+                                # flipped once per process).
+
+
+def _permanently_quiet_engine_output():
+    """One-way fd 1/2 -> devnull redirect that is never restored, applied at most once per
+    worker process. NOT the same thing as the `_quiet_engine_output()` context manager above, and
+    deliberately not built on it -- that one is a `with`-block that restores the real fd 1/2 on
+    exit, which is provably too narrow for the alphaMELTS engine: it buffers its own stdout/stderr
+    output internally (confirmed by direct test, originally for findLiq_multi -- wrapping one
+    findLiq_MELTS call in `with _quiet_engine_output():` let every byte of "alphaMELTS for Python
+    version..."/"...Checking saturation state..."/"Convergence error..." chatter through anyway,
+    landing AFTER the block had already restored the real fd 2, because the flush happens at
+    process exit, not during the call) and the same delayed-flush mechanism is what let "Caught
+    SIGTERM: a termination request was sent to the program" through on every timeout-kill. A
+    redirect that is simply never undone catches the flush no matter when it happens, confirmed
+    against a real SIGTERM kill mid-calculation (5/5 trials, zero leaked bytes).
+
+    ONLY safe to call from inside a genuinely short-lived multiprocessing worker (one spawned via
+    `Process(target=...)`, used for exactly one task or a small, bounded group, then retired) --
+    NEVER from a long-lived process such as the caller's own main/notebook-kernel process, since
+    there is nothing to later "restore" it and every subsequent print/output in that process would
+    be silently lost for the rest of the session. Confirm the calling function's own signature is
+    `(q, index, ...)`/`(q, i, ...)` (a worker target, not a top-level public function the user calls
+    directly) before using this.
+    """
+    global _quiet_redirect_done
+    if _quiet_redirect_done:
+        return
+    sys.stdout.flush()
+    sys.stderr.flush()
+    devnull = os.open(os.devnull, os.O_WRONLY)
+    os.dup2(devnull, 1)
+    os.dup2(devnull, 2)
+    os.close(devnull)
+    _quiet_redirect_done = True
+
+
 Names = {'liquid1': '_Liq',
         'olivine1': '_Ol',
         'orthopyroxene1': '_Opx',
@@ -644,7 +684,53 @@ def rename_keys_with_prefix(d, mapping):
     return new_dict
 
 _JULIA_INITIALIZED = False
+_JULIA_MAIN_READY = False
 _JULIA_WORKERS_READY = False
+
+def _ensure_julia_main_ready():
+    """
+    Lightweight bootstrap: activates the Julia project on the MAIN embedded
+    session and loads MAGEMinCalc there, but does NOT start any `Distributed`
+    worker processes. This is all that `equilibrate`/`equilibrate_multi` and
+    `findLiq_julia` (via `findLiq_multi`) actually need -- both call
+    `jl.MAGEMinCalc.<...>` directly on the main session and get their own
+    speed-up from MAGEMin_C's internal threading inside a single
+    `multi_point_minimization` call (see `_ensure_julia_ready`'s
+    `PYTHON_JULIACALL_THREADS` comment), not from `Distributed`/`addprocs`.
+
+    Previously, these two call paths only worked if the user had already
+    called `activate_petthermotools_env()` (-> `_ensure_julia_workers()`)
+    first -- the only place that loaded MAGEMinCalc onto Main at all --
+    which also unconditionally paid the `addprocs(cores, ...)` start-up cost
+    (booting `cores` full separate Julia processes) even though neither call
+    path uses those workers. Splitting this out means `equilibrate_multi`/
+    `findLiq_multi`'s MAGEMin branches can self-initialise on first use.
+
+    `_ensure_julia_workers()` (below) still does everything this does PLUS
+    the `Distributed` worker pool, for `multi_path_julia`/`barometry`-style
+    calls that genuinely parallelise across per-row `pmap` tasks -- call that
+    (or `activate_petthermotools_env()`) instead when you need those workers.
+    """
+    global _JULIA_MAIN_READY
+
+    if not _JULIA_MAIN_READY:
+        _ensure_julia_ready()
+
+        from juliacall import Main as jl
+
+        env_dir = Path.home() / ".petthermotools_julia_env"
+        jl_env_path = env_dir.as_posix()
+
+        jl.seval(f"""
+            using Pkg
+            Pkg.activate("{jl_env_path}")
+            using MAGEMinCalc
+            if pkgversion(MAGEMinCalc) != v"0.6.4"
+                error("Incorrect version! Expected v0.6.4. Please run ptt.update_MAGEMinCalc()")
+            end
+        """)
+
+        _JULIA_MAIN_READY = True
 
 def _ensure_julia_workers():
     """
@@ -652,27 +738,21 @@ def _ensure_julia_workers():
     It checks the flag so it only ever executes once per session.
     """
     global _JULIA_WORKERS_READY
-    
+
     if not _JULIA_WORKERS_READY:
         print("Initializing MAGEMin environment and workers...")
-        _ensure_julia_ready()
-        
+        _ensure_julia_main_ready()  # Main session + MAGEMinCalc, idempotent
+
         import sys
         from juliacall import Main as jl
-        
+
         env_dir = Path.home() / ".petthermotools_julia_env"
         jl_env_path = env_dir.as_posix()
-        
+
         # Format Python path safely for Julia strings (prevents Windows crash)
         py_exe = sys.executable.replace('\\', '\\\\')
         cores = memory_limit(cores=get_performance_core_count())
-        
-        # 1. Activate Main Environment
-        jl.seval(f"""
-            using Pkg
-            Pkg.activate("{jl_env_path}")
-        """)
-        
+
         # 2. Boot Workers with STRICT environment mapping
         # This guarantees workers know exactly which Python to use for PythonCall
         jl.seval(f"""
@@ -689,40 +769,35 @@ def _ensure_julia_workers():
                 )
             end
         """)
-        
+
         # 3. Force environment activation on all workers
         jl.seval("@everywhere import Pkg")
         jl.seval(f'@everywhere Pkg.activate("{jl_env_path}")')
-        
+
         # 4. Load the packages
         # jl.seval("@everywhere using PythonCall")
         jl.seval("@everywhere using MAGEMinCalc")
-        jl.seval("using MAGEMinCalc")
-        jl.seval(f"""
-            if pkgversion(MAGEMinCalc) != v"0.6.3"
-                error("Incorrect version! Expected v0.6.3. Please run ptt.update_MAGEMinCalc()")
-            else
-                println("Julia Environment Ready. MAGEMinCalc v0.6.3 detected")
-            end"""
-        )
-        
         print("Julia Environment and Workers Ready.")
         _JULIA_WORKERS_READY = True
 
 def activate_petthermotools_env():
     """
-    Public API: Smart Activator.
+    Public API: Smart Activator. Boots the main Julia session AND the
+    Distributed worker pool (for multi_path_julia/barometry-style calls).
+
+    No longer required before equilibrate/equilibrate_multi or a MAGEMin
+    findLiq_multi call -- both self-initialise the lightweight main-session
+    path on first use (see _ensure_julia_main_ready's docstring). Still
+    useful/necessary before path()/crystallisation/barometry-style calls
+    that use the Distributed pool this also boots.
+
     Pre-loads Mac/Linux. Defers Windows to protect MELTS multiprocessing.
     """
-    import sys
-
-    # 1. Set environment variables FIRST
-    os.environ["JULIA_PYTHONCALL_EXE"] = sys.executable
-    os.environ["JULIA_CONDAPKG_BACKEND"] = "Null"
-
-    _ensure_julia_ready()
-    # if platform.system() != "Windows":
-    _ensure_julia_workers()
+    # Environment variables that must be set before juliacall's first
+    # import (JULIA_PYTHONCALL_EXE, JULIA_CONDAPKG_BACKEND,
+    # PYTHON_JULIACALL_THREADS) are all set inside _ensure_julia_ready()
+    # itself now, so every entry point gets them, not just this one.
+    _ensure_julia_workers()  # calls _ensure_julia_ready() first, internally
     # else:
     #     print("Windows detected: Environment pre-activation is bypassed to prevent process deadlocks.")
     #     print("MAGEMin workers will automatically load when you run your first calculation.")
@@ -747,12 +822,94 @@ def _ensure_julia_ready():
     This prevents 'import PetThermoTools' from being slow.
     """
     global _JULIA_INITIALIZED
-    
+
     if not _JULIA_INITIALIZED:
         import juliapkg
-        
+
+        # Must be set BEFORE juliacall's first import anywhere in the
+        # process -- it's read once when libjulia starts, not dynamically,
+        # so setting it later (even earlier in this same function, after
+        # something else has already imported juliacall) would be too late.
+        # Without this, the embedded Julia process defaults to 1 thread,
+        # and MAGEMin_C's own internal parallelism across points inside a
+        # single multi_point_minimization call (used by findLiq_julia and
+        # by the existing equilibrate/equilibrate_multi) never materialises.
+        # Confirmed directly: a 200-point findLiq_julia batch took 614.6s at
+        # 1 thread vs 167.0s at 4 threads (3.68x), same result either way.
+        # Only for the ONE shared, internally-threaded call inside the main
+        # embedded Julia process -- NOT a substitute for the separate
+        # Distributed worker processes _ensure_julia_workers() starts for
+        # path/crystallisation-style multi-row calls: MAGEMin_C's own
+        # minimization functions use Threads.@threads internally, and Julia
+        # forbids a second concurrent/nested use of that from ANY other
+        # thread or task in the same process (confirmed directly: both
+        # Threads.@threads and Threads.@spawn for independent, concurrent
+        # MAGEMin_C sessions either crashed the process outright or raised
+        # "`@threads :static` cannot be used concurrently or nested") -- so
+        # Distributed (separate OS processes, each with its own Julia
+        # runtime) remains the only safe way to run multiple independent
+        # MAGEMin_C sessions at once, and stays unchanged here.
+        #
+        # Deliberately performance-cores-only (not all logical cores, e.g.
+        # 4 of 8 on this machine's Apple Silicon 4P+4E split), even though a
+        # real benchmark (40-row findLiq_julia batch, repeated twice each,
+        # idle machine) measured all-logical-cores as ~18% faster (4
+        # threads: 34.64s/35.17s; 8 threads: 28.55s/28.62s). Kept
+        # conservative on purpose: MAGEMin_C's internal Threads.@threads
+        # :static scheduling waits for the slowest thread every round, so
+        # if something else on the machine is using an efficiency core at
+        # the same time, that thread becomes the straggler EVERY round --
+        # the all-cores setting could then end up slower than this default,
+        # not faster, and leaves no headroom for other concurrent work
+        # either way (the idle-machine benchmark above cannot see this,
+        # since nothing else was competing for a core during it). This
+        # mirrors the known reason MELTS's own multiprocessing pool (which
+        # does use all logical cores, and is why MELTS batches show ~100%
+        # in Activity Monitor vs MAGEMin's ~50%) is a deliberately
+        # heavier-weight, dedicate-the-machine tool.
+        #
+        # To use more threads anyway (e.g. you know nothing else will be
+        # running): set the env var yourself BEFORE `import petthermotools`
+        # (or before calling any MAGEMin function) -- this uses setdefault,
+        # so an already-set value is always honoured, no code change
+        # needed:
+        #     import os
+        #     os.environ["PYTHON_JULIACALL_THREADS"] = "8"  # or your target count
+        #     import petthermotools as ptt
+        os.environ.setdefault("PYTHON_JULIACALL_THREADS", str(get_performance_core_count()))
+
+        # juliacall's own documented recommendation whenever threads > 1:
+        # without this, confirmed directly (macOS crash report) that a real
+        # findLiq_julia call through Python can segfault -- SIGBUS inside
+        # Julia's own JIT codegen lock (jl_generate_fptr_impl), a race
+        # between threads compiling methods concurrently during MAGEMinCalc's
+        # first real use. With it set, the same call converges correctly
+        # with no crash. Trade-off (documented by juliacall itself): this
+        # changes Python's signal handling, so Ctrl-C no longer raises
+        # KeyboardInterrupt while inside a Julia call -- accepted here since
+        # an occasional uninterruptible wait is far preferable to a segfault.
+        os.environ.setdefault("PYTHON_JULIACALL_HANDLE_SIGNALS", "yes")
+
+        # Also must be set before juliacall's first import, same reasoning
+        # as above. Previously these two were only set inside the PUBLIC
+        # activate_petthermotools_env() (before it called this function),
+        # so equilibrate_multi/findLiq_multi's MAGEMin branches -- which
+        # call this function directly, bypassing activate_petthermotools_
+        # env() entirely -- never set them. Without JULIA_CONDAPKG_BACKEND
+        # ="Null", CondaPkg provisions its OWN local Python environment
+        # under the project folder (a `.CondaPkg/.pixi/...` directory) the
+        # first time anything in MAGEMinCalc triggers a PythonCall init,
+        # instead of using JULIA_PYTHONCALL_EXE's target -- confirmed
+        # directly: this not only points PythonCall at the wrong Python,
+        # the resulting fresh package resolution it triggers also silently
+        # pulled in an incompatible Parsers version, breaking MAGEMinCalc's
+        # CSV dependency entirely (`UndefVarError: xparse not defined in
+        # Parsers`) for every subsequent import, not just that one call.
+        os.environ.setdefault("JULIA_PYTHONCALL_EXE", sys.executable)
+        os.environ.setdefault("JULIA_CONDAPKG_BACKEND", "Null")
+
         env_path = Path.home() / ".petthermotools_julia_env"
-        
+
         if env_path.exists():
             # Register the project and version requirement
             os.environ["JULIA_PROJECT"] = str(env_path)

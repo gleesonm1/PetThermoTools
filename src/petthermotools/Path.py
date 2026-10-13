@@ -5,9 +5,10 @@ from petthermotools.GenFuncs import *
 from petthermotools.GenFuncs import _ensure_julia_ready
 from petthermotools.GenFuncs import _ensure_julia_workers
 from petthermotools.GenFuncs import _quiet_engine_output
+from petthermotools.GenFuncs import _permanently_quiet_engine_output
 from petthermotools.Plotting import *
 from petthermotools.MELTS import *
-from petthermotools.core_config import MAX_WORKERS
+from petthermotools.core_config import MAX_WORKERS, resolve_cores
 import multiprocessing
 from multiprocessing import Queue
 from multiprocessing import Process
@@ -261,8 +262,7 @@ def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid 
         if comp['Fe3Fet_Liq'] == 0.0 and "MELTS" in Model and fO2_buffer is None:
             raise Warning("MELTS often fails to produce any results when no ferric Fe is included in the starting composition and an fO2 buffer is not set.")
 
-    if cores is None:
-        cores = MAX_WORKERS #multiprocessing.cpu_count()
+    cores = resolve_cores(cores)
 
     if "MELTS" not in Model:
         cores = memory_limit(cores = cores)
@@ -735,6 +735,11 @@ def path_multi(q, index, *, Model = None, comp = None, Frac_solid = None, Frac_f
     if len(index) > 3:
         index = index[:3]
     
+    if quiet_engine:
+        _permanently_quiet_engine_output()   # one-way; see that function's own docstring --
+        # must run before MELTSdynamic() below, whose own construction is what prints the
+        # "alphaMELTS for Python version..." banner (confirmed directly).
+
     if "MELTS" in Model:
         from meltsdynamic import MELTSdynamic
 
@@ -746,38 +751,36 @@ def path_multi(q, index, *, Model = None, comp = None, Frac_solid = None, Frac_f
             melts = MELTSdynamic(3)
         elif Model == "MELTSv1.2.0":
             melts = MELTSdynamic(4)
-    with (_quiet_engine_output() if quiet_engine else contextlib.nullcontext()):
-        for i in index:
-            try:
-                if "MELTS" in Model:
-                    q.put([i, -1, "Start"])
-                    if i != 0:
-                        melts = melts.addNodeAfter()
-                    if type(comp) == dict:
-                        Results, tr = path_MELTS(Model = Model, comp = comp, Frac_solid = Frac_solid, Frac_fluid = Frac_fluid,
-                                                T_initial_C = np.random.random()*200 + 1200, T_C = T_C[i], T_path_C = T_path_C[i], T_start_C = T_start_C[i],
-                                                T_end_C = T_end_C[i], dt_C = dt_C[i], P_bar = P_bar[i], P_path_bar = P_path_bar[i],
-                                                P_start_bar = P_start_bar[i], P_end_bar = P_end_bar[i], dp_bar = dp_bar[i],
-                                                isenthalpic = isenthalpic, isentropic = isentropic, isochoric = isochoric,
-                                                find_liquidus = find_liquidus, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset[i],
-                                                fluid_sat = fluid_sat, Crystallinity_limit = Crystallinity_limit, Suppress = Suppress,
-                                                Suppress_except=Suppress_except, trail = trail, melts = melts, q = q, index = i)
-                    else:
-                        Results, tr = path_MELTS(Model = Model, comp = comp.loc[i].to_dict(), Frac_solid = Frac_solid, Frac_fluid = Frac_fluid,
-                                                T_initial_C = np.random.random()*200 + 1200, T_C = T_C[i], T_path_C = T_path_C[i], T_start_C = T_start_C[i],
-                                                T_end_C = T_end_C[i], dt_C = dt_C[i], P_bar = P_bar[i], P_path_bar = P_path_bar[i],
-                                                P_start_bar = P_start_bar[i], P_end_bar = P_end_bar[i], dp_bar = dp_bar[i],
-                                                isenthalpic = isenthalpic, isentropic = isentropic, isochoric = isochoric,
-                                                find_liquidus = find_liquidus, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset[i],
-                                                fluid_sat = fluid_sat, Crystallinity_limit = Crystallinity_limit, Suppress = Suppress,
-                                                Suppress_except=Suppress_except, trail = trail, melts = melts, q = q, index = i)
+    for i in index:
+        try:
+            if "MELTS" in Model:
+                q.put([i, -1, "Start"])
+                if i != 0:
+                    melts = melts.addNodeAfter()
+                if type(comp) == dict:
+                    Results, tr = path_MELTS(Model = Model, comp = comp, Frac_solid = Frac_solid, Frac_fluid = Frac_fluid,
+                                            T_initial_C = np.random.random()*200 + 1200, T_C = T_C[i], T_path_C = T_path_C[i], T_start_C = T_start_C[i],
+                                            T_end_C = T_end_C[i], dt_C = dt_C[i], P_bar = P_bar[i], P_path_bar = P_path_bar[i],
+                                            P_start_bar = P_start_bar[i], P_end_bar = P_end_bar[i], dp_bar = dp_bar[i],
+                                            isenthalpic = isenthalpic, isentropic = isentropic, isochoric = isochoric,
+                                            find_liquidus = find_liquidus, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset[i],
+                                            fluid_sat = fluid_sat, Crystallinity_limit = Crystallinity_limit, Suppress = Suppress,
+                                            Suppress_except=Suppress_except, trail = trail, melts = melts, q = q, index = i)
+                else:
+                    Results, tr = path_MELTS(Model = Model, comp = comp.loc[i].to_dict(), Frac_solid = Frac_solid, Frac_fluid = Frac_fluid,
+                                            T_initial_C = np.random.random()*200 + 1200, T_C = T_C[i], T_path_C = T_path_C[i], T_start_C = T_start_C[i],
+                                            T_end_C = T_end_C[i], dt_C = dt_C[i], P_bar = P_bar[i], P_path_bar = P_path_bar[i],
+                                            P_start_bar = P_start_bar[i], P_end_bar = P_end_bar[i], dp_bar = dp_bar[i],
+                                            isenthalpic = isenthalpic, isentropic = isentropic, isochoric = isochoric,
+                                            find_liquidus = find_liquidus, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset[i],
+                                            fluid_sat = fluid_sat, Crystallinity_limit = Crystallinity_limit, Suppress = Suppress,
+                                            Suppress_except=Suppress_except, trail = trail, melts = melts, q = q, index = i)
 
-                if tr is False:
-                    break
-            except:
-                idx.append(i)
+            if tr is False:
                 break
-
+        except:
+            idx.append(i)
+            break
 
     return
 
@@ -888,14 +891,16 @@ def path(q, index, *, Model = None, comp = None, Frac_solid = None, Frac_fluid =
         # engine's raw text nicely in a notebook cell and suppressing it for speed are mutually exclusive
         # goals, and the speed one is the default. Set quiet_engine=False to get today's old behaviour back
         # (pipes() in a Jupyter/qtconsole kernel, plain/unsuppressed everywhere else) for debugging.
+        #
+        # The quiet_engine=True case uses the one-way permanent redirect, not a `with`-scoped one
+        # (see _permanently_quiet_engine_output's own docstring): the alphaMELTS engine buffers its
+        # own stdout/stderr internally, so a scoped redirect lets banner/status text leak through
+        # AFTER the block restores the real fd 1/2. The other two branches (pipes()/nullcontext)
+        # exist specifically to SHOW output, not hide it, so they keep their own, separate,
+        # properly-scoped `with` -- only this function's own worker process exits right after
+        # either branch, so only the quiet_engine=True branch is "one-way forever" by design.
         if quiet_engine:
-            output_ctx = _quiet_engine_output()
-        elif pipes is not None:
-            output_ctx = pipes()
-        else:
-            output_ctx = contextlib.nullcontext()
-
-        with output_ctx:
+            _permanently_quiet_engine_output()
             Results = path_MELTS(Model = Model, comp = comp, Frac_solid = Frac_solid, Frac_fluid = Frac_fluid,
                                     T_C = T_C, T_path_C = T_path_C, T_start_C = T_start_C, T_end_C = T_end_C,
                                     dt_C = dt_C, P_bar = P_bar, P_path_bar = P_path_bar, P_start_bar = P_start_bar,
@@ -903,6 +908,16 @@ def path(q, index, *, Model = None, comp = None, Frac_solid = None, Frac_fluid =
                                     isentropic = isentropic, isochoric = isochoric, find_liquidus = find_liquidus,
                                     fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, fluid_sat = fluid_sat,
                                     Crystallinity_limit = Crystallinity_limit, Suppress = Suppress, Suppress_except = Suppress_except, q = q, index = 0)
+        else:
+            output_ctx = pipes() if pipes is not None else contextlib.nullcontext()
+            with output_ctx:
+                Results = path_MELTS(Model = Model, comp = comp, Frac_solid = Frac_solid, Frac_fluid = Frac_fluid,
+                                        T_C = T_C, T_path_C = T_path_C, T_start_C = T_start_C, T_end_C = T_end_C,
+                                        dt_C = dt_C, P_bar = P_bar, P_path_bar = P_path_bar, P_start_bar = P_start_bar,
+                                        P_end_bar = P_end_bar, dp_bar = dp_bar, isenthalpic = isenthalpic,
+                                        isentropic = isentropic, isochoric = isochoric, find_liquidus = find_liquidus,
+                                        fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, fluid_sat = fluid_sat,
+                                        Crystallinity_limit = Crystallinity_limit, Suppress = Suppress, Suppress_except = Suppress_except, q = q, index = 0)
 
         return
 

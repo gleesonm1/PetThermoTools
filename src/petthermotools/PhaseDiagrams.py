@@ -4,7 +4,7 @@ from petthermotools.GenFuncs import *
 from petthermotools.Plotting import *
 from petthermotools.Path import *
 from petthermotools.MELTS import *
-from petthermotools.core_config import MAX_WORKERS
+from petthermotools.core_config import MAX_WORKERS, resolve_cores
 import multiprocessing
 from multiprocessing import Queue
 from multiprocessing import Process
@@ -229,9 +229,7 @@ def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar
         if fO2_buffer == "NNO":
             fO2_buffer = "nno"
 
-    if cores is None:
-        # cores = multiprocessing.cpu_count()
-        cores = MAX_WORKERS
+    cores = resolve_cores(cores)
 
     if Model is None:
         Model = "MELTSv1.0.2"
