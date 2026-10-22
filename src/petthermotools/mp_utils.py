@@ -167,6 +167,7 @@ def run_tasks(
     cores: int = 1,
     timeout: float = 240.0,
     stall_timeout: Optional[float] = None,
+    startup_timeout: Optional[float] = None,
     max_retries: int = 0,
     kill_grace: float = 5.0,
     max_tasks_per_worker: Optional[int] = 3,
@@ -228,6 +229,29 @@ def run_tasks(
         because it only works if task_fn actually reports progress
         periodically; a task_fn that only reports once at the very end
         would look "stalled" for its entire runtime.
+    startup_timeout : float or None, default None
+        Kill and replace a worker that has been alive this many seconds
+        without ever reporting `_STARTED` -- i.e. still stuck somewhere in
+        its own process bootstrap (unpickling task_fn/args, or whatever
+        that import pulls in: a real task_fn like _path_task_v2 imports
+        the whole petthermotools package to be resolved at all). None
+        resolves to `timeout`: a worker is never allowed to sit un-started
+        for longer than a fully-run task would be allowed to take.
+        Without this, such a worker is invisible to both the timeout
+        check (which only tracks pids once `_STARTED` arrives) and the
+        liveness sweep (which only catches a worker that has actually
+        died, not one that is alive but wedged) -- `while outstanding:`
+        then never terminates, confirmed live via a repro that forces a
+        real-engine worker to re-import the full package under spawn on a
+        loaded CI machine (see MAINTENANCE_NOTES.md). Safe to kill
+        unconditionally without a `_finalise_or_retry` call: a worker that
+        has not yet reported `_STARTED` has not yet reported a `_PROGRESS`
+        or `_DONE` either, and the only gap between `task_queue.get()` and
+        sending `_STARTED` is two in-process lines with no I/O -- in
+        practice this only ever fires during the import/unpickle stage,
+        strictly before a task is pulled off `task_queue`, so the task
+        that would have gone to this worker is simply still sitting there
+        for the replacement (or any other free worker) to pick up.
     max_retries : int, default 0
         How many additional attempts a CRASHED/TIMEOUT/STALLED task gets
         before its TaskResult is finalised as GAVE_UP. Defaults to 0:
@@ -275,6 +299,7 @@ def run_tasks(
     if not indices:
         return {}
     cores = max(1, min(cores, len(indices)))
+    effective_startup_timeout = timeout if startup_timeout is None else startup_timeout
 
     task_queue = _CTX.Queue()
     results_queue = _CTX.Queue()
@@ -284,6 +309,12 @@ def run_tasks(
     results: Dict[Any, TaskResult] = {}
     tracked_by_pid: Dict[int, _Tracked] = {}
     workers: List[Any] = []
+    # pid -> Process.start() time, for any worker that hasn't yet sent its
+    # own _STARTED (see `startup_timeout` above). Entries are removed once
+    # a worker either reports _STARTED (promoted into tracked_by_pid) or is
+    # found dead/killed -- so this only ever holds truly still-booting
+    # workers.
+    pending_since: Dict[int, float] = {}
 
     def _spawn_worker():
         p = _CTX.Process(
@@ -293,6 +324,7 @@ def run_tasks(
         )
         p.start()
         workers.append(p)
+        pending_since[p.pid] = time.time()
         return p
 
     def _terminate(process):
@@ -304,9 +336,9 @@ def run_tasks(
 
     def _retire(pid):
         """Stop tracking `pid`'s task, drop its process from `workers`, and
-        make sure it's actually dead. Does NOT decide whether to spawn a
-        replacement -- callers do that, since one is only needed while
-        there's still outstanding work."""
+        make sure it's actually dead AND reaped. Does NOT decide whether to
+        spawn a replacement -- callers do that, since one is only needed
+        while there's still outstanding work."""
         t = tracked_by_pid.pop(pid, None)
         if t is None:
             return
@@ -315,14 +347,21 @@ def run_tasks(
         # t.process can be None: see the _STARTED handler below for when
         # and why (a worker that dies extremely fast -- before its own
         # _STARTED message is processed -- can have _Tracked created with
-        # no process reference). Nothing to terminate in that case; the
-        # worker is already known dead, which is exactly why this
-        # situation can arise. Defensive guard only -- the _STARTED
-        # handler is the actual fix, this just stops it from ever being
-        # able to crash the supervisor again if some other path also
-        # produces a None reference.
-        if t.process is not None and t.process.is_alive():
-            _terminate(t.process)
+        # no process reference). Nothing to join in that case.
+        if t.process is None:
+            return
+        if t.process.is_alive():
+            _terminate(t.process)  # includes its own bounded join()
+        else:
+            # Still needs reaping even though it already exited on its
+            # own -- the common case (a _DONE with retiring=True is sent
+            # right as or after the worker exits). Skipping this (as a
+            # previous version of this function did, checking `is_alive()`
+            # only) left every naturally-exiting worker as a POSIX zombie /
+            # unclosed Windows handle: exactly "Mechanism 1" from the
+            # cleanup plan's stray-processes investigation, just relocated
+            # here from Path.py's old (now-superseded) batch drain loop.
+            t.process.join()
 
     def _finalise_or_retry(index, status: TaskStatus, error: Optional[str]):
         if index not in outstanding:
@@ -360,10 +399,32 @@ def run_tasks(
                 if not w.is_alive():
                     pid = w.pid
                     workers.remove(w)
+                    pending_since.pop(pid, None)
                     t = tracked_by_pid.pop(pid, None)
                     if t is not None:
                         _finalise_or_retry(t.index, TaskStatus.CRASHED,
                                             "worker process died unexpectedly")
+                    if outstanding:
+                        _spawn_worker()
+
+            # 1b. Startup-timeout sweep: a worker that is ALIVE but has
+            #     never sent _STARTED is invisible to both sweep 1 above
+            #     (which only catches a dead process) and the timeout check
+            #     below (which only tracks pids already in tracked_by_pid).
+            #     Kill and replace it unconditionally -- see `startup_timeout`
+            #     in this function's docstring for why that's always safe:
+            #     the only way to be alive this long with no _STARTED is
+            #     still stuck in process bootstrap, strictly before its task
+            #     (if any) was ever pulled off `task_queue`, so nothing
+            #     needs to be re-queued.
+            now = time.time()
+            for pid, since in list(pending_since.items()):
+                if now - since > effective_startup_timeout:
+                    w = next((w for w in workers if w.pid == pid), None)
+                    pending_since.pop(pid, None)
+                    if w is not None:
+                        workers.remove(w)
+                        _terminate(w)
                     if outstanding:
                         _spawn_worker()
 
@@ -441,6 +502,7 @@ def run_tasks(
                         _finalise_or_retry(index, TaskStatus.CRASHED,
                                             "worker died before its own start could be registered")
                     else:
+                        pending_since.pop(pid, None)
                         now = time.time()
                         tracked_by_pid[pid] = _Tracked(index, proc, now, now)
                 elif tag == _PROGRESS:
