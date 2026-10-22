@@ -56,52 +56,50 @@ _HANG_S = 120
 MULTI_PATH_TIMEOUT = 4
 
 
-def _report_then_hang(q, index, **kwargs):
-    """Batch worker: announces each run, then hangs mid-calculation."""
-    for i in list(index)[:3]:
-        q.put([i, -1, "Start"])
+# multi_path is v2 now: every row (batch or single) runs through the same
+# mp_utils.run_tasks() supervisor, which calls task_fn(q, task, **kwargs)
+# once per row, where `task` is a _PathRowTask (has .row_id), never a raw
+# int or an array of up to 3 indices -- there is no longer a "process
+# handles a group of rows" worker contract to fake. These functions take
+# that same (q, task, **kwargs) shape.
+
+def _report_then_hang(q, task, **kwargs):
+    """Reports that the row started, then hangs mid-calculation."""
+    q.put([task.row_id, -1, "Start"])
     time.sleep(_HANG_S)
 
 
-def _step_then_hang_batch(q, index, **kwargs):
-    """Batch worker: announces each run, delivers one step, then hangs."""
-    for i in list(index)[:3]:
-        q.put([i, -1, "Start"])
-        q.put([i, 0, _STEP])
+def _step_then_hang(q, task, **kwargs):
+    """Reports one step, then hangs."""
+    q.put([task.row_id, -1, "Start"])
+    q.put([task.row_id, 0, _STEP])
     time.sleep(_HANG_S)
 
 
-def _hang_before_report(q, index, **kwargs):
-    """Worker that hangs before sending anything (e.g. the engine hangs while
-    initialising). Used for both batch and single runs."""
+def _hang_before_report(q, task, **kwargs):
+    """Hangs before sending anything (e.g. the engine hangs while
+    initialising)."""
     time.sleep(_HANG_S)
 
 
-def _step_then_hang_single(q, index, **kwargs):
-    """Single-run worker: delivers one step (no Start marker), then hangs."""
-    q.put([index, 0, _STEP])
-    time.sleep(_HANG_S)
-
-
-def _ignores_sigterm(q, index, **kwargs):
-    """Batch worker stuck somewhere that never returns to the interpreter's
-    signal handling (a long C call) -- modelled as ignoring SIGTERM, which is
-    what Process.terminate() sends on macOS/Linux."""
+def _ignores_sigterm(q, task, **kwargs):
+    """Stuck somewhere that never returns to the interpreter's signal
+    handling (a long C call) -- modelled as ignoring SIGTERM, which is what
+    Process.terminate() sends on macOS/Linux."""
     import signal
 
     signal.signal(signal.SIGTERM, signal.SIG_IGN)
-    for i in list(index)[:3]:
-        q.put([i, -1, "Start"])
+    q.put([task.row_id, -1, "Start"])
     time.sleep(_HANG_S)
 
 
 SCENARIOS = {
     "batch_report_then_hang": ("batch", _report_then_hang),
-    "batch_step_then_hang": ("batch", _step_then_hang_batch),
+    "batch_step_then_hang": ("batch", _step_then_hang),
     "batch_hang_before_report": ("batch", _hang_before_report),
     "batch_ignores_sigterm": ("batch", _ignores_sigterm),
     "single_hang_before_report": ("single", _hang_before_report),
-    "single_step_then_hang": ("single", _step_then_hang_single),
+    "single_step_then_hang": ("single", _step_then_hang),
 }
 
 # Incidental library noise that says nothing about how timeouts are reported.
@@ -111,8 +109,14 @@ _NOISE = (DeprecationWarning, PendingDeprecationWarning, FutureWarning, SyntaxWa
 def main(name):
     kind, worker = SCENARIOS[name]
     ptt_path = importlib.import_module("petthermotools.Path")
-    ptt_path.path_multi = worker  # what batch runs spawn
-    ptt_path.path = worker        # what single runs spawn
+    # multi_path (v2, the default since 2026-10-21) never calls path_multi
+    # or path -- patching those is inert and falls through to the real
+    # _path_task_v2, which imports meltsdynamic (absent in CI) and crashes
+    # immediately, but under full concurrent CI load across every scenario
+    # in this module that was enough extra work to blow the harness's
+    # return-cap non-deterministically. Patch what multi_path actually
+    # calls instead (see _orphan_repro.py for the same fix).
+    ptt_path._path_task_v2 = worker
 
     kwargs = {
         'Model': "MELTSv1.0.2", 'comp': COMP, 'T_C': 1200.0, 'cores': 2,
