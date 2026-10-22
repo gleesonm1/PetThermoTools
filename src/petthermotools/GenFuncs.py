@@ -676,11 +676,18 @@ def memory_limit(cores = multiprocessing.cpu_count()):
 
 def check_array(var):
     '''
-    Checks the provided data is a numpy array. If a list is provided instead it is converted.
+    Checks the provided data is a numpy array. If a list or pandas Series is provided instead
+    it is converted.
     '''
     if type(var) == list:
         var_new = np.array(var)
         return var_new
+    elif isinstance(var, pd.Series):
+        # Independent of to_float's own pd.Series handling (see that function's
+        # comment for the full diagnosis) -- check_array is called on its own in
+        # some places, and its stated job is "guarantee this is a numpy array", so
+        # it should not pass a Series through unconverted either.
+        return var.to_numpy()
     else:
         return var
 
@@ -1004,11 +1011,11 @@ def _ensure_julia_ready():
 
 def to_float(x):
     '''
-    Converts input data (scalar, list, tuple, or numpy array) to float type.
+    Converts input data (scalar, list, tuple, numpy array, or pandas Series) to float type.
 
     Parameters:
     ----------
-    x : scalar (int, float) or array-like (list, tuple, np.ndarray)
+    x : scalar (int, float) or array-like (list, tuple, np.ndarray, pd.Series)
         The input data to be converted. Can also be None.
 
     Returns:
@@ -1022,6 +1029,21 @@ def to_float(x):
         return float(x)
     if isinstance(x, (list, tuple)):
         return [float(v) for v in x]
+    if isinstance(x, pd.Series):
+        # A column pulled straight out of a DataFrame (e.g. `T_C=data['Temperature']`)
+        # is a very natural way to pass per-row values, but previously fell through
+        # to the "leave unchanged" branch below -- every caller's own
+        # `type(x) == np.ndarray` check then missed it (np.zeros(n) + a Series is
+        # still a Series, not an ndarray, so the length>1 broadcast branch some
+        # callers use doesn't convert it either), so the WHOLE Series got treated
+        # as a single scalar value and broadcast per row instead of being indexed
+        # per row. Confirmed live via equilibrate_multi: the MELTS engine was
+        # silently handed a pandas Series as its pressure/temperature, every row's
+        # calcEquilibriumState() failed internally, and that failure was masked by
+        # equilibrate_MELTS's own bare `except:`, surfacing much later as a
+        # confusing IndexError/KeyError in stich_work. .to_numpy() drops the
+        # pandas index, same as how a list input is already treated positionally.
+        return x.to_numpy().astype(float)
     if isinstance(x, np.ndarray):
         return x.astype(float)
     return x  # leave unchanged if unexpected type
