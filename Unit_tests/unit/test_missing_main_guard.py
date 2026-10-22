@@ -30,7 +30,10 @@ _SCRIPT = Path(__file__).resolve().parent / "_no_guard_repro.py"
 
 # Seconds the script may keep running once it has started. A round (spawn,
 # re-import, fail) takes a few seconds, so this covers several respawns.
-_CAP_S = 20
+# Generous margin for CI: every spawned worker under multi_path v2 pays a
+# real package re-import to unpickle its _PathRowTask, slower on shared
+# runners than this was when first calibrated.
+_CAP_S = 45
 
 
 def _run(tmp_path, *extra):

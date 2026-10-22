@@ -45,20 +45,33 @@ COMP = {
 }
 
 
-def _healthy_worker(q, index, **kwargs):
-    """Follows path_multi's queue protocol and exits normally."""
-    for i in list(index)[:3]:
-        q.put([i, -1, "Start"])
-        q.put([i, 0, {"Conditions": {}, "_dummy_keys": []}])
+def _healthy_worker(q, task, **kwargs):
+    """Fake _path_task_v2: reports one step for the row and exits normally.
+
+    multi_path (v2, the default) calls _path_task_v2(q, task, **kwargs)
+    once per row -- not path_multi(q, index_array) -- so patching
+    path_multi here was inert and let every row fall through to the real
+    _path_task_v2 (meltsdynamic import, absent in CI), making this
+    script's timing depend on real-engine failure behaviour instead of a
+    fast, deterministic fake. Same fix as _timeout_repro.py.
+
+    No "-1, 'Start'" marker here (v1's path_multi protocol): v2's
+    mp_utils._worker_loop already reports a worker's liveness to the
+    supervisor on its own (_STARTED, sent before task_fn even runs), and
+    multi_path's _capture stores every item task_fn puts straight into
+    `collected` with no v1-style filtering, so a bare "Start" string ends
+    up handed to compile_results, which crashes calling .items() on it.
+    """
+    q.put([task.row_id, 0, {"Conditions": {}, "_dummy_keys": []}])
 
 
 def run_calculation():
     ptt_path = importlib.import_module("petthermotools.Path")
-    ptt_path.path_multi = _healthy_worker
+    ptt_path._path_task_v2 = _healthy_worker
     print("STARTED=1", flush=True)
     ptt_path.multi_path(
         Model="MELTSv1.0.2", comp=COMP, T_C=1200.0,
-        P_bar=np.array([1000.0, 2000.0, 3000.0, 4000.0, 5000.0]),
+        P_bar=np.array([1000.0, 2000.0]),
         cores=2, timeout=30, multi_processing=True, Print_suppress=True,
     )
     print("RETURNED=1", flush=True)
