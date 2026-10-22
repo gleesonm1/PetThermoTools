@@ -8,7 +8,9 @@ from petthermotools.GenFuncs import _quiet_engine_output
 from petthermotools.GenFuncs import _permanently_quiet_engine_output
 from petthermotools.Plotting import *
 from petthermotools.MELTS import *
+from petthermotools.MELTS import _MODEL_CODES
 from petthermotools.core_config import MAX_WORKERS, resolve_cores
+from petthermotools.mp_utils import run_tasks, TaskStatus
 import multiprocessing
 from multiprocessing import Queue
 from multiprocessing import Process
@@ -17,6 +19,7 @@ import sys
 from tqdm.auto import tqdm, trange
 from pathlib import Path
 from queue import Empty
+from typing import NamedTuple
 import platform
 import os
 
@@ -37,12 +40,12 @@ except Exception:
     pipes = None  # Standard Python interpreter (or wurlitzer not available)
 
 
-def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid = None, Frac_fluid = None,
-               T_C = None, T_path_C = None, T_start_C = None, T_end_C = None, dt_C = None, 
-               P_bar = None, P_path_bar = None, P_start_bar = None, P_end_bar = None, dp_bar = None, 
-               Fe3Fet_init = None, Fe3Fet_Liq = None, H2O_init = None, H2O_Liq = None, CO2_init = None, CO2_Liq = None, 
-               isenthalpic = None, isentropic = None, isochoric = None, find_liquidus = False, 
-               fO2_buffer = None, fO2_offset = None, 
+def multi_path_v1(cores = None, Model = None, bulk = None, comp = None, Frac_solid = None, Frac_fluid = None,
+               T_C = None, T_path_C = None, T_start_C = None, T_end_C = None, dt_C = None,
+               P_bar = None, P_path_bar = None, P_start_bar = None, P_end_bar = None, dp_bar = None,
+               Fe3Fet_init = None, Fe3Fet_Liq = None, H2O_init = None, H2O_Liq = None, CO2_init = None, CO2_Liq = None,
+               isenthalpic = None, isentropic = None, isochoric = None, find_liquidus = False,
+               fO2_buffer = None, fO2_offset = None,
                Print_suppress = None, fluid_sat = False, Crystallinity_limit = None, Combined = None,
                label = None, timeout = None, print_label = True, Suppress = ['rutile', 'tridymite'], Suppress_except=False,
                multi_processing = True, quiet_engine = True):
@@ -669,6 +672,465 @@ def multi_path(cores = None, Model = None, bulk = None, comp = None, Frac_solid 
                 return new_out
             else:
                 return Results
+
+
+class _PathRowTask(NamedTuple):
+    """
+    One row's own data for multi_path_v2, carried through
+    mp_utils.run_tasks's `indices` -- same rationale as every other _v2
+    row task this session built (findLiq_multi_v2's _RowTask,
+    equilibrate_multi_v2's _EquilibrateRowTask, saturation_pressure_v2's
+    _SaturationRowTask): a few scalars/arrays and one composition dict per
+    row, not the whole batch passed through task_kwargs (which would be
+    re-pickled and re-sent to every single worker spawn).
+    """
+    row_id: int
+    comp: dict
+    T_C: float
+    T_path_C: object
+    T_start_C: float
+    T_end_C: float
+    dt_C: float
+    P_bar: float
+    P_path_bar: object
+    P_start_bar: float
+    P_end_bar: float
+    dp_bar: float
+    fO2_offset: float
+
+    def __hash__(self):
+        return hash(self.row_id)
+
+    def __eq__(self, other):
+        return isinstance(other, _PathRowTask) and self.row_id == other.row_id
+
+
+def _path_task_v2(q, task, *, Model=None, fO2_buffer=None, Suppress=None, Suppress_except=None,
+                   Frac_solid=None, Frac_fluid=None, isenthalpic=None, isentropic=None,
+                   isochoric=None, find_liquidus=None, fluid_sat=None, Crystallinity_limit=None,
+                   quiet_engine=True):
+    """
+    task_fn for multi_path_v2's mp_utils.run_tasks() call. Always
+    constructs a brand-new MELTSdynamic() -- deliberately never reads or
+    writes a cross-task cache, so this is correct regardless of
+    max_tasks_per_worker (if raised above 1 by a caller experimenting with
+    it, every task STILL gets a fresh engine here; nothing in this
+    function reuses one across rows). That keeps multi_path_v2 safe by
+    construction rather than by relying on the default not being
+    overridden.
+    """
+    if quiet_engine:
+        _permanently_quiet_engine_output()   # one-way; must run before MELTSdynamic()
+        # is constructed below, same reasoning as every other task_fn this session.
+
+    from meltsdynamic import MELTSdynamic
+    melts = MELTSdynamic(_MODEL_CODES.get(Model, 1))
+
+    Results, tr = path_MELTS(
+        Model=Model, comp=task.comp, Frac_solid=Frac_solid, Frac_fluid=Frac_fluid,
+        T_initial_C=np.random.random() * 200 + 1200,
+        T_C=task.T_C, T_path_C=task.T_path_C, T_start_C=task.T_start_C,
+        T_end_C=task.T_end_C, dt_C=task.dt_C,
+        P_bar=task.P_bar, P_path_bar=task.P_path_bar, P_start_bar=task.P_start_bar,
+        P_end_bar=task.P_end_bar, dp_bar=task.dp_bar,
+        isenthalpic=isenthalpic, isentropic=isentropic, isochoric=isochoric,
+        find_liquidus=find_liquidus, fO2_buffer=fO2_buffer, fO2_offset=task.fO2_offset,
+        fluid_sat=fluid_sat, Crystallinity_limit=Crystallinity_limit,
+        Suppress=Suppress, Suppress_except=Suppress_except, trail=True, melts=melts,
+        q=q, index=task.row_id,
+    )
+
+    # `tr` ("trail") is NOT a per-row success/failure flag, even though it
+    # looks like one -- confirmed by reading how the ORIGINAL v1 worker
+    # (path_multi, this file) treats it: `if tr is False: break` only stops
+    # trying FURTHER rows in the same engine-reused batch group, a safety
+    # measure against continuing to chain off a possibly-troubled engine.
+    # It never discards the row that returned False -- that row's own
+    # already-streamed q.put() step data is kept. multi_path_v2 never
+    # chains engines across rows in the first place (fresh engine per row,
+    # by design), so that concern doesn't apply here at all, and treating
+    # `tr is False` as a hard failure was simply wrong: path_MELTS sets it
+    # False on transient engine status messages (e.g. "Quadratic
+    # iterations") that don't actually invalidate the Results already
+    # accumulated, so a fully-populated, legitimate run was being reported
+    # as CRASHED (confirmed live: "0/4 succeeded" with all 4 rows actually
+    # complete, find_liquidus=True). Only a genuinely empty Results means
+    # nothing usable came back.
+    if not Results:
+        raise RuntimeError(f"path_MELTS reported an empty result for row {task.row_id}")
+
+    # Distinct from path_MELTS's own per-step q.put([index, step_i, data]) calls
+    # (step_i is always an int) -- lets on_progress tick the bar once per ROW
+    # done, not once per internal step, without guessing from step numbers.
+    q.put([task.row_id, "__DONE__", None])
+
+
+def multi_path(cores=None, Model=None, bulk=None, comp=None, Frac_solid=None, Frac_fluid=None,
+                   T_C=None, T_path_C=None, T_start_C=None, T_end_C=None, dt_C=None,
+                   P_bar=None, P_path_bar=None, P_start_bar=None, P_end_bar=None, dp_bar=None,
+                   Fe3Fet_init=None, Fe3Fet_Liq=None, H2O_init=None, H2O_Liq=None,
+                   CO2_init=None, CO2_Liq=None,
+                   isenthalpic=None, isentropic=None, isochoric=None, find_liquidus=False,
+                   fO2_buffer=None, fO2_offset=None, fluid_sat=False, Crystallinity_limit=None,
+                   label=None, timeout=None, Suppress=['rutile', 'tridymite'], Suppress_except=False,
+                   quiet_engine=True, max_tasks_per_worker=1, max_retries=0, stall_timeout=None,
+                   multi_processing=True, Print_suppress=None):
+    """
+    Runs isobaric/polybaric/isochoric crystallisation (or decompression/
+    heating) paths for one or more starting compositions/conditions, using
+    the mp_utils.py persistent-worker supervisor (the same one
+    equilibrate_multi/findLiq_multi/saturation_pressure use).
+
+    2026-10-21: this IS the v2 implementation, now the default under the
+    `multi_path` name (previously available as `multi_path_v2`, which
+    remains as a plain alias) -- see MAINTENANCE_NOTES.md (2026-10-16/20/21)
+    for the full before/after measurements this replacement was validated
+    against, most notably a 50-run comparison where 6/50 runs disagreed
+    between this implementation and the OLD one (now `multi_path_v1`), and
+    an isolated, reuse-free ground-truth check matched THIS implementation
+    in all 6 cases -- the old implementation's own `addNodeAfter()`
+    cross-run chaining in `path_multi` was confirmed to produce real,
+    silently wrong answers for roughly 1 in 8 runs at that scale, not a
+    rare edge case. The previous, chain-based implementation is kept,
+    fully intact, as `multi_path_v1` for anyone who needs it.
+
+    Non-MELTS Models (MAGEMin, nGibbs) are delegated straight to
+    `multi_path_v1` -- mp_utils is a MELTS-worker-process concept;
+    multi_path_v1's own Julia/nGibbs branches are untouched by this change.
+
+    Design notes:
+    - max_tasks_per_worker defaults to 1 -- NO cross-row engine reuse.
+      Every path runs in its own freshly-constructed engine (_path_task_v2
+      never caches or reuses one across rows, regardless of this setting).
+      A path is many sequential calcEquilibriumState() steps on ONE
+      composition already; reuse here would mean warm-starting one row's
+      FIRST step from a DIFFERENT row's LAST step -- the same cross-
+      composition-reuse hazard investigated at length for
+      equilibrate_multi/findLiq_multi -- so cross-row reuse is not
+      attempted here at all, not merely defaulted off.
+    - A clear, per-ROW progress bar (tqdm), one tick per path that
+      finishes (successfully or permanently failed), not one tick per
+      internal path step. path_MELTS's own q.put([index, step_i, data])
+      calls (one per path step) are still used to accumulate that row's
+      full step-by-step results via on_progress.
+    - `multi_processing` is accepted for backward compatibility with
+      existing callers (e.g. Path_wrappers.py's six crystallisation
+      wrappers all pass it through) but is otherwise a no-op here: this
+      implementation always uses the persistent-worker supervisor,
+      regardless of its value. The old single-run in-process fallback
+      (`multi_processing=False` skipping process spawn entirely for a
+      lone calculation) is not reproduced -- a minor, rarely-used
+      convenience, not confirmed to be exercised by any real caller
+      (checked: no package code or notebook in this repo actually passes
+      `multi_processing=False` to multi_path). `Print_suppress` IS accepted
+      (added 2026-10-21 after the Unit_tests suite's own repro scripts were
+      found to rely on it -- a gap in the original "no real caller" check,
+      which covered docs/Workshops/src but not Unit_tests): when not None,
+      it suppresses every status print this function makes (the timeout
+      announcement and the final completed/crashed/timed-out/no-results
+      summary), matching v1's own "anything other than None means quiet"
+      convention, though the exact message it originally gated
+      ("Running ... calculation...") no longer exists to suppress.
+      `Combined` and `print_label` (multi_path_v1-only, confirmed unused by
+      any real caller including the test suite) are still not reproduced;
+      use `multi_path_v1` directly if you need them.
+
+    Parameters unique to this version
+    ----------------------------------
+    max_tasks_per_worker : int, default 1
+        How many successful paths one worker process runs (reusing its
+        MELTSdynamic engine via addNodeAfter() -- UNUSED by this version's
+        own task_fn, which always builds a fresh engine regardless; see
+        above for why cross-row reuse is not attempted here) before being
+        retired and replaced. Left at 1 by design.
+    max_retries : int, default 0
+        mp_utils.run_tasks's own blanket retry count for a failed/timed-out
+        row (same inputs, no perturbation). 0 means a failure is reported
+        once, immediately, as GAVE_UP; raise this if you want simple
+        retries.
+    stall_timeout : float or None, default None
+        Passed straight to mp_utils.run_tasks -- kills and retries (if
+        max_retries > 0) a row that has reported no progress (no new path
+        step) for this many seconds, which can catch a genuinely stuck
+        single step far sooner than the absolute `timeout`. Off by
+        default, same as every other v2-based function.
+    timeout : float or None, default None
+        Per-row absolute budget, in seconds, before a stuck worker is
+        killed and replaced. None resolves to 60s on macOS/Linux, 180s on
+        Windows -- longer than equilibrate_multi/findLiq_multi/
+        saturation_pressure's ~20-45s single-equilibrium-step defaults,
+        since a path is many steps, not one. Announced at the start of
+        every call (as the resolved value, whether defaulted or supplied).
+
+    Returns
+    -------
+    Results : dict
+        Keyed by "Run {i}" (each a dict of phase/property DataFrames,
+        'Input' included) for n > 1, or a single run's own dict of
+        DataFrames directly when the normalised input resolves to exactly
+        one run.
+    """
+    # multi_path_v1 defaults Model to "MELTSv1.0.2" this way (a real
+    # reassignment, not just a local substitution) -- missing here until
+    # 2026-10-21 was a real bug: the old `(Model or "MELTSv1.0.2")` below
+    # only affected that one membership check, so Model=None still reached
+    # `Model.startswith('n')` a few lines down as a literal None and
+    # crashed (confirmed live via the Unit_tests suite,
+    # test_model_none_defaults_to_a_melts_model_in_multi_path).
+    if Model is None:
+        Model = "MELTSv1.0.2"
+
+    if "MELTS" not in Model:
+        return multi_path_v1(cores=cores, Model=Model, bulk=bulk, comp=comp, Frac_solid=Frac_solid,
+                           Frac_fluid=Frac_fluid, T_C=T_C, T_path_C=T_path_C, T_start_C=T_start_C,
+                           T_end_C=T_end_C, dt_C=dt_C, P_bar=P_bar, P_path_bar=P_path_bar,
+                           P_start_bar=P_start_bar, P_end_bar=P_end_bar, dp_bar=dp_bar,
+                           Fe3Fet_init=Fe3Fet_init, Fe3Fet_Liq=Fe3Fet_Liq, H2O_init=H2O_init,
+                           H2O_Liq=H2O_Liq, CO2_init=CO2_init, CO2_Liq=CO2_Liq,
+                           isenthalpic=isenthalpic, isentropic=isentropic, isochoric=isochoric,
+                           find_liquidus=find_liquidus, fO2_buffer=fO2_buffer, fO2_offset=fO2_offset,
+                           fluid_sat=fluid_sat, Crystallinity_limit=Crystallinity_limit,
+                           label=label, timeout=timeout, Suppress=Suppress,
+                           Suppress_except=Suppress_except, multi_processing=multi_processing,
+                           Print_suppress=Print_suppress, quiet_engine=quiet_engine)
+
+    if Model.startswith('n'):
+        _ng_base = Model[:-6] if Model.endswith('NoProp') else Model
+        if _ng_base in _nGibbs_models:
+            return multi_path_v1(cores=cores, Model=Model, bulk=bulk, comp=comp, Frac_solid=Frac_solid,
+                               Frac_fluid=Frac_fluid, T_C=T_C, T_path_C=T_path_C, T_start_C=T_start_C,
+                               T_end_C=T_end_C, dt_C=dt_C, P_bar=P_bar, P_path_bar=P_path_bar,
+                               P_start_bar=P_start_bar, P_end_bar=P_end_bar, dp_bar=dp_bar,
+                               Fe3Fet_init=Fe3Fet_init, Fe3Fet_Liq=Fe3Fet_Liq, H2O_init=H2O_init,
+                               H2O_Liq=H2O_Liq, CO2_init=CO2_init, CO2_Liq=CO2_Liq,
+                               isenthalpic=isenthalpic, isentropic=isentropic, isochoric=isochoric,
+                               find_liquidus=find_liquidus, fO2_buffer=fO2_buffer, fO2_offset=fO2_offset,
+                               fluid_sat=fluid_sat, Crystallinity_limit=Crystallinity_limit,
+                               label=label, timeout=timeout, Suppress=Suppress,
+                               Suppress_except=Suppress_except, Print_suppress=Print_suppress,
+                               quiet_engine=quiet_engine)
+
+    ## make sure everything is a float -- identical to multi_path's own preamble
+    T_C = check_array(to_float(T_C))
+    T_path_C = to_float(T_path_C)
+    T_start_C = check_array(to_float(T_start_C))
+    T_end_C = check_array(to_float(T_end_C))
+    dt_C = check_array(to_float(dt_C))
+
+    P_bar = check_array(to_float(P_bar))
+    P_path_bar = to_float(P_path_bar)
+    P_start_bar = check_array(to_float(P_start_bar))
+    P_end_bar = check_array(to_float(P_end_bar))
+    dp_bar = check_array(to_float(dp_bar))
+
+    Fe3Fet_init = check_array(to_float(Fe3Fet_init))
+    Fe3Fet_Liq = check_array(to_float(Fe3Fet_Liq))
+    H2O_init = check_array(to_float(H2O_init))
+    H2O_Liq = check_array(to_float(H2O_Liq))
+    CO2_init = check_array(to_float(CO2_init))
+    CO2_Liq = check_array(to_float(CO2_Liq))
+    fO2_offset = check_array(to_float(fO2_offset))
+
+    if bulk is not None:
+        comp = bulk.copy()
+
+    if H2O_Liq is not None and H2O_init is None:
+        H2O_init = H2O_Liq
+    if CO2_Liq is not None and CO2_init is None:
+        CO2_init = CO2_Liq
+    if Fe3Fet_Liq is not None and Fe3Fet_init is None:
+        Fe3Fet_init = Fe3Fet_Liq
+
+    if Frac_solid is False:
+        Frac_solid = None
+    if Frac_fluid is False:
+        Frac_fluid = None
+
+    if type(comp) == pd.core.series.Series:
+        comp = comp.to_dict()
+
+    if fO2_buffer is not None and fO2_buffer not in ("NNO", "FMQ", "IW"):
+        raise ValueError("fO2 buffer specified is not an allowed input. This argument can only be "
+                          "'FMQ', 'IW', or 'NNO' -- if you want to offset from these buffers use the "
+                          "'fO2_offset' argument.")
+
+    if label is not None:
+        allowed_labels = ['CO2', 'CO2_init', 'pressure', 'P', 'P_bar', 'P_start_bar', 'fO2',
+                           'fO2_offset', 'H2O', 'H2O_init', 'Fe3Fet', 'Fe3Fet_init']
+        if label not in allowed_labels:
+            raise ValueError(f"Do not recognise the label chosen. Available labels are {allowed_labels}")
+
+    if timeout is None:
+        timeout = 180.0 if platform.system() == "Windows" else 60.0
+        if Print_suppress is None:
+            print(f"multi_path_v2: timeout not specified, using the platform default of {timeout:.0f}s "
+                  f"per path (pass timeout=<seconds> to override).")
+    else:
+        if Print_suppress is None:
+            print(f"multi_path_v2: using a {timeout:.0f}s timeout per path.")
+
+    comp = comp_fix(Model=Model, comp=comp, Fe3Fet_Liq=Fe3Fet_init, H2O_Liq=H2O_init, CO2_Liq=CO2_init)
+
+    if type(comp) == dict:
+        if comp['H2O_Liq'] == 0.0:
+            raise Warning("Adding small amounts of H2O may improve the ability of MELTS to accurately "
+                           "reproduce the saturation of oxide minerals. Additionally, sufficient H2O is "
+                           "required in the model for MELTS to predict the crystallisation of apatite, "
+                           "rather than whitlockite.")
+        if comp['Fe3Fet_Liq'] == 0.0 and fO2_buffer is None:
+            raise Warning("MELTS often fails to produce any results when no ferric Fe is included in "
+                           "the starting composition and an fO2 buffer is not set.")
+
+    cores = resolve_cores(cores)
+
+    ## figure out how many runs are being requested -- identical logic to multi_path's own
+    l = []
+    for item in [Fe3Fet_init, Fe3Fet_Liq, H2O_init, H2O_Liq, CO2_init, CO2_Liq, fO2_offset,
+                 P_bar, P_start_bar, P_end_bar, dp_bar, T_C, T_start_C, T_end_C, dt_C]:
+        if type(item) == np.ndarray:
+            l.append(len(item))
+    if type(comp) == pd.core.frame.DataFrame:
+        l.append(len(comp))
+    if len(l) > 1 and len(set(l)) > 1:
+        raise ValueError("Error: non-identical length in provided conditions. Please check lists or "
+                          "arrays are the same length and/or specify single values.")
+    n = l[0] if len(l) > 0 else 1
+
+    P_bar, T_C, P_start_bar, T_start_C, P_end_bar, T_end_C, dp_bar, dt_C, P_path_bar, T_path_C, fO2_offset = \
+        control_path_parameters(n, P_bar, T_C, P_start_bar, T_start_C, P_end_bar, T_end_C,
+                                 dp_bar, dt_C, P_path_bar, T_path_C, fO2_offset)
+
+    if type(comp) == dict:
+        comps = [comp] * n
+    else:
+        comps = [comp.loc[i].to_dict() for i in range(n)]
+
+    pending_tasks = [
+        _PathRowTask(i, comps[i], T_C[i], T_path_C[i], T_start_C[i], T_end_C[i], dt_C[i],
+                     P_bar[i], P_path_bar[i], P_start_bar[i], P_end_bar[i], dp_bar[i], fO2_offset[i])
+        for i in range(n)
+    ]
+
+    collected: dict = {}   # row_id -> {step_i: step_data, ...}
+    pbar = tqdm(total=n, desc="multi_path_v2")
+    ticked: set = set()
+
+    def _tick(row_id):
+        if row_id not in ticked:
+            ticked.add(row_id)
+            pbar.update(1)
+
+    def _capture(item):
+        row_id, step_i, data = item
+        if step_i == "__DONE__":
+            _tick(row_id)
+            return
+        collected.setdefault(row_id, {})[step_i] = data
+
+    try:
+        out = run_tasks(
+            _path_task_v2,
+            pending_tasks,
+            task_kwargs=dict(Model=Model, fO2_buffer=fO2_buffer, Suppress=Suppress,
+                              Suppress_except=Suppress_except, Frac_solid=Frac_solid,
+                              Frac_fluid=Frac_fluid, isenthalpic=isenthalpic, isentropic=isentropic,
+                              isochoric=isochoric, find_liquidus=find_liquidus, fluid_sat=fluid_sat,
+                              Crystallinity_limit=Crystallinity_limit, quiet_engine=quiet_engine),
+            cores=cores,
+            timeout=timeout,
+            stall_timeout=stall_timeout,
+            max_retries=max_retries,
+            max_tasks_per_worker=max_tasks_per_worker,
+            on_progress=_capture,
+        )
+    finally:
+        for row_id in range(n):
+            _tick(row_id)   # any row never reaching __DONE__ (failed/timed out) still ticks once
+        pbar.close()
+
+    # Four-way breakdown instead of a plain succeeded/didn't: `out[row_id].status`
+    # alone can't tell a row that crashed (or timed out) with real, already-
+    # streamed partial step data apart from one that returned nothing at all
+    # -- both show up identically as GAVE_UP there (run_tasks's own
+    # _finalise_or_retry collapses every non-OK status to GAVE_UP once
+    # retries are exhausted, which is immediate here since max_retries=0 by
+    # default). `collected[row_id]` -- filled from on_progress as steps
+    # arrive, independent of the task's eventual status -- is what actually
+    # says whether usable data came back; `.error`'s own text (the one place
+    # the original TIMEOUT/STALLED/CRASHED distinction survives) says why a
+    # non-OK row stopped. STALLED is grouped with TIMEOUT here (both are an
+    # external cutoff imposed by the supervisor, not an engine-side failure).
+    n_completed = 0
+    n_partial_crash = 0
+    n_partial_timeout = 0
+    n_no_results = 0
+
+    # `out` is keyed by the _PathRowTask objects passed in as `indices`, not
+    # by plain row_id ints -- re-key by .row_id once rather than relying on
+    # _PathRowTask.__eq__ matching a bare int (it doesn't: it only compares
+    # equal to another _PathRowTask).
+    result_by_row = {task.row_id: result for task, result in out.items()}
+
+    for row_id in range(n):
+        result = result_by_row.get(row_id)
+        has_data = bool(collected.get(row_id))
+        if result is not None and result.status is TaskStatus.OK:
+            n_completed += 1
+        elif has_data:
+            error = (result.error or "") if result is not None else ""
+            if "timed out" in error or "no activity for over" in error:
+                n_partial_timeout += 1
+            else:
+                n_partial_crash += 1
+        else:
+            n_no_results += 1
+
+    if Print_suppress is None:
+        print(f"multi_path_v2: {n_completed}/{n} completed, {n_partial_crash}/{n} returned partial "
+              f"results after a crash, {n_partial_timeout}/{n} returned partial results after timing "
+              f"out, {n_no_results}/{n} returned no results (no retry by default -- see max_retries).")
+
+    full_results = {}
+    for row_id, steps in collected.items():
+        if steps:
+            full_results[f"Run {row_id}"] = compile_results(steps)
+
+    if n == 1:
+        # Match multi_path's own single-run return shape: the one run's own
+        # dict of DataFrames, not wrapped in a "Run 0" dict of dicts.
+        if full_results:
+            Results = stich(list(full_results.values())[0], Model=Model,
+                             Frac_fluid=Frac_fluid, Frac_solid=Frac_solid)
+        else:
+            print("No calculations returned")
+            Results = {}
+        return Results
+
+    Results = stich(Res=full_results, multi=True, Model=Model, Frac_fluid=Frac_fluid, Frac_solid=Frac_solid)
+
+    for r in Results:
+        i = int(r.split(' ')[1].strip())
+        row_comp = comp if type(comp) == dict else comp.loc[i].to_dict()
+        Results[r]['Input'] = {
+            'Model': Model, 'comp': row_comp, 'Frac_solid': Frac_solid, 'Frac_fluid': Frac_fluid,
+            'T_C': T_C[i], 'T_path_C': T_path_C[i], 'T_start_C': T_start_C[i], 'T_end_C': T_end_C[i],
+            'dt_C': dt_C[i], 'P_bar': P_bar[i], 'P_path_bar': P_path_bar[i], 'P_start_bar': P_start_bar[i],
+            'P_end_bar': P_end_bar[i], 'dp_bar': dp_bar[i], 'isenthalpic': isenthalpic,
+            'isentropic': isentropic, 'isochoric': isochoric, 'find_liquidus': find_liquidus,
+            'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset[i], 'fluid_sat': fluid_sat,
+            'Crystallinity_limit': Crystallinity_limit, 'Suppress': Suppress, 'Suppress_except': Suppress_except,
+        }
+
+    if label is not None:
+        return label_results(Results, label)
+    return Results
+
+
+# Plain alias: `multi_path` IS this implementation as of 2026-10-21 (see its
+# own docstring), so `multi_path_v2` is now redundant but kept so any
+# existing code/notebook/scratch script calling it by that name keeps working.
+multi_path_v2 = multi_path
+
 
 def path_multi(q, index, *, Model = None, comp = None, Frac_solid = None, Frac_fluid = None,
             T_C = None, T_path_C = None, T_start_C = None, T_end_C = None, dt_C = None,

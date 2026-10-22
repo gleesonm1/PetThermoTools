@@ -41,9 +41,22 @@ COMP = {
 
 def _worker_hangs(q, index, **kwargs):
     """Reports 'Start' then hangs, like a calculation stuck in the engine.
-    The sleep is finite so a worker that escapes cleanup can't live forever."""
+    The sleep is finite so a worker that escapes cleanup can't live forever.
+    Matches multi_path_v1's own path_multi(q, index, ...) calling convention
+    (index is a list of up to 3 row ids handled by one process)."""
     for i in list(index)[:3]:
         q.put([i, -1, "Start"])
+    time.sleep(120)
+
+
+def _worker_hangs_v2(q, task, **kwargs):
+    """Same idea as _worker_hangs, but for multi_path's own default
+    implementation as of 2026-10-21 (the mp_utils-based one): its task_fn
+    (_path_task_v2) handles ONE row per call, via `task.row_id`, not a list
+    of up to 3 like path_multi's own `index` -- _fail_the_parent_soon only
+    needs a live worker process to exist, not any particular message
+    content, so reporting anything via q.put() before hanging is enough."""
+    q.put([task.row_id, 0, "Start"])
     time.sleep(120)
 
 
@@ -65,7 +78,8 @@ def _fail_the_parent_soon(mode, main_thread_id):
 
 def main(mode):
     ptt_path = importlib.import_module("petthermotools.Path")
-    ptt_path.path_multi = _worker_hangs
+    ptt_path.path_multi = _worker_hangs       # multi_path_v1's own worker target
+    ptt_path._path_task_v2 = _worker_hangs_v2  # multi_path's (default, v2) own task_fn
 
     threading.Thread(
         target=_fail_the_parent_soon,

@@ -5,6 +5,7 @@ from petthermotools.Plotting import *
 from petthermotools.Path import *
 from petthermotools.MELTS import *
 from petthermotools.core_config import MAX_WORKERS, resolve_cores
+from petthermotools.Liq import equilibrate_multi_v2
 import multiprocessing
 from multiprocessing import Queue
 from multiprocessing import Process
@@ -575,6 +576,235 @@ def phaseDiagram_calc(cores = None, Model = None, bulk = None, T_C = None, P_bar
 
     return Combined
 
+
+def phaseDiagram_calc_v2(cores=None, Model=None, bulk=None, T_C=None, P_bar=None,
+                          T_min_C=None, T_max_C=None, T_num=None,
+                          P_min_bar=None, P_max_bar=None, P_num=None,
+                          Fe3Fet_Liq=None, H2O_Liq=None, CO2_Liq=None,
+                          Fe3Fet_init=None, H2O_init=None, CO2_init=None,
+                          fO2_buffer=None, fO2_offset=None, grid=True,
+                          Suppress=['rutile', 'tridymite'], quiet_engine=True,
+                          max_tasks_per_worker=20, timeout=None, retry=True):
+    """
+    Experimental alternative to phaseDiagram_calc for the MELTS case:
+    calls equilibrate_multi_v2 directly (one call per batch of grid
+    points, fixed-reuse star pattern enabled by default, plus
+    same_bulk=True since every grid point shares one composition) instead
+    of path()/multi_path.
+
+    A phase diagram grid point is really just "the stable phase
+    assemblage for ONE composition at ONE (T, P)" -- exactly
+    equilibrate_multi's own native shape (one composition, many T/P
+    combinations), not a path at all. This skips path()/multi_path
+    entirely.
+
+    IMPORTANT, explicit correctness caveat (read before trusting reuse
+    here for real work): this session's own investigation found
+    equilibrate_multi's cross-row engine reuse (both the original chain-
+    based version and the star-pattern "fixed" v2) can land a DIFFERENT,
+    still-locally-valid-but-wrong-for-that-row phase assemblage for
+    compositions sitting near a real phase-equilibrium boundary -- see
+    MAINTENANCE_NOTES.md 2026-10-16/20. A phase diagram's entire PURPOSE
+    is to sample many points that straddle exactly those boundaries, so
+    this is closer to the worst case for that risk than almost any other
+    calculation in this package, not a low-risk case.
+
+    `same_bulk=True` is used here specifically because every grid point
+    shares the exact same bulk composition by construction (a phase
+    diagram varies T/P only) -- a direct, controlled measurement
+    (MAINTENANCE_NOTES.md 2026-10-20, "digging into the
+    phaseDiagram_refine_v2 slowdown") found plain reuse alone flips the
+    reported phase assemblage at 17.4% of grid cells; `same_bulk` is one
+    mitigation for that, not a complete fix. Still an experiment, not a
+    trusted default.
+
+    Same grid-construction inputs as phaseDiagram_calc (T_C/P_bar or
+    T_min_C/T_max_C/T_num + P_min_bar/P_max_bar/P_num, `grid`). Does NOT
+    reproduce phaseDiagram_calc's `i_max`-round retry heuristics, `refine`
+    pass, or nGibbs grid-sampling special case -- non-MELTS Models are
+    delegated to the real phaseDiagram_calc unchanged.
+
+    Parameters unique to this version
+    ----------------------------------
+    max_tasks_per_worker : int, default 20
+        Passed straight to equilibrate_multi_v2 -- how many grid points one
+        worker process computes (reusing its MELTSdynamic trunk via
+        addNodeAfter(), fresh hop per point) before being retired and
+        replaced. This is the knob being tested for a speedup; see above
+        for the correctness caveat that comes with raising it above 1.
+    timeout : float or None, default None
+        Passed straight to equilibrate_multi_v2; None resolves to its own
+        platform default (45s Windows / 20s macOS/Linux) -- phase-diagram
+        grid points are ordinary single-equilibrium-step calculations,
+        the same shape of work equilibrate_multi_v2 already defaults for.
+    retry : bool, default True
+        If True (default), any grid point equilibrate_multi_v2 did not
+        return a result for (timeout or a genuine calculation error) is
+        retried EXACTLY ONCE, as a second equilibrate_multi_v2 call over
+        just the missing points -- not equilibrate_multi_v2's own built-in
+        timeout-only retry (which still applies within each of these two
+        calls), an extra outer round on top of it, covering calculation
+        errors too. Set False to see the first-pass result only.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Same shape as phaseDiagram_calc's own return: one row per
+        successfully calculated P-T grid point.
+    """
+    if Model is None:
+        Model = "MELTSv1.0.2"
+
+    if "MELTS" not in Model:
+        return phaseDiagram_calc(cores=cores, Model=Model, bulk=bulk, T_C=T_C, P_bar=P_bar,
+                                  T_min_C=T_min_C, T_max_C=T_max_C, T_num=T_num,
+                                  P_min_bar=P_min_bar, P_max_bar=P_max_bar, P_num=P_num,
+                                  Fe3Fet_Liq=Fe3Fet_Liq, H2O_Liq=H2O_Liq, CO2_Liq=CO2_Liq,
+                                  Fe3Fet_init=Fe3Fet_init, H2O_init=H2O_init, CO2_init=CO2_init,
+                                  fO2_buffer=fO2_buffer, fO2_offset=fO2_offset, grid=grid,
+                                  Suppress=Suppress, quiet_engine=quiet_engine)
+
+    T_C = check_array(to_float(T_C))
+    T_min_C = check_array(to_float(T_min_C))
+    T_max_C = check_array(to_float(T_max_C))
+    T_num = check_array(to_float(T_num))
+    P_bar = check_array(to_float(P_bar))
+    P_min_bar = check_array(to_float(P_min_bar))
+    P_max_bar = check_array(to_float(P_max_bar))
+    P_num = check_array(to_float(P_num))
+    Fe3Fet_init = check_array(to_float(Fe3Fet_init))
+    Fe3Fet_Liq = check_array(to_float(Fe3Fet_Liq))
+    H2O_init = check_array(to_float(H2O_init))
+    H2O_Liq = check_array(to_float(H2O_Liq))
+    CO2_init = check_array(to_float(CO2_init))
+    CO2_Liq = check_array(to_float(CO2_Liq))
+    fO2_offset = check_array(to_float(fO2_offset))
+
+    if H2O_Liq is not None and H2O_init is None:
+        H2O_init = H2O_Liq
+    if CO2_Liq is not None and CO2_init is None:
+        CO2_init = CO2_Liq
+    if Fe3Fet_Liq is not None and Fe3Fet_init is None:
+        Fe3Fet_init = Fe3Fet_Liq
+
+    comp = bulk.copy()
+
+    if fO2_buffer is not None and fO2_buffer not in ("NNO", "FMQ", "IW"):
+        raise ValueError("fO2 buffer specified is not an allowed input. This argument can only be "
+                          "'FMQ' or 'NNO' -- if you want to offset from these buffers use the "
+                          "'fO2_offset' argument.")
+
+    cores = resolve_cores(cores)
+
+    if type(comp) == pd.core.series.Series:
+        comp = comp.to_dict()
+
+    comp = comp_fix(Model=Model, comp=comp, Fe3Fet_Liq=Fe3Fet_init, H2O_Liq=H2O_init, CO2_Liq=CO2_init)
+
+    if type(comp) == dict:
+        if comp['Fe3Fet_Liq'] == 0.0 and fO2_buffer is None:
+            raise Warning("MELTS often fails to produce any results when no ferric Fe is included in "
+                           "the starting composition and an fO2 buffer is not set.")
+
+    # --- build the flattened P-T grid -- identical construction to phaseDiagram_calc's own ---
+    if T_min_C is not None:
+        T_C = np.linspace(T_min_C, T_max_C, int(T_num))
+    if P_min_bar is not None:
+        P_bar = np.linspace(P_min_bar, P_max_bar, int(P_num))
+
+    if grid is True:
+        P, T = np.meshgrid(P_bar, T_C)
+    else:
+        P, T = P_bar, T_C
+
+    T_flat = np.round(np.asarray(T).T.flatten(), 2)
+    P_flat = np.round(np.asarray(P).T.flatten(), 2)
+    n = len(T_flat)
+
+    print(f"phaseDiagram_calc_v2: {n} grid points, equilibrate_multi_v2(max_tasks_per_worker="
+          f"{max_tasks_per_worker}, same_bulk=True) -- see this function's own docstring for the "
+          f"reuse-near-phase-boundary caveat before trusting this for real work.")
+
+    # same_bulk=True is safe here specifically: every grid point shares the
+    # exact same `comp` dict (a phase diagram varies T/P only), which this
+    # function's own docstring explains is exactly the case equilibrate_multi_v2
+    # was given that option for.
+    Output = equilibrate_multi_v2(cores=cores, Model=Model, bulk=comp, T_C=T_flat, P_bar=P_flat,
+                                   fO2_buffer=fO2_buffer, fO2_offset=fO2_offset, Suppress=Suppress,
+                                   quiet_engine=quiet_engine, max_tasks_per_worker=max_tasks_per_worker,
+                                   timeout=timeout, same_bulk=True)
+    # equilibrate_multi_v2's own 'All' sheet already carries T_C/P_bar (from
+    # each point's own Conditions.temperature/pressure) -- no need to
+    # re-attach the grid coordinates separately. Final_Combined is pre-
+    # allocated with `index = np.arange(n)` (matching T_flat/P_flat's own
+    # order) and filled by `run_idx`, so a failed point's row stays at its
+    # own position as NaN -- EXCEPT equilibrate_multi's own stich() also
+    # drops any row where the engine itself returned the classic MELTS
+    # zero-sentinel (Conditions['h'] == 0.0 exactly, a genuine non-
+    # convergence that mp_utils sees as an ordinary "OK" result, not a
+    # failure, so it is never retried by equilibrate_multi's own internal
+    # retry). `drop(labels=...)` removes that row by its original index
+    # LABEL rather than renumbering what remains, so `.reindex(np.arange(n))`
+    # (not `.reset_index(drop=True)`, which would silently shift every row
+    # after the drop out of alignment with T_flat/P_flat) restores the full
+    # n-row shape with that point now a clean, ordinary-looking NaN row.
+    Combined = Output['All'].reindex(np.arange(n))
+
+    failed_mask = Combined['H_J'].isna() if 'H_J' in Combined.columns else pd.Series(True, index=Combined.index)
+    n_failed = int(failed_mask.sum())
+    print(f"phaseDiagram_calc_v2: {n - n_failed}/{n} grid points converged on the first pass "
+          f"({n_failed} did not).")
+
+    if retry and n_failed > 0:
+        retry_idx = Combined.index[failed_mask]
+        print(f"phaseDiagram_calc_v2: retrying {n_failed} failed/timed-out point(s) once...")
+        try:
+            # equilibrate_multi itself crashes (KeyError: 'Conditions') when
+            # EVERY point in a batch fails -- Final_Combined never gets any
+            # key populated, and stich()/stich_work() assumes 'Conditions'
+            # exists unconditionally. A real, pre-existing bug in that
+            # shipped function (Liq.py), not something this function can fix
+            # without touching it -- guarded here instead, since a
+            # genuinely all-unconvergeable retry batch is a real outcome
+            # (confirmed on an actual grid), not a hypothetical.
+            Output_retry = equilibrate_multi_v2(cores=cores, Model=Model, bulk=comp,
+                                                 T_C=T_flat[retry_idx], P_bar=P_flat[retry_idx],
+                                                 fO2_buffer=fO2_buffer, fO2_offset=fO2_offset,
+                                                 Suppress=Suppress, quiet_engine=quiet_engine,
+                                                 max_tasks_per_worker=max_tasks_per_worker, timeout=timeout,
+                                                 same_bulk=True)
+            # Same reindex (not reset_index) for the same reason as above, sized
+            # to the retry batch itself, then relabelled onto the ORIGINAL grid
+            # positions so Combined.update aligns correctly either way.
+            retry_df = Output_retry['All'].reindex(np.arange(len(retry_idx)))
+            retry_df.index = retry_idx
+        except KeyError:
+            print("phaseDiagram_calc_v2: every retried point failed to converge "
+                  "(equilibrate_multi_v2 returned nothing) -- leaving them as NaN.")
+            retry_df = pd.DataFrame(index=retry_idx, columns=Combined.columns)
+        Combined.update(retry_df)   # fills only the still-missing cells, aligned by index+column
+
+        n_recovered = n_failed - int(Combined['H_J'].isna().sum())
+        print(f"phaseDiagram_calc_v2: retry recovered {n_recovered}/{n_failed} point(s).")
+
+    # Keep every grid point, including ones that never converged (NaN
+    # properties) -- matching old phaseDiagram_calc's own actual contract
+    # (it keeps a zero-sentinel row per failed point rather than dropping
+    # it), which phaseDiagram_refine_v2's neighbour-lookup logic depends
+    # on: it needs every (T_C, P_bar) combination present to find "below"/
+    # "above" neighbours, which an earlier dropna()-ing version of this
+    # function broke (confirmed: crashed phaseDiagram_refine_v2 on a real
+    # 2500-point grid with some non-converged points). T_C/P_bar are set
+    # directly from the known input grid, not from Output['All'], since a
+    # genuinely failed (never-collected) point's own Conditions sheet is
+    # NaN there too.
+    Combined['T_C'] = np.round(T_flat, 2)
+    Combined['P_bar'] = np.round(P_flat, 2)
+    Combined = Combined.sort_values(['T_C', 'P_bar']).reset_index(drop=True)
+
+    return Combined
+
+
 def phaseDiagram_refine(Data = None, Model = None, bulk = None, Fe3Fet_Liq = None, H2O_Liq = None, CO2_Liq = None,
                         fO2_buffer = None, fO2_offset = None, i_max = 15, cores = None, quiet_engine = True):
     """
@@ -779,6 +1009,170 @@ def phaseDiagram_refine(Data = None, Model = None, bulk = None, Fe3Fet_Liq = Non
     out = out.dropna(subset = ['T_C'])
 
     return out
+
+
+def phaseDiagram_refine_v2(Data=None, Model=None, bulk=None, Fe3Fet_Liq=None, H2O_Liq=None, CO2_Liq=None,
+                            fO2_buffer=None, fO2_offset=None, i_max=15, cores=None, quiet_engine=True,
+                            max_tasks_per_worker=20, timeout=None, retry=True):
+    """
+    phaseDiagram_refine's own logic (identify a finer grid, interpolate
+    homogeneous regions, recalculate only points near a detected phase
+    boundary), but calling phaseDiagram_calc_v2 for that recalculation
+    instead of phaseDiagram_calc.
+
+    Needed for a FAIR v1-vs-v2 comparison once `refine` is involved:
+    phaseDiagram_refine always calls phaseDiagram_calc internally for new
+    points, hardcoded, regardless of which function produced `Data` --
+    refining a phaseDiagram_calc_v2 grid with phaseDiagram_refine would
+    silently fall back to phaseDiagram_calc's own engine-reuse behaviour
+    (none) for every boundary point, which is not a test of the v2
+    approach end-to-end. The grid-doubling/interpolation/boundary-
+    detection logic below is copied verbatim from phaseDiagram_refine,
+    with ONLY the final recalculation call swapped.
+
+    `i_max` is accepted for signature parity with phaseDiagram_refine but
+    unused here -- phaseDiagram_calc_v2 has its own `retry` (bounded to
+    exactly one extra round, not an i_max-round loop).
+    """
+    Combined = Data.copy()
+
+    T_C = Combined['T_C'].unique()
+    P_bar = Combined['P_bar'].unique()
+
+    T_C_new = np.round(np.linspace(np.nanmin(T_C), np.nanmax(T_C), 2 * len(T_C) - 1), 2)
+    P_bar_new = np.round(np.linspace(np.nanmin(P_bar), np.nanmax(P_bar), 2 * len(P_bar) - 1), 2)
+
+    T, P = np.meshgrid(T_C_new, P_bar_new)
+
+    def combine_headers(row):
+        return ','.join([col[5:] for col in Combined.loc[:, Combined.columns.str.contains('mass_g_')].columns
+                          if row[col] > 0.0 and not pd.isna(row[col])])
+
+    Combined['PhaseResults'] = Combined.apply(combine_headers, axis=1).tolist()
+
+    unique_combined_T_C = set(np.round(Combined['T_C'].unique(), 2))
+    unique_combined_P_bar = set(np.round(Combined['P_bar'].unique(), 2))
+
+    flattened_T = np.round(T.flatten(), 2)
+    flattened_P = np.round(P.flatten(), 2)
+
+    matching_df = Data.copy()
+    T_C = []
+    P_bar = []
+    A = None
+    for i in range(len(flattened_T)):
+        if flattened_T[i] in unique_combined_T_C and flattened_P[i] in unique_combined_P_bar:
+            continue
+        elif flattened_T[i] in unique_combined_T_C and flattened_P[i] not in unique_combined_P_bar:
+            sorted_arr = np.sort(np.unique(flattened_P))
+            idx = np.searchsorted(sorted_arr, flattened_P[i])
+            below = sorted_arr[idx - 1]
+            above = sorted_arr[idx + 1]
+
+            if Combined['PhaseResults'].iloc[np.where((Combined['T_C'].values == flattened_T[i]) & (Combined['P_bar'].values == below))[0][0]] == Combined['PhaseResults'].iloc[np.where((Combined['T_C'].values == flattened_T[i]) & (Combined['P_bar'].values == above))[0][0]]:
+                if A is None:
+                    A = (matching_df.iloc[np.where((Combined['T_C'].values == flattened_T[i]) & (Combined['P_bar'].values == below))[0][0], :].values + matching_df.iloc[np.where((Combined['T_C'].values == flattened_T[i]) & (Combined['P_bar'].values == above))[0][0], :].values) / 2
+                    A[0] = flattened_T[i]
+                    A[1] = flattened_P[i]
+                else:
+                    B = (matching_df.iloc[np.where((Combined['T_C'].values == flattened_T[i]) & (Combined['P_bar'].values == below))[0][0], :].values + matching_df.iloc[np.where((Combined['T_C'].values == flattened_T[i]) & (Combined['P_bar'].values == above))[0][0], :].values) / 2
+                    B[0] = flattened_T[i]
+                    B[1] = flattened_P[i]
+                    A = np.vstack((A, B))
+            else:
+                T_C.append(flattened_T[i])
+                P_bar.append(flattened_P[i])
+        elif flattened_T[i] not in unique_combined_T_C and flattened_P[i] in unique_combined_P_bar:
+            sorted_arr = np.sort(np.unique(flattened_T))
+            idx = np.searchsorted(sorted_arr, flattened_T[i])
+            below = sorted_arr[idx - 1]
+            above = sorted_arr[idx + 1]
+
+            if Combined['PhaseResults'].iloc[np.where((Combined['T_C'].values == below) & (Combined['P_bar'].values == flattened_P[i]))[0][0]] == Combined['PhaseResults'].iloc[np.where((Combined['T_C'].values == above) & (Combined['P_bar'].values == flattened_P[i]))[0][0]]:
+                if A is None:
+                    A = (matching_df.iloc[np.where((Combined['T_C'].values == below) & (Combined['P_bar'].values == flattened_P[i]))[0][0], :].values + matching_df.iloc[np.where((Combined['T_C'].values == above) & (Combined['P_bar'].values == flattened_P[i]))[0][0], :].values) / 2
+                    A[0] = flattened_T[i]
+                    A[1] = flattened_P[i]
+                else:
+                    B = (matching_df.iloc[np.where((Combined['T_C'].values == below) & (Combined['P_bar'].values == flattened_P[i]))[0][0], :].values + matching_df.iloc[np.where((Combined['T_C'].values == above) & (Combined['P_bar'].values == flattened_P[i]))[0][0], :].values) / 2
+                    B[0] = flattened_T[i]
+                    B[1] = flattened_P[i]
+                    A = np.vstack((A, B))
+            else:
+                T_C.append(flattened_T[i])
+                P_bar.append(flattened_P[i])
+        else:
+            sorted_arr = np.sort(np.unique(flattened_T))
+            idx = np.searchsorted(sorted_arr, flattened_T[i])
+            below_T = sorted_arr[idx - 1]
+            above_T = sorted_arr[idx + 1]
+
+            sorted_arr = np.sort(np.unique(flattened_P))
+            idx = np.searchsorted(sorted_arr, flattened_P[i])
+            below_P = sorted_arr[idx - 1]
+            above_P = sorted_arr[idx + 1]
+
+            index_1 = np.where((Combined['T_C'].values == below_T) & (Combined['P_bar'].values == below_P))[0][0]
+            index_2 = np.where((Combined['T_C'].values == above_T) & (Combined['P_bar'].values == below_P))[0][0]
+            index_3 = np.where((Combined['T_C'].values == below_T) & (Combined['P_bar'].values == above_P))[0][0]
+            index_4 = np.where((Combined['T_C'].values == above_T) & (Combined['P_bar'].values == above_P))[0][0]
+
+            if Combined['PhaseResults'].loc[index_1] == Combined['PhaseResults'].loc[index_2] == Combined['PhaseResults'].loc[index_3] == Combined['PhaseResults'].loc[index_4]:
+                if A is None:
+                    A = (matching_df.iloc[index_1, :] + matching_df.iloc[index_2, :] + matching_df.iloc[index_3, :] + matching_df.iloc[index_4, :]) / 4
+                    A["T_C"] = flattened_T[i]
+                    A["P_bar"] = flattened_P[i]
+                else:
+                    B = (matching_df.iloc[index_1, :] + matching_df.iloc[index_2, :] + matching_df.iloc[index_3, :] + matching_df.iloc[index_4, :]) / 4
+                    B["T_C"] = flattened_T[i]
+                    B["P_bar"] = flattened_P[i]
+                    A = np.vstack((A, B))
+            else:
+                T_C.append(flattened_T[i])
+                P_bar.append(flattened_P[i])
+
+    B = matching_df.values
+    C = np.concatenate((A, B))
+    matching_df = pd.DataFrame(columns=list(matching_df.keys()), data=C)
+
+    matching_df['T_C'] = np.round(matching_df['T_C'], 2)
+    matching_df['P_bar'] = np.round(matching_df['P_bar'], 2)
+    matching_df = matching_df.sort_values(['T_C', 'P_bar'])
+    matching_df = matching_df.reset_index(drop=True)
+    matching_df = matching_df.dropna(subset=['T_C'])
+
+    T_C = np.array(T_C)
+    P_bar = np.array(P_bar)
+
+    print(f"phaseDiagram_refine_v2: recalculating {len(T_C)} boundary point(s) via "
+          f"phaseDiagram_calc_v2, interpolating {len(matching_df) - len(Data)} homogeneous point(s).")
+
+    if "MELTS" in Model:
+        # NaN is phaseDiagram_calc_v2's own non-convergence marker (it
+        # keeps every grid point rather than dropping one) -- treated
+        # identically to the old 0.0 zero-sentinel here, since both mean
+        # "never actually computed".
+        not_converged = matching_df['H_J'].isna() | (matching_df['H_J'] == 0.0)
+        idx_add = np.where(not_converged)[0]
+        T_C = np.round(np.concatenate((T_C, matching_df.loc[idx_add, 'T_C'].values)), 2)
+        P_bar = np.round(np.concatenate((P_bar, matching_df.loc[idx_add, 'P_bar'].values)), 2)
+        matching_df = matching_df.loc[np.where(~not_converged)[0], :]
+        matching_df = matching_df.reset_index(drop=True)
+
+    New = phaseDiagram_calc_v2(cores=cores, Model=Model, bulk=bulk, T_C=T_C, P_bar=P_bar, grid=False,
+                                Fe3Fet_init=Fe3Fet_Liq, H2O_init=H2O_Liq, CO2_init=CO2_Liq,
+                                fO2_buffer=fO2_buffer, fO2_offset=fO2_offset, quiet_engine=quiet_engine,
+                                max_tasks_per_worker=max_tasks_per_worker, timeout=timeout, retry=retry)
+
+    out = pd.concat([New, matching_df])
+    out['T_C'] = np.round(out['T_C'], 2)
+    out['P_bar'] = np.round(out['P_bar'], 2)
+    out = out.sort_values(['T_C', 'P_bar'])
+    out = out.reset_index(drop=True)
+    out = out.dropna(subset=['T_C'])
+
+    return out
+
 
 def animate_phaseDiagram(base_kwargs, frame_kwargs, P_units="bar", T_units="C",
                          label=True, colormap=None, interval=500):

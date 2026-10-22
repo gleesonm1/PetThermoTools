@@ -51,9 +51,20 @@ def tripwired_backends(monkeypatch):
         def __init__(self, *args, **kwargs):
             raise BackendTouched("SPAWN")
 
+    def _no_run_tasks(*args, **kwargs):
+        raise BackendTouched("SPAWN")
+
     monkeypatch.setattr(ptt_path, "_ensure_julia_ready", _julia)
     monkeypatch.setattr(ptt_path, "_ensure_julia_workers", _julia)
     monkeypatch.setattr(ptt_path, "Process", _NoSpawn)
+    # multi_path is the mp_utils-based v2 implementation as of 2026-10-21 --
+    # it never constructs `Process` directly (that's multi_path_v1's own
+    # mechanism, still tripwired above for anyone calling it explicitly);
+    # the real "about to spawn real worker processes" choke point for the
+    # new default is `run_tasks` itself (imported into this module as
+    # `ptt_path.run_tasks`), called once per multi_path invocation right
+    # before any engine work happens.
+    monkeypatch.setattr(ptt_path, "run_tasks", _no_run_tasks)
 
 
 def _call(**overrides):

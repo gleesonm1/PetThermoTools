@@ -9,26 +9,19 @@ from petthermotools.GenFuncs import estimate_t
 from petthermotools.GenFuncs import _quiet_engine_output
 from petthermotools.GenFuncs import _permanently_quiet_engine_output
 
-def equilibrate_MELTS(Model = None, P_bar = None, T_C = None, comp = None, 
+def equilibrate_MELTS(Model = None, P_bar = None, T_C = None, comp = None,
                       fO2_buffer = None, fO2_offset = None, Suppress = None, Suppress_except=None,
-                      trail = None, melts = None):
+                      trail = None, melts = None, Affinity = True, skip_bulk_update = False):
     Results = {}
-    Affinity = {}
+    AffinityOut = {}
 
 
 
     if trail is not None:
         trail = False
 
-    if comp is None:
+    if comp is None and not skip_bulk_update:
         raise Exception("No composition specified")
-    else:
-        if type(comp) == list:
-            bulk = comp.copy()
-        else:
-            bulk = [comp['SiO2_Liq'], comp['TiO2_Liq'], comp['Al2O3_Liq'], comp['Fe3Fet_Liq']*((159.69/2)/71.844)*comp['FeOt_Liq'], comp['Cr2O3_Liq'], (1 - comp['Fe3Fet_Liq'])*comp['FeOt_Liq'], comp['MnO_Liq'], comp['MgO_Liq'], 0.0, 0.0, comp['CaO_Liq'], comp['Na2O_Liq'], comp['K2O_Liq'], comp['P2O5_Liq'], comp['H2O_Liq'], comp['CO2_Liq'], 0.0, 0.0, 0.0]
-
-    bulk = list(100*np.array(bulk)/np.sum(bulk))
 
     if melts is None:
         from meltsdynamic import MELTSdynamic
@@ -41,13 +34,36 @@ def equilibrate_MELTS(Model = None, P_bar = None, T_C = None, comp = None,
         elif Model == "MELTSv1.2.0":
             melts = MELTSdynamic(4)
 
-    melts.engine.setBulkComposition(bulk)
+    # melts = melts.addNodeAfter()
+
+    if not skip_bulk_update:
+        # skip_bulk_update=True means the caller (currently only
+        # _equilibrate_task_v2's same_bulk option) has already set this
+        # exact composition on an ancestor node that `melts` was hopped
+        # from via addNodeAfter() -- composition is inherited by the hop,
+        # so re-setting it here would be redundant, not merely skippable.
+        # Added for equilibrate_multi_v2's `same_bulk` option (see its
+        # docstring and MAINTENANCE_NOTES.md 2026-10-20); every other
+        # caller is unaffected (skip_bulk_update defaults to False).
+        if type(comp) == list:
+            bulk = comp.copy()
+        else:
+            bulk = [comp['SiO2_Liq'], comp['TiO2_Liq'], comp['Al2O3_Liq'], comp['Fe3Fet_Liq']*((159.69/2)/71.844)*comp['FeOt_Liq'], comp['Cr2O3_Liq'], (1 - comp['Fe3Fet_Liq'])*comp['FeOt_Liq'], comp['MnO_Liq'], comp['MgO_Liq'], 0.0, 0.0, comp['CaO_Liq'], comp['Na2O_Liq'], comp['K2O_Liq'], comp['P2O5_Liq'], comp['H2O_Liq'], comp['CO2_Liq'], 0.0, 0.0, 0.0]
+        bulk = list(100*np.array(bulk)/np.sum(bulk))
+        melts.engine.setBulkComposition(bulk)
+
     melts.engine.pressure = P_bar
     melts.engine.temperature = T_C
 
     if Suppress is None:
         melts.engine.setSystemProperties("Suppress", "rutile")
         melts.engine.setSystemProperties("Suppress", "tridymite")
+        
+        # melts.engine.temperature = T_C + 500
+        # melts.engine.calcSaturationState()
+
+        # melts = melts.addNodeAfter()
+        # melts.engine.temperature = T_C
     else:
         if Suppress == "All":
             melts.engine.pressure = P_bar # np.random.normal(P_bar, P_bar/10)
@@ -90,10 +106,10 @@ def equilibrate_MELTS(Model = None, P_bar = None, T_C = None, comp = None,
         melts.engine.calcEquilibriumState(1,0)
     except:
         if trail is not None:
-            return Results, Affinity, trail
+            return Results, AffinityOut, trail
         else:
-            return Results, Affinity
-    
+            return Results, AffinityOut
+
     if melts.engine.getProperty('mass', 'liquid1') > 0.0:
         PhaseList = ['liquid1'] + melts.engine.solidNames
     else:
@@ -149,15 +165,22 @@ def equilibrate_MELTS(Model = None, P_bar = None, T_C = None, comp = None,
         #         thermodynamics[idx] = melts.engine.getProperty(i, phase, j)
         #         idx = idx + 1
     
-    PhaseList = melts.engine.calcSaturationState()
-    Affinity_raw = melts.engine.getProperty('affinity', PhaseList)
-    Affinity = {Phase: float_value for Phase, float_value in zip(PhaseList, Affinity_raw)}
+    if Affinity:
+        # No addNodeAfter() here (removed 2026-10-14): with max_tasks_per_worker=1 the
+        # only caller ever uses, this node is never reused by a later call, so there's
+        # nothing to protect by branching to a fresh one first -- it was pure overhead.
+        # Skippable entirely for a batch row (equilibrate_multi passes Affinity=(n==1)):
+        # the final Output only ever attaches this for a single-row call anyway, so
+        # computing it for every row in a batch was wasted work.
+        AffinityPhaseList = melts.engine.calcSaturationState()
+        Affinity_raw = melts.engine.getProperty('affinity', AffinityPhaseList)
+        AffinityOut = {Phase: float_value for Phase, float_value in zip(AffinityPhaseList, Affinity_raw)}
     # Results['Affinity'] = pd.DataFrame(Affinity)
 
     if trail is not None:
-        return Results, Affinity, trail
+        return Results, AffinityOut, trail
     else:
-        return Results, Affinity
+        return Results, AffinityOut
 
 def findCO2_MELTS(P_bar = None, Model = None, T_C = None, comp = None, melts = None, fO2_buffer = None, fO2_offset = None, Step = None):
 
@@ -1405,9 +1428,9 @@ def findSatPressure_MELTS(Model = None, T_C_init = None, T_fixed_C = None, P_bar
                     else:
                         P_bar = P_bar*1.5
 
-                    melts.engine.pressure = P_bar
                     try:
                         melts = melts.addNodeAfter()
+                        melts.engine.pressure = P_bar
                         melts.engine.calcEquilibriumState(1,0)
                     except:
                         if trial is not None:
@@ -1424,9 +1447,9 @@ def findSatPressure_MELTS(Model = None, T_C_init = None, T_fixed_C = None, P_bar
                 while len(melts.engine.solidNames) == 0:
                     P_high = P_bar
                     P_bar = P_bar/2
-                    melts.engine.pressure = P_bar
                     try:
                         melts = melts.addNodeAfter()
+                        melts.engine.pressure = P_bar
                         melts.engine.calcEquilibriumState(1,0)
                     except:
                         if trial is not None:
@@ -1441,9 +1464,9 @@ def findSatPressure_MELTS(Model = None, T_C_init = None, T_fixed_C = None, P_bar
 
         for i in range(5):
             P_bar = P_low + (P_high - P_low)/2
-            melts.engine.pressure = P_bar
             try:
                 melts = melts.addNodeAfter()
+                melts.engine.pressure = P_bar
                 melts.engine.calcEquilibriumState(1,0)
             except:
                 if trial is not None:
