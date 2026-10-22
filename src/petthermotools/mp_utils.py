@@ -234,24 +234,35 @@ def run_tasks(
         without ever reporting `_STARTED` -- i.e. still stuck somewhere in
         its own process bootstrap (unpickling task_fn/args, or whatever
         that import pulls in: a real task_fn like _path_task_v2 imports
-        the whole petthermotools package to be resolved at all). None
-        resolves to `timeout`: a worker is never allowed to sit un-started
-        for longer than a fully-run task would be allowed to take.
-        Without this, such a worker is invisible to both the timeout
-        check (which only tracks pids once `_STARTED` arrives) and the
-        liveness sweep (which only catches a worker that has actually
-        died, not one that is alive but wedged) -- `while outstanding:`
-        then never terminates, confirmed live via a repro that forces a
-        real-engine worker to re-import the full package under spawn on a
-        loaded CI machine (see MAINTENANCE_NOTES.md). Safe to kill
-        unconditionally without a `_finalise_or_retry` call: a worker that
-        has not yet reported `_STARTED` has not yet reported a `_PROGRESS`
-        or `_DONE` either, and the only gap between `task_queue.get()` and
-        sending `_STARTED` is two in-process lines with no I/O -- in
-        practice this only ever fires during the import/unpickle stage,
-        strictly before a task is pulled off `task_queue`, so the task
-        that would have gone to this worker is simply still sitting there
-        for the replacement (or any other free worker) to pick up.
+        the whole petthermotools package to be resolved at all). Without
+        this, such a worker is invisible to both the timeout check (which
+        only tracks pids once `_STARTED` arrives) and the liveness sweep
+        (which only catches a worker that has actually died, not one that
+        is alive but wedged) -- `while outstanding:` then never
+        terminates, confirmed live via a repro that forces a real-engine
+        worker to re-import the full package under spawn on a loaded CI
+        machine (see MAINTENANCE_NOTES.md). Left as None (disabled) by
+        default, same reasoning as `stall_timeout`: package-import time
+        under contention is not bounded by `timeout` the way a stuck
+        calculation is (measured anywhere from under a second to several
+        seconds under concurrent load in this session's own benchmarking),
+        so defaulting this to `timeout` -- tried first, reverted
+        2026-10-22 -- made ordinary slow-but-healthy imports indistinguish-
+        able from a genuinely wedged worker, confirmed live as a self-
+        sustaining kill/respawn storm (every replacement hits the same
+        contention and gets killed again) under test_timeout_handling.py's
+        own 6-concurrent-scenario fixture. Set this explicitly, well above
+        your environment's worst-case import time, only once you want the
+        pre-`_STARTED` hang protection badly enough to accept that
+        tradeoff. When set, safe to kill unconditionally without a
+        `_finalise_or_retry` call: a worker that has not yet reported
+        `_STARTED` has not yet reported a `_PROGRESS` or `_DONE` either,
+        and the only gap between `task_queue.get()` and sending `_STARTED`
+        is two in-process lines with no I/O -- in practice this only ever
+        fires during the import/unpickle stage, strictly before a task is
+        pulled off `task_queue`, so the task that would have gone to this
+        worker is simply still sitting there for the replacement (or any
+        other free worker) to pick up.
     max_retries : int, default 0
         How many additional attempts a CRASHED/TIMEOUT/STALLED task gets
         before its TaskResult is finalised as GAVE_UP. Defaults to 0:
@@ -299,7 +310,6 @@ def run_tasks(
     if not indices:
         return {}
     cores = max(1, min(cores, len(indices)))
-    effective_startup_timeout = timeout if startup_timeout is None else startup_timeout
 
     task_queue = _CTX.Queue()
     results_queue = _CTX.Queue()
@@ -407,26 +417,27 @@ def run_tasks(
                     if outstanding:
                         _spawn_worker()
 
-            # 1b. Startup-timeout sweep: a worker that is ALIVE but has
+            # 1b. Startup-timeout sweep (opt-in, see `startup_timeout` in
+            #     this function's docstring): a worker that is ALIVE but has
             #     never sent _STARTED is invisible to both sweep 1 above
             #     (which only catches a dead process) and the timeout check
             #     below (which only tracks pids already in tracked_by_pid).
-            #     Kill and replace it unconditionally -- see `startup_timeout`
-            #     in this function's docstring for why that's always safe:
-            #     the only way to be alive this long with no _STARTED is
-            #     still stuck in process bootstrap, strictly before its task
-            #     (if any) was ever pulled off `task_queue`, so nothing
-            #     needs to be re-queued.
-            now = time.time()
-            for pid, since in list(pending_since.items()):
-                if now - since > effective_startup_timeout:
-                    w = next((w for w in workers if w.pid == pid), None)
-                    pending_since.pop(pid, None)
-                    if w is not None:
-                        workers.remove(w)
-                        _terminate(w)
-                    if outstanding:
-                        _spawn_worker()
+            #     Kill and replace it unconditionally once past
+            #     `startup_timeout` -- always safe to do so: the only way to
+            #     be alive this long with no _STARTED is still stuck in
+            #     process bootstrap, strictly before its task (if any) was
+            #     ever pulled off `task_queue`, so nothing needs re-queuing.
+            if startup_timeout is not None:
+                now = time.time()
+                for pid, since in list(pending_since.items()):
+                    if now - since > startup_timeout:
+                        w = next((w for w in workers if w.pid == pid), None)
+                        pending_since.pop(pid, None)
+                        if w is not None:
+                            workers.remove(w)
+                            _terminate(w)
+                        if outstanding:
+                            _spawn_worker()
 
             # 2. Per-task timeout/stall check, every poll regardless of
             #    which worker reports next -- a single shared results_queue
