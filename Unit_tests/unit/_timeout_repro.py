@@ -121,7 +121,16 @@ def main(name):
     kwargs = {
         'Model': "MELTSv1.0.2", 'comp': COMP, 'T_C': 1200.0, 'cores': 2,
         'timeout': MULTI_PATH_TIMEOUT, 'multi_processing': True, 'Print_suppress': True,
-        'P_bar': np.array([1000.0, 2000.0, 3000.0, 4000.0, 5000.0]) if kind == "batch" else 1000.0,
+        # One row per core: under multi_path v2 every row gets its own
+        # worker process (no more "one process handles up to 3 rows"), so
+        # a 5-row batch against cores=2 needs 3 sequential timeout/kill/
+        # respawn rounds, not the single round this harness's _RETURN_CAP_S
+        # was sized for -- confirmed to blow it intermittently on GitHub
+        # Actions' shared runners (macOS 3.12, ubuntu 3.10). len == cores
+        # keeps this scenario (concurrent workers, timeout, reap) to one
+        # round, matching the original "several multiples of a full round"
+        # budget.
+        'P_bar': np.array([1000.0, 2000.0]) if kind == "batch" else 1000.0,
     }
 
     print("STARTED=1", flush=True)
