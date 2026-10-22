@@ -8,7 +8,12 @@ from petthermotools.Plotting import *
 from petthermotools.MELTS import *
 from petthermotools.MELTS import _MODEL_CODES
 from petthermotools.core_config import MAX_WORKERS, resolve_cores
-from petthermotools.mp_utils import run_tasks, TaskStatus
+from petthermotools.mp_utils import run_tasks, TaskStatus as _TaskStatus
+# Underscore-prefixed deliberately -- see the identical comment in Liq.py's
+# own import of this: TaskStatus must not leak into the wildcard-exported
+# public API (enum.Enum's own __call__ signature differs across Python
+# versions, which made a bare import here break CI on 3.10/3.11 while
+# passing on 3.12/3.13). MAINTENANCE_NOTES.md 2026-10-21.
 import multiprocessing
 from multiprocessing import Queue
 from multiprocessing import Process
@@ -1185,7 +1190,7 @@ def saturation_pressure(Model = "MELTSv1.2.0", cores = MAX_WORKERS,
 
             next_round = []
             for task, res in out.items():
-                if res.status is TaskStatus.OK:
+                if res.status is _TaskStatus.OK:
                     continue
                 # Unlike equilibrate_multi/findLiq_multi, EVERY failure is retried
                 # here (up to max_domain_retries), not just TaskStatus.TIMEOUT --

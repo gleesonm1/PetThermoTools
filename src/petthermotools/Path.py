@@ -10,7 +10,12 @@ from petthermotools.Plotting import *
 from petthermotools.MELTS import *
 from petthermotools.MELTS import _MODEL_CODES
 from petthermotools.core_config import MAX_WORKERS, resolve_cores
-from petthermotools.mp_utils import run_tasks, TaskStatus
+from petthermotools.mp_utils import run_tasks, TaskStatus as _TaskStatus
+# Underscore-prefixed deliberately -- see the identical comment in Liq.py's
+# own import of this: TaskStatus must not leak into the wildcard-exported
+# public API (enum.Enum's own __call__ signature differs across Python
+# versions, which made a bare import here break CI on 3.10/3.11 while
+# passing on 3.12/3.13). MAINTENANCE_NOTES.md 2026-10-21.
 import multiprocessing
 from multiprocessing import Queue
 from multiprocessing import Process
@@ -1074,7 +1079,7 @@ def multi_path(cores=None, Model=None, bulk=None, comp=None, Frac_solid=None, Fr
     for row_id in range(n):
         result = result_by_row.get(row_id)
         has_data = bool(collected.get(row_id))
-        if result is not None and result.status is TaskStatus.OK:
+        if result is not None and result.status is _TaskStatus.OK:
             n_completed += 1
         elif has_data:
             error = (result.error or "") if result is not None else ""

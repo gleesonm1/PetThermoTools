@@ -6,7 +6,15 @@ from petthermotools.GenFuncs import _ensure_julia_main_ready
 from petthermotools.GenFuncs import _quiet_engine_output
 from petthermotools.GenFuncs import _permanently_quiet_engine_output
 from petthermotools.core_config import MAX_WORKERS, resolve_cores
-from petthermotools.mp_utils import run_tasks, TaskStatus
+from petthermotools.mp_utils import run_tasks, TaskStatus as _TaskStatus
+# Imported with a leading underscore deliberately: TaskStatus is an mp_utils
+# implementation detail (task-completion bookkeeping), not public API, and
+# this file is wildcard-exported by __init__.py -- a bare `TaskStatus` import
+# here leaked it into `ptt.TaskStatus`, and since enum.Enum's own __call__
+# signature is not stable across Python versions (confirmed: CI failures on
+# 3.10/3.11 but not 3.12/3.13, captured 2026-10-21 from a snapshot taken on
+# 3.13), that leak made the committed public-API snapshot itself
+# Python-version-dependent. See MAINTENANCE_NOTES.md 2026-10-21.
 import contextlib
 from petthermotools.Plotting import *
 from petthermotools.MELTS import *
@@ -644,7 +652,7 @@ def equilibrate_multi(cores = MAX_WORKERS, Model = "MELTSv1.0.2", bulk = None, T
 
                 next_round = []
                 for task, res in out.items():
-                    if res.status is TaskStatus.OK:
+                    if res.status is _TaskStatus.OK:
                         continue
                     # With max_retries=0, run_tasks finalises EVERY non-OK result as
                     # GAVE_UP (confirmed by reading mp_utils.py's _finalise_or_retry:
@@ -1708,7 +1716,7 @@ def findLiq_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P
 
                 next_round = []
                 for task, res in out.items():
-                    if res.status is TaskStatus.OK:
+                    if res.status is _TaskStatus.OK:
                         continue
                     retry_log.append((task.row_id, round_num, res.status.value, res.error,
                                        task.T_initial_C, current_timeout))
