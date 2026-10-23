@@ -10,6 +10,18 @@ respawn loop into every later test: the loop looks up `Process` and
 whatever a later test has patched them to (or the real, un-patched
 `path_multi` once the patch is undone).
 
+multi_path is v2 now (mp_utils.run_tasks-based): it calls
+_path_task_v2(q, task, **kwargs) once per row (task is a _PathRowTask,
+not path_multi's old `index` array), never path_multi itself -- patching
+path_multi here was inert, same bug already fixed in _timeout_repro.py,
+_no_guard_repro.py and test_process_reaping.py this session. The fake
+workers below patch _path_task_v2 instead. Confirmed live: with the dead
+patch, "completes" fell through to the real _path_task_v2 (meltsdynamic
+import, absent in CI), making this script's timing depend on real-engine
+import/failure behaviour under CI load instead of a fast, deterministic
+fake -- CI observed this specific scenario ("every worker reports
+promptly") exceeding a 120s cap.
+
 Usage:  python _multi_path_repro.py never_reports | completes
 
 The `if __name__ == "__main__"` guard is required: under the spawn start
@@ -33,19 +45,24 @@ COMP = {
 }
 
 
-def _worker_never_reports(q, index, **kwargs):
+def _worker_never_reports(q, task, **kwargs):
     """Engine construction fails before anything is put on the queue -- the
     alphaMELTS 'C library will not reinitialize after a crash' failure mode
-    (the real path_multi has no try/except around MELTSdynamic(...))."""
+    (the real _path_task_v2 has no try/except around MELTSdynamic(...))."""
     raise RuntimeError("simulated permanent alphaMELTS engine init failure")
 
 
-def _worker_completes(q, index, **kwargs):
-    """A well-behaved worker following path_multi's real queue protocol: a
-    'Start' marker, then step messages, then a normal exit."""
-    for i in list(index)[:3]:
-        q.put([i, -1, "Start"])
-        q.put([i, 0, {"Conditions": {}, "_dummy_keys": []}])
+def _worker_completes(q, task, **kwargs):
+    """Fake _path_task_v2: reports one step for the row and exits normally.
+
+    No "-1, 'Start'" marker (v1's path_multi protocol): v2's
+    mp_utils._worker_loop already reports a worker's liveness to the
+    supervisor on its own, and multi_path's _capture stores every item
+    task_fn puts straight into `collected` with no v1-style filtering, so
+    a bare "Start" string would be handed to compile_results, which
+    crashes calling .items() on it (same fix as _no_guard_repro.py).
+    """
+    q.put([task.row_id, 0, {"Conditions": {}, "_dummy_keys": []}])
 
 
 _WORKERS = {"never_reports": _worker_never_reports, "completes": _worker_completes}
@@ -53,12 +70,16 @@ _WORKERS = {"never_reports": _worker_never_reports, "completes": _worker_complet
 
 def main(mode):
     ptt_path = importlib.import_module("petthermotools.Path")
-    ptt_path.path_multi = _WORKERS[mode]
+    ptt_path._path_task_v2 = _WORKERS[mode]
     ptt_path.multi_path(
         Model="MELTSv1.0.2",
         comp=COMP,
         T_C=1200.0,
-        P_bar=np.array([1000.0, 2000.0, 3000.0, 4000.0, 5000.0]),
+        # One row per core: under multi_path v2 every row gets its own worker
+        # process, so a 5-row batch against cores=2 needed 3 sequential
+        # rounds -- see _timeout_repro.py's identical fix for the full
+        # reasoning. len == cores keeps this to one round.
+        P_bar=np.array([1000.0, 2000.0]),
         cores=2,
         # Generous on purpose: this only bounds a *hung* worker; a well-behaved
         # one exits as soon as it has reported. (Workers here only import numpy
