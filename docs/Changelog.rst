@@ -10,6 +10,17 @@ multi_path now reports the timeout being used at the start of a calculation, and
 Fixed a bug where multi_path, equilibrate_multi, findLiq_multi and saturation_pressure could silently produce incorrect or incomplete results when a pandas Series (e.g. a DataFrame column, such as T_C=data['Temperature']) was passed directly for T_C/P_bar, rather than a plain number, list, or numpy array.
 Faster result assembly for large batch calculations.
 
+Version 1.2.2 (Oct 2026)
+====================================
+Fixed a Julia package conflict (Parsers.jl) that could prevent MAGEMin calculations from running at all on a fresh install, including via a Julia environment used internally by juliacall that install_MAGEMinCalc()/update_MAGEMinCalc() could not reach directly.
+install_MAGEMinCalc() and update_MAGEMinCalc() now warn if they are about to overwrite a local development version of MAGEMinCalc, and their docstrings now explain that the Julia environment they manage is shared by every Python environment on your machine, not created separately for each one.
+
+Version 1.2.1 (Oct 2026)
+====================================
+findLiq_multi rebuilt on a faster, more robust calculation engine: better reliability at scale, a progress bar, and support for MAGEMin models (previously unavailable for findLiq_multi).
+Fixed the MELTS engine's own startup banner and status text (e.g. "alphaMELTS for Python version...", "Setting calculation mode to...") leaking into notebook output during batch calculations (equilibrate_multi, findCO2_multi, multi_path, saturation_pressure, and others).
+The cores argument on the parallel calculation functions now also accepts 'performance' (the default, performance cores only) or 'all' (every logical core); invalid values now raise a clear error instead of being silently misused.
+
 Version 1.2.0 (Oct 2026)
 ====================================
 New quiet_engine keyword (default True) on multi_path, the crystallisation/decompression wrapper functions, equilibrate_multi, findCO2_multi, findLiq_multi, supCalc, mineral_cosaturation, saturation_pressure, phaseDiagram_calc and AdiabaticDecompressionMelting: suppresses the MELTS engine's console output for a sizeable speed-up in batch calculations. Set quiet_engine=False to see the raw engine output for debugging.
