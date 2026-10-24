@@ -2,6 +2,14 @@
 Change Log
 ================================================
 
+Version 1.2.3 (Oct 2026)
+====================================
+multi_path, equilibrate_multi, findLiq_multi and saturation_pressure now use a more robust calculation engine by default. The previous implementation could reuse a MELTS engine's internal state between unrelated rows of a batch, which was found to occasionally produce silently incorrect results (confirmed in roughly 1 in 8 runs at the scale tested for multi_path); every row now always starts from a freshly initialised engine unless you explicitly ask for reuse.
+As part of this change, a stuck or crashed calculation within a batch is now handled individually, instead of the whole batch/round waiting on or being discarded by it, and stray worker processes left behind after a crashed or interrupted calculation are now properly cleaned up rather than lingering in the background.
+multi_path now reports the timeout being used at the start of a calculation, and gives a clearer breakdown at the end (completed / returned partial results after a crash / returned partial results after timing out / returned no results) instead of a single success/fail count that could under-report calculations that actually returned usable partial results.
+Fixed a bug where multi_path, equilibrate_multi, findLiq_multi and saturation_pressure could silently produce incorrect or incomplete results when a pandas Series (e.g. a DataFrame column, such as T_C=data['Temperature']) was passed directly for T_C/P_bar, rather than a plain number, list, or numpy array.
+Faster result assembly for large batch calculations.
+
 Version 1.2.0 (Oct 2026)
 ====================================
 New quiet_engine keyword (default True) on multi_path, the crystallisation/decompression wrapper functions, equilibrate_multi, findCO2_multi, findLiq_multi, supCalc, mineral_cosaturation, saturation_pressure, phaseDiagram_calc and AdiabaticDecompressionMelting: suppresses the MELTS engine's console output for a sizeable speed-up in batch calculations. Set quiet_engine=False to see the raw engine output for debugging.
