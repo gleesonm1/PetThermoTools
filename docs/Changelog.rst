@@ -2,6 +2,12 @@
 Change Log
 ================================================
 
+Version 1.3.0 (Nov 2026)
+====================================
+Beta release of the trace element engine (petthermotools.trace_engine). calc_trace_conc calculates trace element concentrations in the liquid and in each phase along the output of crystallisation or melting calculations (e.g. isobaric_crystallisation, AdiabaticDecompressionMelting), using either a built-in set of partition coefficients (D_Gibson_2010), your own coefficients supplied as a dictionary, or composition-dependent partitioning models for specific phases.
+Composition-dependent models included in this beta: clinopyroxene REE + Y partitioning after Sun & Liang (2012) ("Sun2012", checked against the authors' own spreadsheet calculator) and Wood & Blundy (1997) ("Wood1997"), and olivine partitioning after Beattie (1993) ("Beattie1993").
+Load it with: from petthermotools.trace_engine import trace_engine as te. As a beta, function names and options may still change in future releases; please report any problems.
+
 Version 1.2.3 (Oct 2026)
 ====================================
 multi_path, equilibrate_multi, findLiq_multi and saturation_pressure now use a more robust calculation engine by default. The previous implementation could reuse a MELTS engine's internal state between unrelated rows of a batch, which was found to occasionally produce silently incorrect results (confirmed in roughly 1 in 8 runs at the scale tested for multi_path); every row now always starts from a freshly initialised engine unless you explicitly ask for reuse.
