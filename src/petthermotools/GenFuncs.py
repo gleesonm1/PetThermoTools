@@ -1468,7 +1468,7 @@ def compile_results(results):
 
     return new_results
 
-def stich(Res, multi = None, Model = None, Frac_fluid = None, Frac_solid = None):
+def stich(Res, multi = None, Model = None, Frac_fluid = None, Frac_solid = None, Frac_liquid = None):
     '''
     Processes, cleans, and combines the raw output from single or multiple 
     alphaMELTS/MAGEMinCalc calculations into a standardized format.
@@ -1510,12 +1510,12 @@ def stich(Res, multi = None, Model = None, Frac_fluid = None, Frac_solid = None)
     if "MELTS" in Model:
         Order = ['SiO2', 'TiO2', 'Al2O3', 'Cr2O3', 'Fe2O3', 'FeO', 'FeOt', 'MnO', 'MgO', 'CaO', 'Na2O', 'K2O', 'P2O5', 'H2O', 'CO2', 'Fe3Fet']
         if multi is None:
-            Results = stich_work(Results = Results, Order = Order, Model = "MELTS", Frac_fluid = Frac_fluid, Frac_solid = Frac_solid)
+            Results = stich_work(Results = Results, Order = Order, Model = "MELTS", Frac_fluid = Frac_fluid, Frac_solid = Frac_solid, Frac_liquid = Frac_liquid)
         else:
             for Ind in Res:
                 Result = Res[Ind].copy()
                 # if "Conditions" in Result.keys():
-                Result = stich_work(Results = Result, Order = Order, Model = "MELTS", Frac_fluid = Frac_fluid, Frac_solid = Frac_solid)
+                Result = stich_work(Results = Result, Order = Order, Model = "MELTS", Frac_fluid = Frac_fluid, Frac_solid = Frac_solid, Frac_liquid = Frac_liquid)
                 Results[Ind] = Result.copy()
     else:
         if Model == "Weller2024":
@@ -1524,16 +1524,16 @@ def stich(Res, multi = None, Model = None, Frac_fluid = None, Frac_solid = None)
             Order = ['SiO2', 'TiO2', 'Al2O3', 'Cr2O3', 'FeOt', 'MgO', 'CaO', 'Na2O', 'K2O', 'H2O', 'Fe3Fet']
 
         if multi is None:
-            Results = stich_work(Results = Results, Order = Order, Model = "Green2025", Frac_fluid = Frac_fluid, Frac_solid = Frac_solid)
+            Results = stich_work(Results = Results, Order = Order, Model = "Green2025", Frac_fluid = Frac_fluid, Frac_solid = Frac_solid, Frac_liquid = Frac_liquid)
         else:
             for Ind in Res:
                 Result = Res[Ind].copy()
-                Result = stich_work(Results = Result, Order = Order, Model = "Green2025", Frac_fluid = Frac_fluid, Frac_solid = Frac_solid)
+                Result = stich_work(Results = Result, Order = Order, Model = "Green2025", Frac_fluid = Frac_fluid, Frac_solid = Frac_solid, Frac_liquid = Frac_liquid)
                 Results[Ind] = Result.copy()
 
     return Results
 
-def stich_work(Results = None, Order = None, Model = "MELTS", Frac_fluid = None, Frac_solid = None):
+def stich_work(Results = None, Order = None, Model = "MELTS", Frac_fluid = None, Frac_solid = None, Frac_liquid = None):
     '''
     Internal worker function for `stich`. Performs the core unit conversions, 
     data cleaning, Fe speciation, and property standardization on a single 
@@ -1684,6 +1684,9 @@ def stich_work(Results = None, Order = None, Model = "MELTS", Frac_fluid = None,
                 if n != 'liquid1' and n != 'liq1':
                     Results_Mass[n + '_cumsum'] = Results_Mass[n].fillna(0.0).cumsum()
 
+    # if Frac_liquid:
+    #     Results_Mass['liquid1_cumsum'] = Results_Mass['liquid1'].fillna(0.0).cumsum()
+
     Results_All = Results['Conditions'].copy()
     for R in Results:
         if R != "Conditions" and R != "sys":
@@ -1747,6 +1750,19 @@ def stich_work(Results = None, Order = None, Model = "MELTS", Frac_fluid = None,
             zero_row = pd.DataFrame(0, index=[0], columns=residual_mass.columns)
             residual_mass = pd.concat([zero_row, residual_mass], ignore_index = True)
             Results['mass_g'][residual_mass.columns] = Results['mass_g'][residual_mass.columns] - residual_mass.cumsum()
+
+        if Frac_liquid:
+            Results['mass_g']['liquid1_cumsum'] = Results['mass_g']['liquid1'].cumsum()
+            residual_mass = calculate_retained_masses(Results, residual = ['solid', 'fluid'])[0]
+            Results['residual_mass_g'] = residual_mass.copy()
+            residual_mass = residual_mass.add_suffix('_cumsum')
+            residual_mass = residual_mass.loc[:,residual_mass.columns.str.contains("liquid")]
+
+            zero_row = pd.DataFrame(0, index=[0], columns=residual_mass.columns)
+            residual_mass = pd.concat([zero_row, residual_mass], ignore_index = True)
+            Results['mass_g'][residual_mass.columns] = Results['mass_g'][residual_mass.columns] - residual_mass.cumsum()
+
+
 
         if 'fluid1' in Results.keys():
             if "MELTS" in Model:

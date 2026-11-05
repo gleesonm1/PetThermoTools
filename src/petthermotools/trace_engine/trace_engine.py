@@ -2,6 +2,54 @@ import numpy as np
 import pandas as pd 
 from petthermotools.trace_engine.partition_standards import *
 from petthermotools.trace_engine.trace_core import *
+from petthermotools.trace_engine import px_partitioning_models, ol_partitioning_models, grt_partitioning_models
+
+
+def show_models():
+    """Print the composition-dependent partitioning models available for each phase,
+    with each model's notes.
+
+    Each model name can be passed to calc_trace_conc via partition_models, e.g.
+    partition_models={"clinopyroxene": "Sun2012"}. Clinopyroxene and orthopyroxene
+    share the pyroxene models.
+    """
+    models = {
+        "pyroxene": px_partitioning_models.MODEL_REGISTRY,
+        "olivine": ol_partitioning_models.MODEL_REGISTRY,
+        "garnet": grt_partitioning_models.MODEL_REGISTRY,
+    }
+    print("{")
+    for phase, registry in models.items():
+        print(f"    {phase!r}: {{")
+        for name, cls in registry.items():
+            notes = " ".join(getattr(cls, "notes", "").split())   # triple-quoted notes -> one line
+            print(f"        {name!r}: {notes!r},")
+        print("    },")
+    print("}")
+
+def show_citations():
+    """Print the citations for each composition-dependent partitioning model, grouped
+    by phase, one citation per line (each line of a model's `citations` string is
+    one citation).
+    """
+    models = {
+        "pyroxene": px_partitioning_models.MODEL_REGISTRY,
+        "olivine": ol_partitioning_models.MODEL_REGISTRY,
+        "garnet": grt_partitioning_models.MODEL_REGISTRY,
+    }
+    print("{")
+    for phase, registry in models.items():
+        print(f"    {phase!r}: {{")
+        for name, cls in registry.items():
+            # one citation per non-blank line, indentation from triple quotes removed
+            citations = [line.strip() for line in getattr(cls, "citations", "").splitlines() if line.strip()]
+            print(f"        {name!r}: [")
+            for citation in citations:
+                print(f"            {citation!r},")
+            print("        ],")
+        print("    },")
+    print("}")
+
 
 def calc_trace_conc(results=None, elements=None, partition_models=None, D_coeffs=coeffs["D_Gibson_2010"],
                     initial_conc = None, fractional = False):

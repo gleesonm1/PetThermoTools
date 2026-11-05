@@ -96,6 +96,9 @@ def AdiabaticDecompressionMelting(cores = MAX_WORKERS,
     """
     cores = resolve_cores(cores)
 
+    if Frac and "MELTS" not in Model:
+        print('Fractional melting not yet enabled for the MAGEMin calculations.')
+
     Tp_C        = to_float(Tp_C)
     Tp_C        = check_array(Tp_C)
     T_start_C        = to_float(T_start_C)
@@ -238,12 +241,12 @@ def AdiabaticDecompressionMelting(cores = MAX_WORKERS,
             if len(ret) > 0:
                 Results, index = ret
                 if Model != "pyMelt":
-                    Results = stich(Results, Model = Model)
+                    Results = stich(Results, Model = Model, Frac_liquid=Frac)
 
                     # make mass relative to 1 at the start of the model
-                    Tot = Results['mass_g'].sum(axis = 1)[0]
-                    Results['mass_frac'] = Results['mass_g']/Tot
-                    Results['All'].loc[:,Results['All'].columns.str.contains('mass_g_')] = Results['All'].loc[:,Results['All'].columns.str.contains('mass_g_')]/Tot
+                    # Tot = Results['mass_g'].sum(axis = 1)[0]
+                    # Results['mass_frac'] = Results['mass_g']/Tot
+                    # Results['All'].loc[:,Results['All'].columns.str.contains('mass_g_')] = Results['All'].loc[:,Results['All'].columns.str.contains('mass_g_')]/Tot
                 return Results
             else:
                 Results = {}
@@ -286,9 +289,9 @@ def AdiabaticDecompressionMelting(cores = MAX_WORKERS,
             Results = stich(Results, Model = Model)
 
             # make mass relative to 1 at the start of the model
-            Tot = Results['mass_g'].sum(axis = 1)[0]
-            Results['mass_frac'] = Results['mass_g']/Tot
-            Results['All'].loc[:,Results['All'].columns.str.contains('mass_g_')] = Results['All'].loc[:,Results['All'].columns.str.contains('mass_g_')]/Tot
+            # Tot = Results['mass_g'].sum(axis = 1)[0]
+            # Results['mass_frac'] = Results['mass_g']/Tot
+            # Results['All'].loc[:,Results['All'].columns.str.contains('mass_g_')] = Results['All'].loc[:,Results['All'].columns.str.contains('mass_g_')]/Tot
 
     return Results
 
@@ -343,7 +346,7 @@ def AdiabaticMelt(q, index, *, Model = None, comp_1 = None, comp_2 = None, comp_
                 _permanently_quiet_engine_output()   # one-way; see that function's own docstring
             Results = AdiabaticDecompressionMelting_MELTS(Model = Model, comp = comp_1, T_start_C = T_start_C, Tp_C = Tp_C, Tp_Method = Tp_Method,
                                                       P_path_bar = P_path_bar, P_start_bar = P_start_bar, P_end_bar = P_end_bar, dp_bar = dp_bar,
-                                                      fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, s = s)
+                                                      fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, s = s, Frac = Frac)
             q.put([Results, index])
         except:
             q.put([])

@@ -2,6 +2,15 @@
 Change Log
 ================================================
 
+Version 1.3.1 (Nov 2026)
+====================================
+Trace element engine (beta): new composition-dependent partitioning models for low-Ca pyroxene after Sun & Liang (2013) ("Sun2013"), olivine REE + Y after Sun & Liang (2014) ("Sun2014") and garnet after Sun & Liang (2013) ("Sun2013", passed as partition_models={"garnet": "Sun2013"}), each checked against the authors' own calculators. The olivine model from v1.3.0 is registered as "Beattie1991" (the v1.3.0 notes incorrectly called it "Beattie1993").
+New te.show_models() and te.show_citations() list the available partitioning models for each phase, with short notes on each model and the references to cite.
+Sun2012 now uses the same Avogadro constant and unrounded coefficients as the authors' calculator, so clinopyroxene partition coefficients may shift very slightly compared with v1.3.0. Wood1997 no longer prints numpy RuntimeWarnings for rows without a pyroxene.
+Fractional melting (Frac=True) is now enabled in AdiabaticDecompressionMelting for the MELTS models: melt is removed at each step, and the cumulative extracted melt is reported (mass_g column liquid1_cumsum). calc_trace_conc recognises these results and carries the residue's trace element concentrations from one step to the next, so incompatible elements are correctly depleted in later melts. Fractional melting is not yet available for MAGEMin models (a message is printed if requested).
+AdiabaticDecompressionMelting no longer rescales the mass_g_ columns of Results['All'] to fractions of the starting mass, and no longer returns Results['mass_frac']; masses are now reported in grams (the starting system is 100 g), consistent with the other calculation functions.
+New MgO_limit keyword on multi_path and the crystallisation wrapper functions (isobaric_crystallisation, isochoric_crystallisation, polybaric_crystallisation_path, polybaric_crystallisation_onestep): ends a calculation once the MgO content of the liquid (wt%) falls below this value. MELTS models only; ignored with a warning for MAGEMin models.
+
 Version 1.3.0 (Nov 2026)
 ====================================
 Beta release of the trace element engine (petthermotools.trace_engine). calc_trace_conc calculates trace element concentrations in the liquid and in each phase along the output of crystallisation or melting calculations (e.g. isobaric_crystallisation, AdiabaticDecompressionMelting), using either a built-in set of partition coefficients (D_Gibson_2010), your own coefficients supplied as a dictionary, or composition-dependent partitioning models for specific phases.

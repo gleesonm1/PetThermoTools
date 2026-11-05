@@ -8,10 +8,13 @@ from petthermotools.trace_engine.core_trace_calcs import *
 MODEL_REGISTRY = {}
 
 
-def register_model(name: str):
-    """Decorator to register a partitioning model class under a string name."""
+def register_model(name: str, notes: str = "", citations: str = ""):
+    """Decorator to register a partitioning model class under a string name;
+    `notes` is stored on the class and printed by trace_engine.show_models()."""
 
     def decorator(cls):
+        cls.notes = notes
+        cls.citations = citations
         MODEL_REGISTRY[name] = cls
         return cls
 
@@ -30,8 +33,10 @@ class PartitionModel(ABC):
 
 
 # 3. Individual Model Implementations
-@register_model("Beattie1993")
-class Beattie1993(PartitionModel):
+@register_model("Beattie1991", 
+                notes = "Olivine partitioning models from Beattie et al. (1991), including Ca, Sc, Mn, Ni, Co, and Yb",
+                citations = "Beattie, P., Ford, C. and Russell, D., 1991. Partition coefficients for olivine-melt and orthopyroxene-melt systems. Contributions to Mineralogy and Petrology, 109(2), pp.212-224.")
+class Beattie1991(PartitionModel):
 
     ol_data = {
         'Element': ['Ca', 'Sc', 'Mn', 'Co', 'Ni', 'Yb'],
@@ -44,17 +49,17 @@ class Beattie1993(PartitionModel):
         self, data, liquid, temperature_c: float, pressure_bar: float, **kwargs
     ):
         ol = data.copy()
-        ol = ensure_oxide_columns(ol)
-        liquid = ensure_oxide_columns(liquid.copy())
+        ol, ol_tot = any_cation_fractions(ol, True, phase="ol")
+        liquid, liq_tot = any_cation_fractions(liquid, True, phase="liq")
 
-        p = pressure_bar.values/10000
-        temp = temperature_c.values + 273.15
+        # p = pressure_bar.values/10000
+        # temp = temperature_c.values + 273.15
 
-        # calc cation fractions
-        ol_cat, ol_total_cat = any_cation_fractions(ol, return_total_cations=True)
-        liq_cat, liq_total_cat = any_cation_fractions(liquid, return_total_cations=True)
+        # # calc cation fractions
+        # ol_cat, ol_total_cat = any_cation_fractions(ol, return_total_cations=True)
+        # liq_cat, liq_total_cat = any_cation_fractions(liquid, return_total_cations=True)
 
-        D_Mg = ol_cat['MgO'] / liq_cat['MgO']
+        D_Mg = ol['MgO'] / liquid['MgO']
 
         A = self.ol_AB['A_i_OlL']
         B = self.ol_AB['B_i_OlL']
@@ -67,12 +72,51 @@ class Beattie1993(PartitionModel):
         )
 
         # Convert to mass (ppm) basis
-        mbar_ratio = ol_total_cat / liq_total_cat   # Series, length N samples
+        mbar_ratio = ol_tot / liq_tot  # Series, length N samples
         D_mass = D_cation.mul(mbar_ratio, axis=0)
 
         return D_mass
 
-# 4. Main Framework Class for the user
+@register_model("Sun2014", notes = """
+                    Olivine partitioning model for 3+ cations 
+                    (REE + Y). Benchmarked against 
+                    the excel macro file from Prof. Chenguang Sun. 
+                    Original study - Sun and Liang (2014). 
+                    """,
+                    citations = """
+                    Sun, C. and Liang, Y., 2014. An assessment of subsolidus re-equilibration on REE distribution among mantle minerals olivine, orthopyroxene, clinopyroxene, and garnet in peridotites. Chemical Geology, 372, pp.80-91.                    
+                    """)
+class Sun2014(PartitionModel):
+    # Shannon (1976) VIII-fold radii (Angstrom) -- exactly as used in the Sun macro
+    SUN2012_RADII = {"La": 1.160, "Ce": 1.143, "Pr": 1.126, "Nd": 1.109, "Sm": 1.079,
+                    "Eu": 1.066, "Gd": 1.053, "Tb": 1.040, "Dy": 1.027, "Y": 1.019,
+                    "Ho": 1.015, "Er": 1.004, "Tm": 0.994, "Yb": 0.985, "Lu": 0.977}
+
+    N_A = 6.02e23  
+    def calculate(self, data, liquid=None, temperature_c = None, pressure_bar = None, **kwargs):
+        n = len(data)
+        T_K = np.broadcast_to(np.asarray(temperature_c, dtype=float).ravel(), (n,)) + 273.15
+        P_GPa = np.broadcast_to(np.asarray(pressure_bar, dtype=float).ravel(), (n,))*10**(-4)
+
+        ol = any_cation_fractions(data, False, phase="ol", fe_mode="total")
+        # ol_ox = oxides(data, phase = "ol")
+
+        Mg, Fe = (ol[k].to_numpy() for k in ("MgO", "FeO"))
+        Fo = (100*Mg/(Mg+Fe))
+
+        Al = normalise(oxides(data, "ol", "total", volatiles=False), "oxygen", 4)['Al2O3'].values
+
+        Do = np.exp(-0.435048903684216 - 0.183783970943972*P_GPa + 123.748633183663*Al - 1.48890441979127*10**(-2)*Fo)
+        ro = 0.808800831576529
+        E = 297.625641481357*10**9
+
+        ri = np.array(list(self.SUN2012_RADII.values()))[None, :] * 1e-10
+        r0m = ro * 1e-10
+        strain = r0m / 2 * (ri - r0m)**2 + (ri - r0m)**3 / 3
+        D = Do[:, None] * np.exp(-4 * np.pi * E * self.N_A * strain / (8.3145 * T_K[:, None]))
+        return pd.DataFrame(D, columns=list(self.SUN2012_RADII), index=data.index)
+
+# 4. Main Framework Class
 class OlTraceElementCalculator:
 
     def calculate_partitioning(
@@ -82,7 +126,7 @@ class OlTraceElementCalculator:
         temperature_c: np.ndarray | pd.Series,
         pressure_bar: np.ndarray | pd.Series,
         liquid: pd.DataFrame | None = None,
-        model_name: str = "Beattie1993",
+        model_name: str = "Beattie1991",
         **kwargs,
     ):
         """Main user-facing function."""

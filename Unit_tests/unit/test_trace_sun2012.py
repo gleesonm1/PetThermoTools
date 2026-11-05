@@ -7,9 +7,8 @@ cpx-melt examples (T, P, melt H2O wt%, cpx majors) with two sets of D:
   - `macro_<El>`: output of Sun & Liang's own spreadsheet macro (external truth)
   - `<El>`:       PTT's output when the reference was recorded (regression snapshot)
 
-The macro uses Avogadro = 6.02e23, PTT the CODATA value; that alone shifts D by
-up to ~0.09 %. With the macro's constant patched in, PTT matches the macro to
-~1e-5 (the rounding of the macro output).
+PTT uses the macro's Avogadro constant (6.02e23) and unrounded coefficients, so
+it matches the macro to ~1e-5 (the rounding of the macro output).
 """
 from pathlib import Path
 
@@ -49,13 +48,8 @@ def _assert_close(D, ref, prefix, rtol):
     )
 
 
-def test_sun2012_reproduces_macro_with_macro_avogadro(ref, monkeypatch):
-    monkeypatch.setattr(px, "N_A", 6.02e23)
+def test_sun2012_reproduces_macro(ref):
     _assert_close(_sun2012(ref), ref, "macro_", rtol=5e-5)
-
-
-def test_sun2012_within_avogadro_offset_of_macro(ref):
-    _assert_close(_sun2012(ref), ref, "macro_", rtol=1.5e-3)
 
 
 def test_sun2012_matches_recorded_ptt_output(ref):

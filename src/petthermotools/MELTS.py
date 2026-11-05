@@ -752,7 +752,7 @@ def path_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid = None, 
                isenthalpic = None, isentropic = None, isochoric = None, find_liquidus = False, 
                fO2_buffer = None, fO2_offset = None, fluid_sat = False, Crystallinity_limit = None, 
                Suppress = ['rutile', 'tridymite'], Suppress_except=False, phases=None, trail = None, melts = None,
-               thermo_prop = False, shared_dict = None, index = None, q = None):
+               thermo_prop = False, shared_dict = None, index = None, q = None, MgO_limit = None):
     '''
     Perform a single  calculation in MELTS. WARNING! Running this function directly from the command land/jupyter notebook will initiate the MELTS C library in the main python process. Once this has been initiated the MELTS C library cannot be re-loaded and failures during the calculation will likely cause a terminal error to occur.
 
@@ -1198,6 +1198,10 @@ def path_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid = None, 
                     ll = ll + 1
             
             if ll == len(phases):
+                break
+
+        if MgO_limit is not None:
+            if 'liquid1' not in Results[i] or melts.engine.getProperty('dispComposition', 'liquid1', 'MgO') < MgO_limit:
                 break
 
         if i != length - 1:
@@ -1761,6 +1765,9 @@ def AdiabaticDecompressionMelting_MELTS(Model = None, comp = None, Tp_C = None, 
     Results['Conditions'] = pd.DataFrame(data = np.zeros((len(P), 8)), columns = ['temperature', 'pressure', 'h', 's', 'v', 'mass', 'dvdp', 'logfO2'])
     properties = ['g', 'h', 's', 'v', 'cp', 'dcpdt', 'dvdt', 'dpdt', 'd2vdt2', 'd2vdtdp', 'd2vdp2', 'molwt', 'rho', 'mass']
     
+    if Frac:
+        melts.engine.setSystemProperties("Mode", "Fractionate Liquids")
+
     for k in range(len(P)):
         if k != 0:
             melts = melts.addNodeAfter()
@@ -1770,6 +1777,9 @@ def AdiabaticDecompressionMelting_MELTS(Model = None, comp = None, Tp_C = None, 
             T = T_start_C
 
             try:
+                # if Frac:
+                #     melts.engine.calcEquilibriumState(1,1)
+                #     melts = melts.addNodeAfter()
                 melts.engine.calcEquilibriumState(1,0)
                 s = melts.engine.getProperty('s','bulk')
             except:
@@ -1808,6 +1818,16 @@ def AdiabaticDecompressionMelting_MELTS(Model = None, comp = None, Tp_C = None, 
                 if n > 32:
                     break
 
+            # if Frac:
+            #     try:
+            #         melts.engine.calcEquilibriumState(1,1)
+            #         melts = melts.addNodeAfter()
+            #         melts.engine.calcEquilibriumState(1,0)
+            #         s = melts.engine.getProperty('s','bulk')
+            #     except:
+            #         return Results
+        
+
             T = T_next
             
         for R in Results['Conditions']:
@@ -1843,6 +1863,15 @@ def AdiabaticDecompressionMelting_MELTS(Model = None, comp = None, Tp_C = None, 
 
                 for pr in Results[phase + '_prop']:
                     Results[phase + '_prop'].loc[k,pr] = melts.engine.getProperty(pr, phase)
+
+        if Frac:
+            try:
+                melts.engine.calcEquilibriumState(1,1)
+                melts = melts.addNodeAfter()
+                melts.engine.calcEquilibriumState(1,0)
+                s = melts.engine.getProperty('s','bulk')
+            except:
+                return Results
         
         # if k == 0:
         #     s = melts.engine.getProperty('s','bulk')

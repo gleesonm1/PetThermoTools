@@ -5,6 +5,7 @@ import warnings
 from petthermotools.trace_engine.partition_standards import phases
 from petthermotools.trace_engine.px_partitioning_models import PxTraceElementCalculator
 from petthermotools.trace_engine.ol_partitioning_models import OlTraceElementCalculator
+from petthermotools.trace_engine.grt_partitioning_models import GrtTraceElementCalculator
 
 
 def check_partition_keys(partition):
@@ -50,21 +51,72 @@ def get_trace_d(results, d_coeffs, partition_models):
                         
                         valid_mask = kd_calc.notna() & (kd_calc > 0.0)
                         trace_d[cpx_num]= trace_d[cpx_num].mask(valid_mask, kd_calc)
+            elif key_lower in ["opx", "orthopyroxene", "Opx", "orthopyroxene1"]:
+                opx_calc = PxTraceElementCalculator()
+                opx_dict = {k: v for k, v in results.items() if "orthopyroxene" in k and "prop" not in k}
+                if len(opx_dict)>0.0:
+                    for opx_num in opx_dict.keys():
+                        if 'liquid1' in results.keys():
+                            kd_calc = opx_calc.calculate_partitioning(
+                                    data = results[opx_num],
+                                    liquid = results['liquid1'],
+                                    model_name=partition_models[key],
+                                    temperature_c=results['All']['T_C'],
+                                    pressure_bar=results['All']['P_bar']).reindex(columns=d_coeffs.columns, fill_value=0.0)
+                        else:
+                            kd_calc = opx_calc.calculate_partitioning(
+                                    data = results[opx_num],
+                                    liquid = None,
+                                    model_name=partition_models[key],
+                                    temperature_c=results['All']['T_C'],
+                                    pressure_bar=results['All']['P_bar']).reindex(columns=d_coeffs.columns, fill_value=0.0)
+                        
+                        valid_mask = kd_calc.notna() & (kd_calc > 0.0)
+                        trace_d[opx_num]= trace_d[opx_num].mask(valid_mask, kd_calc)
             elif key_lower in ["ol", "olivine", "olivine1", "Ol", "Olivine"]:
                 ol_calc = OlTraceElementCalculator()
                 ol_dict = {k: v for k, v in results.items() if "olivine" in k and "prop" not in k}
                 if len(ol_dict) > 0.0:
                     for ol_num in ol_dict.keys():
-                        kd_calc = ol_calc.calculate_partitioning(
-                            data = results[ol_num],
-                            liquid = results['liquid1'],
-                            model_name=partition_models[key],
-                            temperature_c=results['All']['T_C'],
-                            pressure_bar=results['All']['P_bar']).reindex(columns=d_coeffs.columns, fill_value=0.0)
-                        
+                        if 'liquid1' in results.keys():
+                            kd_calc = ol_calc.calculate_partitioning(
+                                data = results[ol_num],
+                                liquid = results['liquid1'],
+                                model_name=partition_models[key],
+                                temperature_c=results['All']['T_C'],
+                                pressure_bar=results['All']['P_bar']).reindex(columns=d_coeffs.columns, fill_value=0.0)
+                        else:
+                            kd_calc = ol_calc.calculate_partitioning(
+                                data = results[ol_num],
+                                liquid = None,
+                                model_name=partition_models[key],
+                                temperature_c=results['All']['T_C'],
+                                pressure_bar=results['All']['P_bar']).reindex(columns=d_coeffs.columns, fill_value=0.0)
                     
-                    valid_mask = kd_calc.notna() & (kd_calc > 0.0)
-                    trace_d[ol_num] = trace_d[ol_num].mask(valid_mask, kd_calc)
+                        valid_mask = kd_calc.notna() & (kd_calc > 0.0)
+                        trace_d[ol_num] = trace_d[ol_num].mask(valid_mask, kd_calc)
+            elif key_lower in ["grt", "garnet", "g"]:
+                grt_calc = GrtTraceElementCalculator()
+                grt_dict = {k: v for k, v in results.items() if "garnet" in k and "prop" not in k}
+                if len(grt_dict) > 0.0:
+                    for grt_num in grt_dict.keys():
+                        if 'liquid1' in results.keys():
+                            kd_calc = grt_calc.calculate_partitioning(
+                                data = results[grt_num],
+                                liquid = results['liquid1'],
+                                model_name=partition_models[key],
+                                temperature_c=results['All']['T_C'],
+                                pressure_bar=results['All']['P_bar']).reindex(columns=d_coeffs.columns, fill_value=0.0)
+                        else:
+                            kd_calc = grt_calc.calculate_partitioning(
+                                data = results[grt_num],
+                                liquid = None,
+                                model_name=partition_models[key],
+                                temperature_c=results['All']['T_C'],
+                                pressure_bar=results['All']['P_bar']).reindex(columns=d_coeffs.columns, fill_value=0.0)
+                    
+                        valid_mask = kd_calc.notna() & (kd_calc > 0.0)
+                        trace_d[grt_num] = trace_d[grt_num].mask(valid_mask, kd_calc)
 
             # elif key == "opx" or key == "orthopyroxene" or key == "Opx":
             #     opx_calc = PxTraceElementCalculator()

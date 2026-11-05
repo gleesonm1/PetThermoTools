@@ -9,7 +9,7 @@ def isobaric_crystallisation(Model = None, bulk = None, Frac_solid = None, Frac_
                              find_liquidus = False, fO2_buffer = None, fO2_offset = None, 
                              label = None, Crystallinity_limit = None, fluid_sat = False, timeout = None,
                              Suppress = ['rutile', 'tridymite'], Suppress_except=False,
-                             multi_processing = True, quiet_engine = True):
+                             multi_processing = True, quiet_engine = True, MgO_limit = None):
     """
     Simulates isobaric (constant-pressure) crystallization paths using the `multi_path` function.
 
@@ -50,6 +50,8 @@ def isobaric_crystallisation(Model = None, bulk = None, Frac_solid = None, Frac_
         (e.g., 'H2O_init', 'P_bar', 'fO2_offset', 'Fe3Fet_init').
     Crystallinity_limit : float, optional
         Stops if total crystallinity exceeds this value.
+    MgO_limit : float, optional
+        Stops once the MgO content of the liquid (wt%) falls below this value. MELTS models only.
     fluid_sat : bool, optional
         If True, begins at fluid saturation. Default is False.
     timeout : float, optional
@@ -92,7 +94,7 @@ def isobaric_crystallisation(Model = None, bulk = None, Frac_solid = None, Frac_
                          find_liquidus = find_liquidus, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset,
                          label = label, Crystallinity_limit = Crystallinity_limit, fluid_sat = fluid_sat,
                          timeout = timeout, Suppress = Suppress, Suppress_except=Suppress_except,
-                         multi_processing = multi_processing, quiet_engine = quiet_engine)
+                         multi_processing = multi_processing, quiet_engine = quiet_engine, MgO_limit = MgO_limit)
 
     return Results
 
@@ -103,7 +105,7 @@ def isochoric_crystallisation(Model = None, bulk = None, Frac_solid = None, Frac
                               find_liquidus = False, fO2_buffer = None, fO2_offset = None, 
                               label = None, Crystallinity_limit = None, fluid_sat = False, 
                               timeout = None, Suppress = ['rutile', 'tridymite'], Suppress_except=False,
-                              multi_processing = True, quiet_engine = True):
+                              multi_processing = True, quiet_engine = True, MgO_limit = None):
     """
     Simulates isochoric (constant-volume) crystallization paths using the `multi_path` function.
 
@@ -140,6 +142,8 @@ def isochoric_crystallisation(Model = None, bulk = None, Frac_solid = None, Frac
         Label for the run.
     Crystallinity_limit : float, optional
         Stops if total crystallinity exceeds this value.
+    MgO_limit : float, optional
+        Stops once the MgO content of the liquid (wt%) falls below this value. MELTS models only.
     fluid_sat : bool, optional
         If True, begins at fluid saturation. Default is False.
     timeout : float, optional
@@ -182,7 +186,7 @@ def isochoric_crystallisation(Model = None, bulk = None, Frac_solid = None, Frac
                          find_liquidus = find_liquidus, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset,
                          label = label, Crystallinity_limit = Crystallinity_limit, fluid_sat = fluid_sat,
                          timeout = timeout, isochoric = True, Suppress = Suppress, Suppress_except=Suppress_except,
-                         multi_processing=multi_processing, quiet_engine = quiet_engine)
+                         multi_processing=multi_processing, quiet_engine = quiet_engine, MgO_limit = MgO_limit)
 
     return Results
 
@@ -192,7 +196,8 @@ def polybaric_crystallisation_path(Model = None, bulk = None, Frac_solid = None,
                                    Fe3Fet_init = None, Fe3Fet_Liq = None, H2O_init = None, H2O_Liq = None, 
                                    CO2_init = None, CO2_Liq = None, find_liquidus = False, fO2_buffer = None, 
                                    fO2_offset = None, label = None, timeout = None, multi_processing=True, fluid_sat = False,
-                                   Suppress = ['rutile', 'tridymite'], Suppress_except=False, quiet_engine = True):
+                                   Suppress = ['rutile', 'tridymite'], Suppress_except=False, quiet_engine = True,
+                                   MgO_limit = None):
     """
     Simulates polybaric crystallization along a user-specified P-T path using the `multi_path` function.
 
@@ -234,6 +239,8 @@ def polybaric_crystallisation_path(Model = None, bulk = None, Frac_solid = None,
         Label for the run.
     Crystallinity_limit : float, optional
         Stops if total crystallinity exceeds this value.
+    MgO_limit : float, optional
+        Stops once the MgO content of the liquid (wt%) falls below this value. MELTS models only.
     fluid_sat : bool, optional
         If True, begins at fluid saturation. Default is False.
     timeout : float, optional
@@ -276,7 +283,8 @@ def polybaric_crystallisation_path(Model = None, bulk = None, Frac_solid = None,
                          Fe3Fet_init = Fe3Fet_init, H2O_init = H2O_init, CO2_init = CO2_init, find_liquidus = find_liquidus,
                          fO2_buffer = fO2_buffer, fO2_offset = fO2_offset,
                          label = label, timeout = timeout, Suppress = Suppress, Suppress_except=Suppress_except,
-                         multi_processing=multi_processing, fluid_sat=fluid_sat, quiet_engine = quiet_engine)
+                         multi_processing=multi_processing, fluid_sat=fluid_sat, quiet_engine = quiet_engine,
+                         MgO_limit = MgO_limit)
 
     return Results
 
@@ -286,7 +294,7 @@ def polybaric_crystallisation_onestep(Model = None, bulk = None, Frac_solid = No
                                       H2O_Liq = None, H2O_init = None, CO2_Liq = None, CO2_init = None, 
                                       find_liquidus = False, fO2_buffer = None, fO2_offset = None, label = None, 
                                       timeout = None, multi_processing = True, Suppress = ['rutile', 'tridymite'],
-                                      Suppress_except=False, fluid_sat = False, quiet_engine = True):
+                                      Suppress_except=False, fluid_sat = False, quiet_engine = True, MgO_limit = None):
     """
     Simulates polybaric crystallization along a user-specified P-T path using the `multi_path` function.
 
@@ -326,6 +334,8 @@ def polybaric_crystallisation_onestep(Model = None, bulk = None, Frac_solid = No
         Label for the run.
     Crystallinity_limit : float, optional
         Stops if total crystallinity exceeds this value.
+    MgO_limit : float, optional
+        Stops once the MgO content of the liquid (wt%) falls below this value. MELTS models only.
     fluid_sat : bool, optional
         If True, begins at fluid saturation. Default is False.
     timeout : float, optional
@@ -400,7 +410,8 @@ def polybaric_crystallisation_onestep(Model = None, bulk = None, Frac_solid = No
                         H2O_init = H2O_init, CO2_init = CO2_init,
                         find_liquidus = find_liquidus, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset,
                         label = label, timeout = timeout, Suppress = Suppress, Suppress_except=Suppress_except,
-                        multi_processing=multi_processing, fluid_sat=fluid_sat, quiet_engine = quiet_engine)
+                        multi_processing=multi_processing, fluid_sat=fluid_sat, quiet_engine = quiet_engine,
+                        MgO_limit = MgO_limit)
 
     return Results
 

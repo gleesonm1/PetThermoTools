@@ -1,4 +1,5 @@
 import contextlib
+import warnings
 import numpy as np
 import pandas as pd
 from petthermotools.GenFuncs import *
@@ -712,7 +713,7 @@ class _PathRowTask(NamedTuple):
 
 def _path_task_v2(q, task, *, Model=None, fO2_buffer=None, Suppress=None, Suppress_except=None,
                    Frac_solid=None, Frac_fluid=None, isenthalpic=None, isentropic=None,
-                   isochoric=None, find_liquidus=None, fluid_sat=None, Crystallinity_limit=None,
+                   isochoric=None, find_liquidus=None, fluid_sat=None, Crystallinity_limit=None, MgO_limit=None,
                    quiet_engine=True):
     """
     task_fn for multi_path_v2's mp_utils.run_tasks() call. Always
@@ -742,7 +743,7 @@ def _path_task_v2(q, task, *, Model=None, fO2_buffer=None, Suppress=None, Suppre
         find_liquidus=find_liquidus, fO2_buffer=fO2_buffer, fO2_offset=task.fO2_offset,
         fluid_sat=fluid_sat, Crystallinity_limit=Crystallinity_limit,
         Suppress=Suppress, Suppress_except=Suppress_except, trail=True, melts=melts,
-        q=q, index=task.row_id,
+        q=q, index=task.row_id, MgO_limit=MgO_limit
     )
 
     # `tr` ("trail") is NOT a per-row success/failure flag, even though it
@@ -779,7 +780,7 @@ def multi_path(cores=None, Model=None, bulk=None, comp=None, Frac_solid=None, Fr
                    fO2_buffer=None, fO2_offset=None, fluid_sat=False, Crystallinity_limit=None,
                    label=None, timeout=None, Suppress=['rutile', 'tridymite'], Suppress_except=False,
                    quiet_engine=True, max_tasks_per_worker=1, max_retries=0, stall_timeout=None,
-                   multi_processing=True, Print_suppress=None):
+                   multi_processing=True, Print_suppress=None, MgO_limit=None):
     """
     Runs isobaric/polybaric/isochoric crystallisation (or decompression/
     heating) paths for one or more starting compositions/conditions, using
@@ -866,6 +867,11 @@ def multi_path(cores=None, Model=None, bulk=None, comp=None, Frac_solid=None, Fr
         saturation_pressure's ~20-45s single-equilibrium-step defaults,
         since a path is many steps, not one. Announced at the start of
         every call (as the resolved value, whether defaulted or supplied).
+    MgO_limit : float or None, default None
+        Ends a run once the MgO content of the liquid (wt%) falls below
+        this value (or no liquid is left); the first step below the limit
+        is kept as the last row. MELTS models only -- ignored, with a
+        warning, for MAGEMin and nGibbs models.
 
     Returns
     -------
@@ -884,6 +890,9 @@ def multi_path(cores=None, Model=None, bulk=None, comp=None, Frac_solid=None, Fr
     # test_model_none_defaults_to_a_melts_model_in_multi_path).
     if Model is None:
         Model = "MELTSv1.0.2"
+
+    if MgO_limit is not None and "MELTS" not in Model:
+        warnings.warn(f"MgO_limit is only implemented for the MELTS models and will be ignored for Model = '{Model}'.")
 
     if "MELTS" not in Model:
         return multi_path_v1(cores=cores, Model=Model, bulk=bulk, comp=comp, Frac_solid=Frac_solid,
@@ -1040,7 +1049,7 @@ def multi_path(cores=None, Model=None, bulk=None, comp=None, Frac_solid=None, Fr
                               Suppress_except=Suppress_except, Frac_solid=Frac_solid,
                               Frac_fluid=Frac_fluid, isenthalpic=isenthalpic, isentropic=isentropic,
                               isochoric=isochoric, find_liquidus=find_liquidus, fluid_sat=fluid_sat,
-                              Crystallinity_limit=Crystallinity_limit, quiet_engine=quiet_engine),
+                              Crystallinity_limit=Crystallinity_limit, quiet_engine=quiet_engine, MgO_limit=MgO_limit),
             cores=cores,
             timeout=timeout,
             stall_timeout=stall_timeout,
@@ -1123,7 +1132,8 @@ def multi_path(cores=None, Model=None, bulk=None, comp=None, Frac_solid=None, Fr
             'P_end_bar': P_end_bar[i], 'dp_bar': dp_bar[i], 'isenthalpic': isenthalpic,
             'isentropic': isentropic, 'isochoric': isochoric, 'find_liquidus': find_liquidus,
             'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset[i], 'fluid_sat': fluid_sat,
-            'Crystallinity_limit': Crystallinity_limit, 'Suppress': Suppress, 'Suppress_except': Suppress_except,
+            'Crystallinity_limit': Crystallinity_limit, 'MgO_limit': MgO_limit,
+            'Suppress': Suppress, 'Suppress_except': Suppress_except,
         }
 
     if label is not None:
@@ -1142,7 +1152,8 @@ def path_multi(q, index, *, Model = None, comp = None, Frac_solid = None, Frac_f
             P_bar = None, P_path_bar = None, P_start_bar = None, P_end_bar = None, dp_bar = None,
             isenthalpic = None, isentropic = None, isochoric = None, find_liquidus = None,
             fO2_buffer = None, fO2_offset = None, fluid_sat = False, Crystallinity_limit = None,
-            Suppress = None, Suppress_except = None, trail = True, shared_dict = None, quiet_engine = True):
+            Suppress = None, Suppress_except = None, trail = True, shared_dict = None, quiet_engine = True,
+            MgO_limit = None):
     """
     Worker function to run a subset of crystallization/decompression models (MELTS or MAGEMin) in parallel.
 
@@ -1179,6 +1190,8 @@ def path_multi(q, index, *, Model = None, comp = None, Frac_solid = None, Frac_f
         If True, terminates runs at fluid saturation.
     Crystallinity_limit : float
         Ends run when crystallinity exceeds this value.
+    MgO_limit : float
+        Ends run when the MgO content of the liquid (wt%) falls below this value.
     Suppress : list of str
         Phases to exclude from results.
     Suppress_except : bool
@@ -1232,7 +1245,8 @@ def path_multi(q, index, *, Model = None, comp = None, Frac_solid = None, Frac_f
                                             isenthalpic = isenthalpic, isentropic = isentropic, isochoric = isochoric,
                                             find_liquidus = find_liquidus, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset[i],
                                             fluid_sat = fluid_sat, Crystallinity_limit = Crystallinity_limit, Suppress = Suppress,
-                                            Suppress_except=Suppress_except, trail = trail, melts = melts, q = q, index = i)
+                                            Suppress_except=Suppress_except, trail = trail, melts = melts, q = q, index = i,
+                                            MgO_limit = MgO_limit)
                 else:
                     Results, tr = path_MELTS(Model = Model, comp = comp.loc[i].to_dict(), Frac_solid = Frac_solid, Frac_fluid = Frac_fluid,
                                             T_initial_C = np.random.random()*200 + 1200, T_C = T_C[i], T_path_C = T_path_C[i], T_start_C = T_start_C[i],
@@ -1241,7 +1255,8 @@ def path_multi(q, index, *, Model = None, comp = None, Frac_solid = None, Frac_f
                                             isenthalpic = isenthalpic, isentropic = isentropic, isochoric = isochoric,
                                             find_liquidus = find_liquidus, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset[i],
                                             fluid_sat = fluid_sat, Crystallinity_limit = Crystallinity_limit, Suppress = Suppress,
-                                            Suppress_except=Suppress_except, trail = trail, melts = melts, q = q, index = i)
+                                            Suppress_except=Suppress_except, trail = trail, melts = melts, q = q, index = i,
+                                            MgO_limit = MgO_limit)
 
             if tr is False:
                 break
@@ -1257,7 +1272,7 @@ def path(q, index, *, Model = None, comp = None, Frac_solid = None, Frac_fluid =
          P_bar = None, P_path_bar = None, P_start_bar = None, P_end_bar = None, dp_bar = None, 
          isenthalpic = None, isentropic = None, isochoric = None, find_liquidus = None, 
          fO2_buffer = None, fO2_offset = None, fluid_sat = None, Crystallinity_limit = None,
-         Suppress = None, Suppress_except = False, shared_dict=None, quiet_engine = True):
+         Suppress = None, Suppress_except = False, shared_dict=None, quiet_engine = True, MgO_limit = None):
     '''
     Crystallisation calculations to be performed in parallel. Calculations may be either isobaric or isochoric.
 
@@ -1374,7 +1389,8 @@ def path(q, index, *, Model = None, comp = None, Frac_solid = None, Frac_fluid =
                                     P_end_bar = P_end_bar, dp_bar = dp_bar, isenthalpic = isenthalpic,
                                     isentropic = isentropic, isochoric = isochoric, find_liquidus = find_liquidus,
                                     fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, fluid_sat = fluid_sat,
-                                    Crystallinity_limit = Crystallinity_limit, Suppress = Suppress, Suppress_except = Suppress_except, q = q, index = 0)
+                                    Crystallinity_limit = Crystallinity_limit, Suppress = Suppress, Suppress_except = Suppress_except, q = q, index = 0,
+                                    MgO_limit = MgO_limit)
         else:
             output_ctx = pipes() if pipes is not None else contextlib.nullcontext()
             with output_ctx:
@@ -1384,7 +1400,8 @@ def path(q, index, *, Model = None, comp = None, Frac_solid = None, Frac_fluid =
                                         P_end_bar = P_end_bar, dp_bar = dp_bar, isenthalpic = isenthalpic,
                                         isentropic = isentropic, isochoric = isochoric, find_liquidus = find_liquidus,
                                         fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, fluid_sat = fluid_sat,
-                                        Crystallinity_limit = Crystallinity_limit, Suppress = Suppress, Suppress_except = Suppress_except, q = q, index = 0)
+                                        Crystallinity_limit = Crystallinity_limit, Suppress = Suppress, Suppress_except = Suppress_except, q = q, index = 0,
+                                        MgO_limit = MgO_limit)
 
         return
 
