@@ -537,6 +537,11 @@ def phase_mass_comparison(Results=None, x_axis = "MgO_Liq", phase = "liquid1", c
 
     return f, a    
 
+def _phase_mass_col(mass_df, phase):
+    # Fractional runs report the removed phase as <phase>_cumsum: the solids for fractional
+    # crystallisation, the liquid for fractional melting. Use it per phase where it exists.
+    return phase + "_cumsum" if phase + "_cumsum" in mass_df.columns else phase
+
 def phase_plot(Results, x_axis = None, y_axis = None, cmap = "Reds", lines = False):
     """
     Create stacked phase mass-fraction plots from thermodynamic model results.
@@ -631,25 +636,23 @@ def phase_plot(Results, x_axis = None, y_axis = None, cmap = "Reds", lines = Fal
 
     for run_id, data in runs.items():
         mass_df = data['mass_g']
-        use_cumsum = any(col.endswith("_cumsum") for col in mass_df.columns)
-        suffix = "_cumsum" if use_cumsum else ""
-        
+
         exclude_cols = {'T_C', None}
-        current_phases = [
-            col.replace(suffix, "") 
-            for col in mass_df.columns 
-            if col.endswith(suffix) or (not use_cumsum and not col.endswith("_cumsum") and col not in exclude_cols)
-        ]
-        
+        current_phases = list(dict.fromkeys(
+            col.removesuffix("_cumsum")
+            for col in mass_df.columns
+            if col not in exclude_cols
+        ))
+
         # Remove liquid for now to handle it separately later
         liquid_names = ["liq1", "liquid1"]
         current_phases = [p for p in current_phases if p not in liquid_names]
-        
+
         all_unique_phases.update(current_phases)
 
         # Track earliest appearance for sorting
         for p in current_phases:
-            col = p + suffix if (use_cumsum and p + suffix in mass_df.columns) else p
+            col = _phase_mass_col(mass_df, p)
             vals = mass_df[col].values
             nz = np.flatnonzero(vals > 0)
             first_idx = nz[0] if len(nz) > 0 else np.inf
@@ -684,11 +687,8 @@ def phase_plot(Results, x_axis = None, y_axis = None, cmap = "Reds", lines = Fal
 
     # 5. Define modified makeplot that uses the MasterPhaseColors
     def makeplot(Mass, Res, title = None):
-        use_cumsum = any(col.endswith("_cumsum") for col in Mass.columns)
-        suffix = "_cumsum" if use_cumsum else ""
-
         # Identify local phases and sort them based on the Master list order
-        local_phases = [p for p in sorted_phases if (p+suffix in Mass.columns or p in Mass.columns)]
+        local_phases = [p for p in sorted_phases if (p + "_cumsum" in Mass.columns or p in Mass.columns)]
         # Special check for liquid names
         if "liq1" in Mass.columns and "liq1" not in local_phases: local_phases.append("liq1")
         if "liquid1" in Mass.columns and "liquid1" not in local_phases: local_phases.append("liquid1")
@@ -703,7 +703,7 @@ def phase_plot(Results, x_axis = None, y_axis = None, cmap = "Reds", lines = Fal
         Stop = np.zeros(len(Mass))
 
         for p in local_phases:
-            col = p + suffix if (use_cumsum and p + suffix in Mass.columns) else p
+            col = _phase_mass_col(Mass, p)
             if col not in Mass.columns: continue
             
             vals = Mass[col].values

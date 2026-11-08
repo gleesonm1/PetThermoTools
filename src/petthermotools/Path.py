@@ -732,6 +732,7 @@ def _path_task_v2(q, task, *, Model=None, fO2_buffer=None, Suppress=None, Suppre
     from meltsdynamic import MELTSdynamic
     melts = MELTSdynamic(_MODEL_CODES.get(Model, 1))
 
+    stop_info = {'complete': False, 'reason': None}
     Results, tr = path_MELTS(
         Model=Model, comp=task.comp, Frac_solid=Frac_solid, Frac_fluid=Frac_fluid,
         T_initial_C=np.random.random() * 200 + 1200,
@@ -743,7 +744,7 @@ def _path_task_v2(q, task, *, Model=None, fO2_buffer=None, Suppress=None, Suppre
         find_liquidus=find_liquidus, fO2_buffer=fO2_buffer, fO2_offset=task.fO2_offset,
         fluid_sat=fluid_sat, Crystallinity_limit=Crystallinity_limit,
         Suppress=Suppress, Suppress_except=Suppress_except, trail=True, melts=melts,
-        q=q, index=task.row_id, MgO_limit=MgO_limit
+        q=q, index=task.row_id, MgO_limit=MgO_limit, stop_info=stop_info
     )
 
     # `tr` ("trail") is NOT a per-row success/failure flag, even though it
@@ -764,6 +765,15 @@ def _path_task_v2(q, task, *, Model=None, fO2_buffer=None, Suppress=None, Suppre
     # nothing usable came back.
     if not Results:
         raise RuntimeError(f"path_MELTS reported an empty result for row {task.row_id}")
+
+    # A path only counts as completed if it reached its final step or stopped at a requested
+    # limit (Crystallinity_limit, MgO_limit). Otherwise the engine failed part-way: raising here
+    # reports the row as CRASHED, and the steps already streamed via q.put are kept, so
+    # multi_path counts it as "returned partial results after a crash".
+    if not stop_info['complete']:
+        last = Results[max(Results)]['Conditions']
+        raise RuntimeError(f"path for row {task.row_id} stopped early after {len(Results)} steps "
+                           f"(last step: T = {last[0]:.1f} C, P = {last[1]:.1f} bar)")
 
     # Distinct from path_MELTS's own per-step q.put([index, step_i, data]) calls
     # (step_i is always an int) -- lets on_progress tick the bar once per ROW

@@ -752,7 +752,8 @@ def path_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid = None, 
                isenthalpic = None, isentropic = None, isochoric = None, find_liquidus = False, 
                fO2_buffer = None, fO2_offset = None, fluid_sat = False, Crystallinity_limit = None, 
                Suppress = ['rutile', 'tridymite'], Suppress_except=False, phases=None, trail = None, melts = None,
-               thermo_prop = False, shared_dict = None, index = None, q = None, MgO_limit = None):
+               thermo_prop = False, shared_dict = None, index = None, q = None, MgO_limit = None,
+               stop_info = None):
     '''
     Perform a single  calculation in MELTS. WARNING! Running this function directly from the command land/jupyter notebook will initiate the MELTS C library in the main python process. Once this has been initiated the MELTS C library cannot be re-loaded and failures during the calculation will likely cause a terminal error to occur.
 
@@ -1189,6 +1190,9 @@ def path_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid = None, 
 
             # 4. Check the limit (and protect against division by zero)
             if Total_volume > 0 and (Volume / Total_volume) > Crystallinity_limit:
+                if stop_info is not None:
+                    stop_info['complete'] = True
+                    stop_info['reason'] = 'Crystallinity_limit'
                 break
 
         if phases is not None:
@@ -1198,11 +1202,22 @@ def path_MELTS(Model = None, comp = None, Frac_solid = None, Frac_fluid = None, 
                     ll = ll + 1
             
             if ll == len(phases):
+                if stop_info is not None:
+                    stop_info['complete'] = True
+                    stop_info['reason'] = 'phases'
                 break
 
         if MgO_limit is not None:
             if 'liquid1' not in Results[i] or melts.engine.getProperty('dispComposition', 'liquid1', 'MgO') < MgO_limit:
+                if stop_info is not None:
+                    stop_info['complete'] = True
+                    stop_info['reason'] = 'MgO_limit'
                 break
+
+        # every other exit from this loop (engine exception, convergence status) is a failure
+        if i == length - 1 and stop_info is not None:
+            stop_info['complete'] = True
+            stop_info['reason'] = 'end'
 
         if i != length - 1:
             try:

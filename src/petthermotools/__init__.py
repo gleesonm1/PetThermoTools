@@ -15,6 +15,7 @@ import matplotlib.pyplot as plt
 # import glob
 from subprocess import Popen, PIPE
 from os import path
+import platform
 
 # import importlib.util
 
@@ -43,7 +44,17 @@ except (ImportError, ModuleNotFoundError) as e:
     warnings.warn(f"Failed to import MELTSdynamic: {e}. \nUse `import sys; sys.path.append(r'path_to_alphaMELTS_4_python')` to add the alphaMELTS for Python files to the Python path.")
 
 if _IS_MAIN_PROCESS:
-    print("If using the Green et al. (2025) or Weller et al. (2024) thermodynamic models please run `ptt.activate_petthermotools_env()` prior to any calculations.")
+    system = platform.system()
+    if system != "Windows":
+        print("If you are planning on using the Green et al. (2025) or Weller et al. (2024) thermodynamic models through MAGEMin for crystallization, melting, or phase diagram calculations\n" \
+        "you will need to run `ptt.activate_petthermotools_env()` at the start of each notebook, prior to any calculations, every time you restart the kernel. \n" \
+        "This step establishes the python-julia connection and sets up the julia workers. Expect it to take about 20-40s on most machines.")
+    else:
+        print("If you are planning on using the Green et al. (2025) or Weller et al. (2024) thermodynamic models through MAGEMin for crystallization, melting, or phase diagram calculations \n" \
+        "you will need to run `ptt.activate_petthermotools_env()` at the start of each notebook, prior to any calculations, every time you restart the kernel. \n" \
+        "This step establishes the python-julia connection and sets up the julia workers. Expect it to take about 20-40s on most machines. \n" \
+        "NOTE - once `ptt.activate_petthermotools_env()` has been run you WILL NOT be able to run any calculations with the MELTS models. It is my recommendation that Windows \n" \
+        "users run the MAGEMin models in one notebook and the MELTS models in another notebook. I'm actively working to try and find a way around this.")
 
 # test installation script
 from petthermotools.Installation import *
