@@ -713,7 +713,10 @@ def phase_plot(Results, x_axis = None, y_axis = None, cmap = "Reds", lines = Fal
             color = MasterPhaseColors.get(p, "grey") # Fallback to grey if not found
 
             if lines:
-                a.plot(coord, vals, '-', color = color, label = label)
+                if horizontal:
+                    a.plot(vals, coord, '-', label = label)
+                else:
+                    a.plot(coord, vals, '-', label = label)
             else:
                 if horizontal:
                     a.fill_betweenx(coord, Stop, Stop + vals, color=color, alpha=0.75, lw=0, label=label)

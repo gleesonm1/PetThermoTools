@@ -1095,24 +1095,33 @@ def multi_path(cores=None, Model=None, bulk=None, comp=None, Frac_solid=None, Fr
     # equal to another _PathRowTask).
     result_by_row = {task.row_id: result for task, result in out.items()}
 
+    failures = []
     for row_id in range(n):
         result = result_by_row.get(row_id)
         has_data = bool(collected.get(row_id))
         if result is not None and result.status is _TaskStatus.OK:
             n_completed += 1
-        elif has_data:
-            error = (result.error or "") if result is not None else ""
-            if "timed out" in error or "no activity for over" in error:
-                n_partial_timeout += 1
-            else:
-                n_partial_crash += 1
-        else:
+            continue
+        error = (result.error or "") if result is not None else ""
+        if not has_data:
             n_no_results += 1
+            failures.append((row_id, "no results", error))
+        elif "timed out" in error or "no activity for over" in error:
+            n_partial_timeout += 1
+            failures.append((row_id, "partial results", error))
+        else:
+            n_partial_crash += 1
+            failures.append((row_id, "partial results", error))
 
     if Print_suppress is None:
         print(f"multi_path_v2: {n_completed}/{n} completed, {n_partial_crash}/{n} returned partial "
               f"results after a crash, {n_partial_timeout}/{n} returned partial results after timing "
               f"out, {n_no_results}/{n} returned no results (no retry by default -- see max_retries).")
+        max_listed = 10
+        for row_id, outcome, error in failures[:max_listed]:
+            print(f"  Run {row_id} ({outcome}): {error or 'no reason reported'}")
+        if len(failures) > max_listed:
+            print(f"  ... and {len(failures) - max_listed} more runs that did not complete.")
 
     full_results = {}
     for row_id, steps in collected.items():

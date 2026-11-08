@@ -20,7 +20,9 @@ that spawn/queue/timeout/retry bookkeeping is done, not the one-process-per-
 risky-unit-of-work architecture itself.
 """
 
+import os
 import time
+import traceback
 import multiprocessing as mp
 from dataclasses import dataclass
 from enum import Enum
@@ -32,6 +34,14 @@ from typing import Any, Callable, Dict, Iterable, List, Optional
 # Linux behave identically regardless of the platform default (Linux forks
 # by default today; Python 3.14 moves its default to forkserver).
 _CTX = mp.get_context("spawn")
+
+
+def _describe_exception(exc):
+    # e.g. "KeyError: 'liquid1' (MELTS.py, line 1043, in path_MELTS)" -- str(exc) alone
+    # loses both the exception type and where it was raised
+    tb = traceback.extract_tb(exc.__traceback__)
+    where = f" ({os.path.basename(tb[-1].filename)}, line {tb[-1].lineno}, in {tb[-1].name})" if tb else ""
+    return f"{type(exc).__name__}: {exc}{where}"
 
 # Tags used on the single shared results queue to distinguish supervisor
 # bookkeeping messages from a task's own progress reports. task_fn never
@@ -155,7 +165,7 @@ def _worker_loop(task_fn, task_queue, results_queue, task_kwargs, max_tasks):
             # module docstring. Reporting *what* failed is the point --
             # today's `except: idx.append(i); break` in path_multi reports
             # nothing back to the parent at all.
-            results_queue.put((_DONE, index, TaskStatus.CRASHED, str(exc), True))
+            results_queue.put((_DONE, index, TaskStatus.CRASHED, _describe_exception(exc), True))
             return
 
 

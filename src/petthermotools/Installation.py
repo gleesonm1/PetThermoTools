@@ -478,6 +478,11 @@ def test_alphaMELTS(path = None):
                                    find_liquidus = True,
                                    H2O_init = 0.2)
 
+    if 'liquid1' not in Res:
+        print("\nalphaMELTS test FAILED: the test calculation did not return any results.\n"
+              "The reason is given in the 'Run 0' line printed above; please include it when asking for help.")
+        return
+
     print(Res['liquid1'])
 
 
