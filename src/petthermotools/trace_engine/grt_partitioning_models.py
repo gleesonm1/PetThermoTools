@@ -10,7 +10,7 @@ MODEL_REGISTRY = {}
 
 def register_model(name: str, notes: str = "", citations: str = ""):
     """Decorator to register a partitioning model class under a string name;
-    `notes` is stored on the class and printed by trace_engine.show_models()."""
+    `notes` is stored on the class and printed by trace_engine.show_trace_models()."""
 
     def decorator(cls):
         cls.notes = notes

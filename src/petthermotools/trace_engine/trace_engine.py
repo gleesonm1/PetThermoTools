@@ -5,7 +5,7 @@ from petthermotools.trace_engine.trace_core import *
 from petthermotools.trace_engine import px_partitioning_models, ol_partitioning_models, grt_partitioning_models
 
 
-def show_models():
+def show_trace_models():
     """Print the composition-dependent partitioning models available for each phase,
     with each model's notes.
 
@@ -27,7 +27,7 @@ def show_models():
         print("    },")
     print("}")
 
-def show_citations():
+def show_trace_citations():
     """Print the citations for each composition-dependent partitioning model, grouped
     by phase, one citation per line (each line of a model's `citations` string is
     one citation).
@@ -49,6 +49,10 @@ def show_citations():
             print("        ],")
         print("    },")
     print("}")
+
+# names used in v1.3.1, kept so existing notebooks calling te.show_models() / te.show_citations() still work
+show_models = show_trace_models
+show_citations = show_trace_citations
 
 
 def calc_trace_conc(results=None, elements=None, partition_models=None, D_coeffs=coeffs["D_Gibson_2010"],

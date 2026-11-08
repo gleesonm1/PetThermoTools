@@ -2,6 +2,11 @@
 Change Log
 ================================================
 
+Version 1.3.4 (Nov 2026)
+====================================
+The trace element engine now loads with ``import petthermotools as ptt``: it is available as ``ptt.te`` (e.g. ``ptt.te.calc_trace_conc``, ``ptt.te.coeffs``), and the main functions are also available directly (``ptt.calc_trace_conc``, ``ptt.show_trace_models``, ``ptt.show_trace_citations``, ``ptt.PxTraceElementCalculator``, ``ptt.OlTraceElementCalculator``, ``ptt.GrtTraceElementCalculator``). The separate ``from petthermotools.trace_engine import trace_engine as te`` import still works.
+te.show_models() and te.show_citations() are renamed show_trace_models() and show_trace_citations(), so their purpose is clear at the top level of ptt. The old names still work with ``te.``.
+
 Version 1.3.1 (Nov 2026)
 ====================================
 Trace element engine (beta): new composition-dependent partitioning models for low-Ca pyroxene after Sun & Liang (2013) ("Sun2013"), olivine REE + Y after Sun & Liang (2014) ("Sun2014") and garnet after Sun & Liang (2013) ("Sun2013", passed as partition_models={"garnet": "Sun2013"}), each checked against the authors' own calculators. The olivine model from v1.3.0 is registered as "Beattie1991" (the v1.3.0 notes incorrectly called it "Beattie1993").
