@@ -824,6 +824,9 @@ def _ensure_julia_workers():
         # jl.seval("@everywhere using PythonCall")
         jl.seval("@everywhere using MAGEMinCalc")
         print("Julia Environment and Workers Ready.")
+        # MAGEMinCalc loads MAGEMin_C with `using`, so it is reachable as MAGEMinCalc.MAGEMin_C
+        print(f"MAGEMinCalc v{jl.seval('string(pkgversion(MAGEMinCalc))')}, "
+              f"MAGEMin_C v{jl.seval('string(pkgversion(MAGEMinCalc.MAGEMin_C))')}")
         _JULIA_WORKERS_READY = True
 
 def activate_petthermotools_env():
