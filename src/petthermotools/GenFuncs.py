@@ -29,22 +29,64 @@ def _quiet_engine_output():
     Restores the original descriptors in a `finally`, including on an exception, so a worker's own
     traceback (printed via fd 2 by the normal Python/multiprocessing machinery) is never silently
     lost -- only the engine's own writes, made *inside* this block, are discarded.
+
+    A Python-level sys.stdout/sys.stderr that writes straight to fd 1/2 is swapped for the null
+    device too (see _swap_std_streams_to_devnull); one that does not, such as ipykernel's OutStream
+    in a notebook, is left alone, so Python prints inside the block still reach the notebook.
     """
-    sys.stdout.flush()
-    sys.stderr.flush()
+    _flush_std_streams()
     saved = {fd: os.dup(fd) for fd in (1, 2)}
+    saved_streams = (sys.stdout, sys.stderr)
     devnull = os.open(os.devnull, os.O_WRONLY)
+    null_streams = []
     try:
         os.dup2(devnull, 1)
         os.dup2(devnull, 2)
+        null_streams = _swap_std_streams_to_devnull(only_fd_backed=True)
         yield
     finally:
-        sys.stdout.flush()
-        sys.stderr.flush()
+        _flush_std_streams()
+        sys.stdout, sys.stderr = saved_streams
+        for stream in null_streams:
+            stream.close()
         for fd, dup in saved.items():
             os.dup2(dup, fd)
             os.close(dup)
         os.close(devnull)
+
+
+def _flush_std_streams():
+    # sys.stdout/sys.stderr can be None, e.g. in a Windows worker started without a console
+    for stream in (sys.stdout, sys.stderr):
+        if stream is not None:
+            stream.flush()
+
+
+def _writes_to_fd(stream, fd):
+    # True for a terminal or Windows console stream on that fd; False for streams that send
+    # output elsewhere (ipykernel's OutStream, StringIO) or have no fd at all
+    try:
+        return stream is not None and stream.fileno() == fd
+    except (AttributeError, OSError, ValueError):   # io.UnsupportedOperation is OSError + ValueError
+        return False
+
+
+def _swap_std_streams_to_devnull(only_fd_backed):
+    """Point sys.stdout/sys.stderr at the null device, after fd 1/2 have been redirected there.
+
+    Redirecting the fds alone is not enough on Windows: when a process shares a console, Python's
+    sys.stdout is a console stream that writes with WriteConsoleW to whatever handle fd 1 now refers
+    to, and the NUL device rejects that with "OSError: [WinError 1] Incorrect function". In a
+    worker that broke every MELTS calculation at MELTSdynamic()'s own start-up print (see
+    MAINTENANCE_NOTES.md 2026-11-08). The null file is opened as UTF-8 so any character can be
+    printed to it, whatever the platform's default encoding.
+    """
+    opened = []
+    for name, fd in (("stdout", 1), ("stderr", 2)):
+        if not only_fd_backed or _writes_to_fd(getattr(sys, name), fd):
+            opened.append(open(os.devnull, "w", encoding="utf-8"))
+            setattr(sys, name, opened[-1])
+    return opened
 
 
 _quiet_redirect_done = False   # see _permanently_quiet_engine_output below; one flag per
@@ -78,12 +120,14 @@ def _permanently_quiet_engine_output():
     global _quiet_redirect_done
     if _quiet_redirect_done:
         return
-    sys.stdout.flush()
-    sys.stderr.flush()
+    _flush_std_streams()
     devnull = os.open(os.devnull, os.O_WRONLY)
     os.dup2(devnull, 1)
     os.dup2(devnull, 2)
     os.close(devnull)
+    # Worker errors reach the parent through the result queue (mp_utils), not stderr, so nothing
+    # is lost by swapping both streams unconditionally here
+    _swap_std_streams_to_devnull(only_fd_backed=False)
     _quiet_redirect_done = True
 
 
