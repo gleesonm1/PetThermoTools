@@ -127,9 +127,19 @@ def test_model_none_defaults_to_a_melts_model_in_multi_path():
 # 2. Clear errors that already exist and must not regress
 # --------------------------------------------------------------------------
 
-def test_zero_h2o_is_rejected_with_a_hint_for_melts():
-    with pytest.raises(Exception, match="H2O"):
-        _call(comp={**GOOD, 'H2O_Liq': 0.0})
+def test_zero_h2o_warns_with_a_hint_for_melts_but_still_runs():
+    # a warning, not an error: the calculation still goes ahead
+    with pytest.warns(UserWarning, match="H2O"):
+        assert _backend_reached(comp={**GOOD, 'H2O_Liq': 0.0}) == "SPAWN"
+
+
+@pytest.mark.parametrize("model", ["MELTSv1.0.2", "Green2025"])
+def test_no_starting_temperature_and_no_find_liquidus_is_rejected(model):
+    _assert_clear_error("starting temperature", Model=model, T_C=None, find_liquidus=False)
+
+
+def test_find_liquidus_without_a_starting_temperature_is_accepted():
+    assert _backend_reached(T_C=None, find_liquidus=True) == "SPAWN"
 
 
 def test_zero_ferric_iron_without_a_buffer_is_rejected_with_a_hint():
@@ -203,6 +213,6 @@ def test_bad_composition_gets_a_clear_error(comp):
 
 
 @_XFAIL
-def test_no_temperature_or_pressure_is_rejected():
-    # today: spawns a worker with nothing to calculate
-    _assert_clear_error("", T_C=None, P_bar=None)
+def test_no_pressure_is_rejected():
+    # today: spawns a worker, which then fails ("Initial P system must be defined" in path_MELTS)
+    _assert_clear_error("", P_bar=None)

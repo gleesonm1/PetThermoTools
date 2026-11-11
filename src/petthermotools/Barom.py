@@ -6,6 +6,7 @@ from petthermotools.GenFuncs import *
 from petthermotools.GenFuncs import _ensure_julia_ready
 from petthermotools.GenFuncs import _quiet_engine_output
 from petthermotools.GenFuncs import _permanently_quiet_engine_output
+from petthermotools.GenFuncs import _reset_comp_index
 import contextlib
 from petthermotools.Plotting import *
 from petthermotools.Liq import *
@@ -191,8 +192,8 @@ def mineral_cosaturation(Model="MELTSv1.0.2", cores=MAX_WORKERS, bulk=None,
     H2O_init   = to_float(H2O_init)
     CO2_init   = to_float(CO2_init)
     fO2_offset = to_float(fO2_offset)
-    
-    comp = bulk.copy()
+
+    comp = _reset_comp_index(bulk).copy()
 
     if fO2_buffer is not None:
         if fO2_buffer != "NNO":

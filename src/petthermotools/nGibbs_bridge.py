@@ -22,6 +22,7 @@ import sys
 import numpy as np
 import pandas as pd
 from petthermotools.MELTS import calc_phase_props_MELTS_parallel, calc_phase_props_MELTS # Property Calculators
+from petthermotools.GenFuncs import _reset_comp_index
 
 _FE2O3_TO_FEO = 0.8998
 
@@ -913,6 +914,7 @@ def nGibbsAPI(Model="nMELTSv1.0.2NoProp", comp=None, T_C=None, T_path_C=None, T_
 
     if comp is None:
         raise ValueError("Composition must be provided as a pandas DataFrame, pandas Series, or dictionary.")
+    comp = _reset_comp_index(comp)
 
     for arg, contents in kwargs.items():
         if contents is not None:

@@ -5,6 +5,7 @@ from petthermotools.GenFuncs import *
 from petthermotools.GenFuncs import _ensure_julia_ready
 from petthermotools.GenFuncs import _quiet_engine_output
 from petthermotools.GenFuncs import _permanently_quiet_engine_output
+from petthermotools.GenFuncs import _reset_comp_index
 from petthermotools.core_config import MAX_WORKERS, resolve_cores
 from petthermotools.Plotting import *
 from petthermotools.MELTS import *
@@ -136,6 +137,7 @@ def AdiabaticDecompressionMelting(cores = MAX_WORKERS,
 
     if bulk is not None and comp_lith_1 is None:
         comp_lith_1 = bulk
+    comp_lith_1 = _reset_comp_index(comp_lith_1)
 
     if T_start_C is not None:
         Tp_C = None

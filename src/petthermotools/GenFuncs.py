@@ -1056,6 +1056,19 @@ def _ensure_julia_ready():
         else:
             print("Julia environment not available. Please run the `install_MAGEMinCalc()` function first.")
 
+def _reset_comp_index(comp):
+    '''
+    The calculations look up DataFrame rows by label (comp.loc[i] for i = 0, 1, 2, ...), so a composition
+    DataFrame needs the index 0, 1, ..., n-1. If it has a different index, a copy with the index reset is
+    returned and a message is printed; otherwise (including dicts, Series and None) the input is returned as is.
+    The caller's DataFrame is never modified.
+    '''
+    if isinstance(comp, pd.DataFrame) and not comp.index.equals(pd.RangeIndex(len(comp))):
+        print("Note: the index of the input DataFrame has been reset to 0, 1, 2, ... for these calculations. "
+              "The index of the output may not match the index of the input.")
+        return comp.copy().reset_index(drop=True)
+    return comp
+
 def to_float(x):
     '''
     Converts input data (scalar, list, tuple, numpy array, or pandas Series) to float type.

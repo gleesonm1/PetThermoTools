@@ -7,6 +7,7 @@ from petthermotools.GenFuncs import _ensure_julia_ready
 from petthermotools.GenFuncs import _ensure_julia_workers
 from petthermotools.GenFuncs import _quiet_engine_output
 from petthermotools.GenFuncs import _permanently_quiet_engine_output
+from petthermotools.GenFuncs import _reset_comp_index
 from petthermotools.Plotting import *
 from petthermotools.MELTS import *
 from petthermotools.MELTS import _MODEL_CODES
@@ -128,6 +129,9 @@ def multi_path_v1(cores = None, Model = None, bulk = None, comp = None, Frac_sol
         Dictionary with each run's label as key. Values are sub-dictionaries of phase/property DataFrames.
         Includes `Input` key summarizing model configuration per run.
     """
+    bulk = _reset_comp_index(bulk)
+    comp = _reset_comp_index(comp)
+
     ## make sure everything is a float
     T_C        = to_float(T_C)
     T_path_C   = to_float(T_path_C)
@@ -266,7 +270,7 @@ def multi_path_v1(cores = None, Model = None, bulk = None, comp = None, Frac_sol
 
     if type(comp) == dict:
         if comp['H2O_Liq'] == 0.0 and "MELTS" in Model:
-            raise Warning("Adding small amounts of H2O may improve the ability of MELTS to accurately reproduce the saturation of oxide minerals. Additionally, sufficient H2O is required in the model for MELTS to predict the crystallisation of apatite, rather than whitlockite.")
+            warnings.warn("Adding small amounts of H2O may improve the ability of MELTS to accurately reproduce the saturation of oxide minerals. Additionally, sufficient H2O is required in the model for MELTS to predict the crystallisation of apatite, rather than whitlockite.", stacklevel=2)
 
         if comp['Fe3Fet_Liq'] == 0.0 and "MELTS" in Model and fO2_buffer is None:
             raise Warning("MELTS often fails to produce any results when no ferric Fe is included in the starting composition and an fO2 buffer is not set.")
@@ -805,111 +809,153 @@ def multi_path(cores=None, Model=None, bulk=None, comp=None, Frac_solid=None, Fr
                    quiet_engine=True, max_tasks_per_worker=1, max_retries=0, stall_timeout=None,
                    multi_processing=True, Print_suppress=None, MgO_limit=None, trace_params = False):
     """
-    Runs isobaric/polybaric/isochoric crystallisation (or decompression/
-    heating) paths for one or more starting compositions/conditions, using
-    the mp_utils.py persistent-worker supervisor (the same one
-    equilibrate_multi/findLiq_multi/saturation_pressure use).
+    Runs one or more crystallisation, decompression or heating paths (isobaric, polybaric,
+    isochoric, isentropic, ...). This is the function behind all of the path wrappers
+    (isobaric_crystallisation, polybaric_crystallisation_path, isothermal_decompression, etc.).
 
-    Non-MELTS Models (MAGEMin, nGibbs) are delegated straight to
-    `multi_path_v1` -- mp_utils is a MELTS-worker-process concept;
-    multi_path_v1 is the legacy code but did not change for the MAGEMin calculations.
+    A batch of calculations is run when `bulk` is a DataFrame (one run per row) and/or when any
+    of the conditions below is given as an array (one run per element); all arrays and the
+    DataFrame must then have the same length. MELTS paths run in parallel worker processes, each
+    path in its own fresh MELTS engine; MAGEMin and nGibbs models use their own back ends.
 
-    Design notes:
-    - max_tasks_per_worker defaults to 1 -- NO cross-row engine reuse.
-      Every path runs in its own freshly-constructed engine (_path_task_v2
-      never caches or reuses one across rows, regardless of this setting).
-      A path is many sequential calcEquilibriumState() steps on ONE
-      composition already; reuse here would mean warm-starting one row's
-      FIRST step from a DIFFERENT row's LAST step -- the same cross-
-      composition-reuse hazard investigated at length for
-      equilibrate_multi/findLiq_multi -- so cross-row reuse is not
-      attempted here at all, not merely defaulted off.
-    - A clear, per-ROW progress bar (tqdm), one tick per path that
-      finishes (successfully or permanently failed), not one tick per
-      internal path step. path_MELTS's own q.put([index, step_i, data])
-      calls (one per path step) are still used to accumulate that row's
-      full step-by-step results via on_progress.
-    - `multi_processing` is accepted for backward compatibility with
-      existing callers (e.g. Path_wrappers.py's six crystallisation
-      wrappers all pass it through) but is otherwise a no-op here: this
-      implementation always uses the persistent-worker supervisor,
-      regardless of its value. The old single-run in-process fallback
-      (`multi_processing=False` skipping process spawn entirely for a
-      lone calculation) is not reproduced -- a minor, rarely-used
-      convenience, not confirmed to be exercised by any real caller
-      (checked: no package code or notebook in this repo actually passes
-      `multi_processing=False` to multi_path). `Print_suppress` IS accepted
-      (added 2026-10-21 after the Unit_tests suite's own repro scripts were
-      found to rely on it -- a gap in the original "no real caller" check,
-      which covered docs/Workshops/src but not Unit_tests): when not None,
-      it suppresses every status print this function makes (the timeout
-      announcement and the final completed/crashed/timed-out/no-results
-      summary), matching v1's own "anything other than None means quiet"
-      convention, though the exact message it originally gated
-      ("Running ... calculation...") no longer exists to suppress.
-      `Combined` and `print_label` (multi_path_v1-only, confirmed unused by
-      any real caller including the test suite) are still not reproduced;
-      use `multi_path_v1` directly if you need them.
-
-    Parameters unique to this version
-    ----------------------------------
-    max_tasks_per_worker : int, default 1
-        How many successful paths one worker process runs (reusing its
-        MELTSdynamic engine via addNodeAfter() -- UNUSED by this version's
-        own task_fn, which always builds a fresh engine regardless; see
-        above for why cross-row reuse is not attempted here) before being
-        retired and replaced. Left at 1 by design.
-    max_retries : int, default 0
-        mp_utils.run_tasks's own blanket retry count for a failed/timed-out
-        row (same inputs, no perturbation). 0 means a failure is reported
-        once, immediately, as GAVE_UP; raise this if you want simple
-        retries.
-    stall_timeout : float or None, default None
-        Passed straight to mp_utils.run_tasks -- kills and retries (if
-        max_retries > 0) a row that has reported no progress (no new path
-        step) for this many seconds, which can catch a genuinely stuck
-        single step far sooner than the absolute `timeout`. Off by
-        default, same as every other v2-based function.
-    timeout : float or None, default None
-        Per-row absolute budget, in seconds, before a stuck worker is
-        killed and replaced. None resolves to 60s on macOS/Linux, 180s on
-        Windows -- longer than equilibrate_multi/findLiq_multi/
-        saturation_pressure's ~20-45s single-equilibrium-step defaults,
-        since a path is many steps, not one. Announced at the start of
-        every call (as the resolved value, whether defaulted or supplied).
-    MgO_limit : float or None, default None
-        Ends a run once the MgO content of the liquid (wt%) falls below
-        this value (or no liquid is left); the first step below the limit
-        is kept as the last row. MELTS models only -- ignored, with a
-        warning, for MAGEMin and nGibbs models.
-    trace_params : dict or False, default False
-        If given, the trace element engine is run on the results (every
-        model). Keys: 'initial_conc' (required, e.g. {"Ni": 250.0}),
-        'partition_models' (optional, e.g. {"cpx": "Sun2012"}) and
-        'D_coeffs' (optional, a name such as "D_Gibson_2010" or a dict of
-        phase -> {element: D}; default "D_Gibson_2010").
+    Parameters
+    ----------
+    cores : int or {"performance", "all"}, optional
+        Number of worker processes. Default (None) is the number of performance cores.
+    Model : str, optional
+        Thermodynamic model. Default "MELTSv1.0.2". Options:
+            MELTS: "MELTSv1.0.2", "MELTSv1.1.0", "MELTSv1.2.0", "pMELTS"
+            MAGEMin: "Green2025", "Weller2024"
+            nGibbs: "nMELTSv1.0.2", "nMELTSv1.2.0" (add "NoProp" to skip phase properties)
+    bulk, comp : dict, pandas.Series or pandas.DataFrame
+        Starting composition(s) in wt% oxides with "_Liq" suffixes (e.g. "SiO2_Liq").
+        A dict or Series gives one composition; a DataFrame gives one run per row (its index is
+        reset to 0, 1, 2, ... if needed). `bulk` is used if both are given.
+    Frac_solid : bool, optional
+        If True, solid phases are removed after each step (fractional crystallisation).
+        Default False (equilibrium crystallisation).
+    Frac_fluid : bool, optional
+        If True, the fluid phase is removed after each step. Default False.
+    T_path_C : array, optional
+        Temperature at every step (°C); overrides T_start_C/T_end_C/dt_C. A 2D array gives one
+        path per row.
+    T_start_C, T_end_C, dt_C : float or array, optional
+        Starting temperature, final temperature and temperature step (°C) of a linear path.
+    T_C : float or array, optional
+        Fixed temperature (°C), used as T_start_C when T_start_C is not given (e.g. isothermal
+        decompression).
+    find_liquidus : bool, optional
+        If True, the path starts at the liquidus temperature found for the starting
+        composition and pressure. Either find_liquidus=True or a starting temperature
+        (T_start_C, T_C or T_path_C) must be given. Default False.
+    P_path_bar : array, optional
+        Pressure at every step (bar); overrides P_start_bar/P_end_bar/dp_bar. A 2D array gives
+        one path per row.
+    P_start_bar, P_end_bar, dp_bar : float or array, optional
+        Starting pressure, final pressure and pressure step (bar) of a linear path.
+    P_bar : float or array, optional
+        Constant pressure (bar) for an isobaric path, or the starting pressure of an isochoric
+        path.
+    Fe3Fet_init : float or array, optional
+        Initial Fe3+/total Fe ratio of the system. If None, the value in the composition is used.
+    H2O_init, CO2_init : float or array, optional
+        Initial H2O and CO2 contents (wt%). If None, the values in the composition are used.
+    Fe3Fet_Liq, H2O_Liq, CO2_Liq : float or array, optional
+        Older names for Fe3Fet_init, H2O_init and CO2_init; still accepted.
+    fO2_buffer : {"FMQ", "NNO", "IW"}, optional
+        Oxygen fugacity buffer to follow along the path. Without a buffer the system is closed
+        to oxygen, so the initial Fe3+/total Fe must not be zero.
+    fO2_offset : float or array, optional
+        Offset from fO2_buffer in log units.
+    isochoric : bool, optional
+        If True, the path is at constant volume (P_bar is the starting pressure).
+    isentropic : bool, optional
+        If True, the path is at constant entropy (e.g. adiabatic decompression).
+    isenthalpic : bool, optional
+        If True, the path is at constant enthalpy.
+    fluid_sat : bool, optional
+        If True, the calculation starts at fluid saturation. Default False.
+    Crystallinity_limit : float, optional
+        Stops a run once the volume fraction of crystals (0-1, relative to crystals + liquid)
+        exceeds this value.
+    MgO_limit : float, optional
+        Stops a run once the MgO content of the liquid (wt%) falls below this value (or no
+        liquid is left); the first step below the limit is kept. MELTS models only, ignored with
+        a warning for MAGEMin and nGibbs.
+    label : str, optional
+        For a batch, names the runs after the input that varies instead of "Run 0", "Run 1", ...
+        Options: 'P_bar' (or 'P', 'pressure'), 'P_start_bar', 'H2O_init' (or 'H2O'),
+        'CO2_init' (or 'CO2'), 'Fe3Fet_init' (or 'Fe3Fet'), 'fO2_offset' (or 'fO2').
+    Suppress : str or list of str, optional
+        Phases that are not allowed to form. Default ['rutile', 'tridymite']; "All" suppresses
+        every solid phase.
+    Suppress_except : bool or str or list of str, optional
+        If given, every solid phase except these is suppressed. Default False.
+    timeout : float, optional
+        Time limit per run (seconds) before a stuck MELTS run is stopped. Default 60 s
+        (180 s on Windows). For MAGEMin the default is 5 minutes.
+    max_retries : int, optional
+        Number of times a MELTS run that failed or timed out is retried with the same inputs.
+        Default 0.
+    stall_timeout : float, optional
+        Stops (and retries, if max_retries > 0) a MELTS run that has made no progress for this
+        many seconds, even if `timeout` has not been reached. Default None (off).
+    max_tasks_per_worker : int, optional
+        Number of runs a MELTS worker process handles before it is replaced. Default 1.
+    quiet_engine : bool, optional
+        If True (default), the MELTS engine's own output is hidden, which is faster. Set to False
+        to see it when debugging.
+    Print_suppress : optional
+        If not None, the timeout and summary messages are not printed.
+    multi_processing : bool, optional
+        Kept for compatibility; MELTS paths always run in worker processes.
+    trace_params : dict, optional
+        If given, the trace element engine is run on the results (any model). Keys:
+        'initial_conc' (required, e.g. {"Ni": 250.0}), 'partition_models' (optional, e.g.
+        {"cpx": "Sun2012", "ol": "Sun2014"}) and 'D_coeffs' (optional, a name such as
+        "D_Gibson_2010" or a dict of phase -> {element: D}; default "D_Gibson_2010").
 
     Returns
     -------
     Results : dict
-        Keyed by "Run {i}" (each a dict of phase/property DataFrames,
-        'Input' included) for n > 1, or a single run's own dict of
-        DataFrames directly when the normalised input resolves to exactly
-        one run.
+        For a single run, a dict of DataFrames ('All', 'Conditions', 'mass_g', one per phase,
+        ...). For a batch, a dict of those keyed "Run 0", "Run 1", ... (or by `label`), each with
+        an 'Input' entry recording its inputs.
     trace_conc, trace_d : dict
-        Only when `trace_params` is given, in which case the return value
-        is (Results, trace_conc, trace_d): trace element concentrations and
-        partition coefficients per phase, keyed the same way as Results.
+        Only when `trace_params` is given, in which case (Results, trace_conc, trace_d) is
+        returned: trace element concentrations and partition coefficients per phase, keyed the
+        same way as Results.
+
+    Raises
+    ------
+    ValueError
+        If neither a starting temperature (T_start_C, T_C or T_path_C) nor find_liquidus=True
+        is given, if fO2_buffer or label is not recognised, or if array inputs differ in length.
+    Warning
+        For a single MELTS composition with zero Fe3+ and no fO2 buffer (MELTS usually fails).
+
+    Warns
+    -----
+    UserWarning
+        For a single MELTS composition with zero H2O (the calculation still runs).
+
+    Examples
+    --------
+    >>> Results = multi_path(Model="MELTSv1.0.2", bulk=comp, P_bar=2000, find_liquidus=True,
+    ...                      T_end_C=900, dt_C=5, Fe3Fet_init=0.15, H2O_init=1.0)
     """
-    # multi_path_v1 defaults Model to "MELTSv1.0.2" this way (a real
-    # reassignment, not just a local substitution) -- missing here until
-    # 2026-10-21 was a real bug: the old `(Model or "MELTSv1.0.2")` below
-    # only affected that one membership check, so Model=None still reached
-    # `Model.startswith('n')` a few lines down as a literal None and
-    # crashed (confirmed live via the Unit_tests suite,
-    # test_model_none_defaults_to_a_melts_model_in_multi_path).
     if Model is None:
         Model = "MELTSv1.0.2"
+
+    bulk = _reset_comp_index(bulk)
+    comp = _reset_comp_index(comp)
+
+    # Checked here, before any model branch: without it a MELTS run starts anyway and each row
+    # fails inside its worker with an unhelpful TypeError (path_MELTS's own check only fires for
+    # find_liquidus=None, but the default here is False)
+    if not find_liquidus and T_start_C is None and T_C is None and T_path_C is None:
+        raise ValueError("A starting temperature must be specified (T_start_C, T_C or T_path_C), "
+                         "or set find_liquidus=True to start at the liquidus.")
 
     if MgO_limit is not None and "MELTS" not in Model:
         warnings.warn(f"MgO_limit is only implemented for the MELTS models and will be ignored for Model = '{Model}'.")
@@ -1014,10 +1060,10 @@ def multi_path(cores=None, Model=None, bulk=None, comp=None, Frac_solid=None, Fr
 
     if type(comp) == dict:
         if comp['H2O_Liq'] == 0.0:
-            raise Warning("Adding small amounts of H2O may improve the ability of MELTS to accurately "
-                           "reproduce the saturation of oxide minerals. Additionally, sufficient H2O is "
-                           "required in the model for MELTS to predict the crystallisation of apatite, "
-                           "rather than whitlockite.")
+            warnings.warn("Adding small amounts of H2O may improve the ability of MELTS to accurately "
+                          "reproduce the saturation of oxide minerals. Additionally, sufficient H2O is "
+                          "required in the model for MELTS to predict the crystallisation of apatite, "
+                          "rather than whitlockite.", stacklevel=2)
         if comp['Fe3Fet_Liq'] == 0.0 and fO2_buffer is None:
             raise Warning("MELTS often fails to produce any results when no ferric Fe is included in "
                            "the starting composition and an fO2 buffer is not set.")

@@ -5,6 +5,7 @@ from petthermotools.GenFuncs import _ensure_julia_ready
 from petthermotools.GenFuncs import _ensure_julia_main_ready
 from petthermotools.GenFuncs import _quiet_engine_output
 from petthermotools.GenFuncs import _permanently_quiet_engine_output
+from petthermotools.GenFuncs import _reset_comp_index
 from petthermotools.core_config import MAX_WORKERS, resolve_cores
 from petthermotools.mp_utils import run_tasks, TaskStatus as _TaskStatus
 # Imported with a leading underscore deliberately: TaskStatus is an mp_utils
@@ -422,6 +423,7 @@ def equilibrate_multi(cores = MAX_WORKERS, Model = "MELTSv1.0.2", bulk = None, T
         (a pre-existing quirk, not addressed here: a batch of more than one row does not get
         this attached, even though it's computed internally for every row either way).
     '''
+    bulk = _reset_comp_index(bulk)
     cores = resolve_cores(cores)
     if timeout is None:
         timeout = 45.0 if platform.system() == "Windows" else 20.0
@@ -926,7 +928,7 @@ def findCO2_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P
         if fO2_buffer == "NNO":
             fO2_buffer = "nno"
 
-    comp = bulk.copy()
+    comp = _reset_comp_index(bulk).copy()
 
     if Model is None:
         Model = "MELTSv1.0.2"
@@ -1588,7 +1590,7 @@ def findLiq_multi(cores = None, Model = None, bulk = None, T_initial_C = None, P
     if timeout is None:
         timeout = 45.0 if platform.system() == "Windows" else 20.0
 
-    comp = bulk.copy()
+    comp = _reset_comp_index(bulk).copy()
 
     if fO2_buffer is not None:
         if fO2_buffer not in ("NNO", "FMQ", "IW"):

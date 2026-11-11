@@ -3,6 +3,7 @@ import pandas as pd
 from petthermotools.GenFuncs import *
 from petthermotools.GenFuncs import _quiet_engine_output
 from petthermotools.GenFuncs import _permanently_quiet_engine_output
+from petthermotools.GenFuncs import _reset_comp_index
 import contextlib
 from petthermotools.Plotting import *
 from petthermotools.MELTS import *
@@ -78,6 +79,7 @@ def findSatPressure_multi(cores = MAX_WORKERS, Model = "MELTSv1.2.0", bulk = Non
     warnings.warn("findSatPressure_multi() is deprecated and will be removed in a future release; use "
                   "saturation_pressure() instead.", DeprecationWarning, stacklevel=2)
     cores = resolve_cores(cores)
+    bulk = _reset_comp_index(bulk)
     comp = bulk.copy()
 
     # if T_fixed_C is None:
@@ -212,6 +214,7 @@ def findSatPressure(cores = None, Model = None, bulk = None, T_C_init = None, T_
     if Model is None:
         Model == "MELTSv1.2.0"
 
+    bulk = _reset_comp_index(bulk)
     comp = bulk.copy()
 
     if T_C_init is None and T_fixed_C is None:
@@ -460,6 +463,7 @@ def saturation_pressure_v1(Model = "MELTSv1.2.0", cores = MAX_WORKERS,
        
 
     if bulk is not None:
+        bulk = _reset_comp_index(bulk)
         comp = bulk.copy()
 
     if H2O_Liq is not None:
@@ -1089,6 +1093,7 @@ def saturation_pressure(Model = "MELTSv1.2.0", cores = MAX_WORKERS,
     if timeout is None:
         timeout = 45.0 if platform.system() == "Windows" else 20.0
 
+    bulk = _reset_comp_index(bulk)
     comp = bulk.copy()
 
     if H2O_Liq is not None:
