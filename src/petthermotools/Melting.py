@@ -243,6 +243,19 @@ def AdiabaticDecompressionMelting(cores = MAX_WORKERS,
                 if Model != "pyMelt":
                     Results = stich(Results, Model = Model, Frac_liquid=Frac)
 
+                    if Frac:
+                        def _add_F(res):
+                            F = res['mass_g']['liquid1_cumsum']/res['mass_g'].loc[0].sum()
+                            res['All'] = res['All'].drop(columns='F', errors='ignore')
+                            res['All'].insert(2, 'F', F)
+
+                        if 'All' in Results.keys():
+                            _add_F(Results)
+                        else:
+                            for r in Results.keys():
+                                _add_F(Results[r])
+
+
                     # make mass relative to 1 at the start of the model
                     # Tot = Results['mass_g'].sum(axis = 1)[0]
                     # Results['mass_frac'] = Results['mass_g']/Tot
