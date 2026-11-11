@@ -4,6 +4,9 @@ For full documentation, installation instructions, and example calculations usin
 
 https://PetThermoTools.readthedocs.io/en/latest/
 
+We have also developed a simple web app. This is ideal for small number of calculations. The app will crash if you try to run thousands of models. 
+https://petthermotoolsapp.streamlit.app/
+
 **Note on Reproducibility:** To comply with the open-source spirit of PetThermoTools and underlying tools, any publication should include a clear explanation of your model settings (Pressure, Temperature, and $fO_2$ buffers, etc.) to ensure results can be independently verified. This is in addition to the citation information listed below.
 
 # Citing PetThermoTools and underlying packages
