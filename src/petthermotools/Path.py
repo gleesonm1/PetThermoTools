@@ -781,6 +781,19 @@ def _path_task_v2(q, task, *, Model=None, fO2_buffer=None, Suppress=None, Suppre
     q.put([task.row_id, "__DONE__", None])
 
 
+def _add_trace_results(Results, trace_params):
+    """
+    Runs the trace element engine on finished path results (one run or several) and returns
+    (Results, trace_conc, trace_d). Shared by every model branch of multi_path.
+    """
+    from petthermotools.trace_engine.trace_engine import calc_trace_conc
+    trace_conc, trace_d = calc_trace_conc(results=Results,
+                                          initial_conc=trace_params['initial_conc'],
+                                          partition_models=trace_params.get('partition_models'),
+                                          D_coeffs=trace_params.get('D_coeffs', "D_Gibson_2010"))
+    return Results, trace_conc, trace_d
+
+
 def multi_path(cores=None, Model=None, bulk=None, comp=None, Frac_solid=None, Frac_fluid=None,
                    T_C=None, T_path_C=None, T_start_C=None, T_end_C=None, dt_C=None,
                    P_bar=None, P_path_bar=None, P_start_bar=None, P_end_bar=None, dp_bar=None,
@@ -790,29 +803,16 @@ def multi_path(cores=None, Model=None, bulk=None, comp=None, Frac_solid=None, Fr
                    fO2_buffer=None, fO2_offset=None, fluid_sat=False, Crystallinity_limit=None,
                    label=None, timeout=None, Suppress=['rutile', 'tridymite'], Suppress_except=False,
                    quiet_engine=True, max_tasks_per_worker=1, max_retries=0, stall_timeout=None,
-                   multi_processing=True, Print_suppress=None, MgO_limit=None):
+                   multi_processing=True, Print_suppress=None, MgO_limit=None, trace_params = False):
     """
     Runs isobaric/polybaric/isochoric crystallisation (or decompression/
     heating) paths for one or more starting compositions/conditions, using
     the mp_utils.py persistent-worker supervisor (the same one
     equilibrate_multi/findLiq_multi/saturation_pressure use).
 
-    2026-10-21: this IS the v2 implementation, now the default under the
-    `multi_path` name (previously available as `multi_path_v2`, which
-    remains as a plain alias) -- see MAINTENANCE_NOTES.md (2026-10-16/20/21)
-    for the full before/after measurements this replacement was validated
-    against, most notably a 50-run comparison where 6/50 runs disagreed
-    between this implementation and the OLD one (now `multi_path_v1`), and
-    an isolated, reuse-free ground-truth check matched THIS implementation
-    in all 6 cases -- the old implementation's own `addNodeAfter()`
-    cross-run chaining in `path_multi` was confirmed to produce real,
-    silently wrong answers for roughly 1 in 8 runs at that scale, not a
-    rare edge case. The previous, chain-based implementation is kept,
-    fully intact, as `multi_path_v1` for anyone who needs it.
-
     Non-MELTS Models (MAGEMin, nGibbs) are delegated straight to
     `multi_path_v1` -- mp_utils is a MELTS-worker-process concept;
-    multi_path_v1's own Julia/nGibbs branches are untouched by this change.
+    multi_path_v1 is the legacy code but did not change for the MAGEMin calculations.
 
     Design notes:
     - max_tasks_per_worker defaults to 1 -- NO cross-row engine reuse.
@@ -882,6 +882,12 @@ def multi_path(cores=None, Model=None, bulk=None, comp=None, Frac_solid=None, Fr
         this value (or no liquid is left); the first step below the limit
         is kept as the last row. MELTS models only -- ignored, with a
         warning, for MAGEMin and nGibbs models.
+    trace_params : dict or False, default False
+        If given, the trace element engine is run on the results (every
+        model). Keys: 'initial_conc' (required, e.g. {"Ni": 250.0}),
+        'partition_models' (optional, e.g. {"cpx": "Sun2012"}) and
+        'D_coeffs' (optional, a name such as "D_Gibson_2010" or a dict of
+        phase -> {element: D}; default "D_Gibson_2010").
 
     Returns
     -------
@@ -890,6 +896,10 @@ def multi_path(cores=None, Model=None, bulk=None, comp=None, Frac_solid=None, Fr
         'Input' included) for n > 1, or a single run's own dict of
         DataFrames directly when the normalised input resolves to exactly
         one run.
+    trace_conc, trace_d : dict
+        Only when `trace_params` is given, in which case the return value
+        is (Results, trace_conc, trace_d): trace element concentrations and
+        partition coefficients per phase, keyed the same way as Results.
     """
     # multi_path_v1 defaults Model to "MELTSv1.0.2" this way (a real
     # reassignment, not just a local substitution) -- missing here until
@@ -905,7 +915,7 @@ def multi_path(cores=None, Model=None, bulk=None, comp=None, Frac_solid=None, Fr
         warnings.warn(f"MgO_limit is only implemented for the MELTS models and will be ignored for Model = '{Model}'.")
 
     if "MELTS" not in Model:
-        return multi_path_v1(cores=cores, Model=Model, bulk=bulk, comp=comp, Frac_solid=Frac_solid,
+        Results =  multi_path_v1(cores=cores, Model=Model, bulk=bulk, comp=comp, Frac_solid=Frac_solid,
                            Frac_fluid=Frac_fluid, T_C=T_C, T_path_C=T_path_C, T_start_C=T_start_C,
                            T_end_C=T_end_C, dt_C=dt_C, P_bar=P_bar, P_path_bar=P_path_bar,
                            P_start_bar=P_start_bar, P_end_bar=P_end_bar, dp_bar=dp_bar,
@@ -918,10 +928,14 @@ def multi_path(cores=None, Model=None, bulk=None, comp=None, Frac_solid=None, Fr
                            Suppress_except=Suppress_except, multi_processing=multi_processing,
                            Print_suppress=Print_suppress, quiet_engine=quiet_engine)
 
+        if trace_params:
+            return _add_trace_results(Results, trace_params)
+        return Results
+
     if Model.startswith('n'):
         _ng_base = Model[:-6] if Model.endswith('NoProp') else Model
         if _ng_base in _nGibbs_models:
-            return multi_path_v1(cores=cores, Model=Model, bulk=bulk, comp=comp, Frac_solid=Frac_solid,
+            Results = multi_path_v1(cores=cores, Model=Model, bulk=bulk, comp=comp, Frac_solid=Frac_solid,
                                Frac_fluid=Frac_fluid, T_C=T_C, T_path_C=T_path_C, T_start_C=T_start_C,
                                T_end_C=T_end_C, dt_C=dt_C, P_bar=P_bar, P_path_bar=P_path_bar,
                                P_start_bar=P_start_bar, P_end_bar=P_end_bar, dp_bar=dp_bar,
@@ -933,6 +947,9 @@ def multi_path(cores=None, Model=None, bulk=None, comp=None, Frac_solid=None, Fr
                                label=label, timeout=timeout, Suppress=Suppress,
                                Suppress_except=Suppress_except, Print_suppress=Print_suppress,
                                quiet_engine=quiet_engine)
+            if trace_params:
+                return _add_trace_results(Results, trace_params)
+            return Results
 
     ## make sure everything is a float -- identical to multi_path's own preamble
     T_C = check_array(to_float(T_C))
@@ -1131,32 +1148,36 @@ def multi_path(cores=None, Model=None, bulk=None, comp=None, Frac_solid=None, Fr
     if n == 1:
         # Match multi_path's own single-run return shape: the one run's own
         # dict of DataFrames, not wrapped in a "Run 0" dict of dicts.
+        # No early return here: a single run must still reach the trace_params block below
         if full_results:
             Results = stich(list(full_results.values())[0], Model=Model,
                              Frac_fluid=Frac_fluid, Frac_solid=Frac_solid)
         else:
             print("No calculations returned")
             Results = {}
-        return Results
+    else:
+        Results = stich(Res=full_results, multi=True, Model=Model, Frac_fluid=Frac_fluid, Frac_solid=Frac_solid)
 
-    Results = stich(Res=full_results, multi=True, Model=Model, Frac_fluid=Frac_fluid, Frac_solid=Frac_solid)
+        for r in Results:
+            i = int(r.split(' ')[1].strip())
+            row_comp = comp if type(comp) == dict else comp.loc[i].to_dict()
+            Results[r]['Input'] = {
+                'Model': Model, 'comp': row_comp, 'Frac_solid': Frac_solid, 'Frac_fluid': Frac_fluid,
+                'T_C': T_C[i], 'T_path_C': T_path_C[i], 'T_start_C': T_start_C[i], 'T_end_C': T_end_C[i],
+                'dt_C': dt_C[i], 'P_bar': P_bar[i], 'P_path_bar': P_path_bar[i], 'P_start_bar': P_start_bar[i],
+                'P_end_bar': P_end_bar[i], 'dp_bar': dp_bar[i], 'isenthalpic': isenthalpic,
+                'isentropic': isentropic, 'isochoric': isochoric, 'find_liquidus': find_liquidus,
+                'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset[i], 'fluid_sat': fluid_sat,
+                'Crystallinity_limit': Crystallinity_limit, 'MgO_limit': MgO_limit,
+                'Suppress': Suppress, 'Suppress_except': Suppress_except,
+            }
 
-    for r in Results:
-        i = int(r.split(' ')[1].strip())
-        row_comp = comp if type(comp) == dict else comp.loc[i].to_dict()
-        Results[r]['Input'] = {
-            'Model': Model, 'comp': row_comp, 'Frac_solid': Frac_solid, 'Frac_fluid': Frac_fluid,
-            'T_C': T_C[i], 'T_path_C': T_path_C[i], 'T_start_C': T_start_C[i], 'T_end_C': T_end_C[i],
-            'dt_C': dt_C[i], 'P_bar': P_bar[i], 'P_path_bar': P_path_bar[i], 'P_start_bar': P_start_bar[i],
-            'P_end_bar': P_end_bar[i], 'dp_bar': dp_bar[i], 'isenthalpic': isenthalpic,
-            'isentropic': isentropic, 'isochoric': isochoric, 'find_liquidus': find_liquidus,
-            'fO2_buffer': fO2_buffer, 'fO2_offset': fO2_offset[i], 'fluid_sat': fluid_sat,
-            'Crystallinity_limit': Crystallinity_limit, 'MgO_limit': MgO_limit,
-            'Suppress': Suppress, 'Suppress_except': Suppress_except,
-        }
+        # label_results needs the multi-run "Run i" layout with 'Input', so a single run is never labelled
+        if label is not None:
+            Results = label_results(Results, label)
 
-    if label is not None:
-        return label_results(Results, label)
+    if trace_params:
+        return _add_trace_results(Results, trace_params)
     return Results
 
 

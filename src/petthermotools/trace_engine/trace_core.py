@@ -206,3 +206,9 @@ def get_trace_conc(results, trace_d, trace_split, df_initial, fractional):
             trace_conc[phase_name] = df_initial.iloc[0,:].values*tr
 
     return trace_conc
+
+def calc_accumulated_melt(results, trace_conc):
+    liq_mass = results['mass_g']['liquid1']
+    mass_trace_sum = trace_conc['liquid1'].mul(liq_mass, axis=0).cumsum()
+    liq_sum = liq_mass.cumsum()
+    return mass_trace_sum.div(liq_sum, axis=0)

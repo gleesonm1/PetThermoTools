@@ -54,7 +54,6 @@ def show_trace_citations():
 show_models = show_trace_models
 show_citations = show_trace_citations
 
-
 def calc_trace_conc(results=None, elements=None, partition_models=None, D_coeffs=coeffs["D_Gibson_2010"],
                     initial_conc = None, fractional = False):
 

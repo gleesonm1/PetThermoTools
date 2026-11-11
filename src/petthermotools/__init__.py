@@ -87,7 +87,7 @@ from petthermotools.Methods import *
 # Trace element engine (beta): everything is available as ptt.te.<name>; the main user functions are also ptt.<name>
 from petthermotools.trace_engine import trace_engine as te
 from petthermotools.trace_engine.trace_engine import (calc_trace_conc, show_trace_models, show_trace_citations,
-    PxTraceElementCalculator, OlTraceElementCalculator, GrtTraceElementCalculator)
+    PxTraceElementCalculator, OlTraceElementCalculator, GrtTraceElementCalculator, calc_accumulated_melt)
 
 # ── nGibbs neural-network emulator registry ──────────────────────────────────
 # Instantiated once in nGibbs_bridge.py and imported here so users can

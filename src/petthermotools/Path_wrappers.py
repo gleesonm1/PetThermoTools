@@ -9,7 +9,7 @@ def isobaric_crystallisation(Model = None, bulk = None, Frac_solid = None, Frac_
                              find_liquidus = False, fO2_buffer = None, fO2_offset = None, 
                              label = None, Crystallinity_limit = None, fluid_sat = False, timeout = None,
                              Suppress = ['rutile', 'tridymite'], Suppress_except=False,
-                             multi_processing = True, quiet_engine = True, MgO_limit = None):
+                             multi_processing = True, quiet_engine = True, MgO_limit = None, trace_params = False):
     """
     Simulates isobaric (constant-pressure) crystallization paths using the `multi_path` function.
 
@@ -65,11 +65,17 @@ def isobaric_crystallisation(Model = None, bulk = None, Frac_solid = None, Frac_
     quiet_engine : bool, optional
         If True (default), the MELTS engine's own progress text is suppressed for speed. Set to
         False to see its raw per-step output for debugging. See `multi_path`.
+    trace_params : dict, optional
+        If given, the trace element engine is run on the results. Keys: 'initial_conc' (required,
+        e.g. {"Ni": 250.0}), 'partition_models' (optional, e.g. {"cpx": "Sun2012", "ol": "Sun2014"})
+        and 'D_coeffs' (optional, default "D_Gibson_2010"). See `multi_path`.
 
     Returns
     -------
     dict
         A dictionary of results with DataFrames for each phase.
+    trace_conc, trace_d : dict
+        Only with `trace_params`, in which case (Results, trace_conc, trace_d) is returned.
     """
     if H2O_Liq is not None:
         print('Warning - the kwarg "H2O_Liq" will be removed from v1.0.0 onwards. Please use "H2O_init" instead.')
@@ -88,14 +94,15 @@ def isobaric_crystallisation(Model = None, bulk = None, Frac_solid = None, Frac_
 
     comp = bulk.copy()
 
+    # with trace_params, multi_path returns (Results, trace_conc, trace_d)
     Results = multi_path(Model = Model, bulk = comp, Frac_solid = Frac_solid, Frac_fluid = Frac_fluid,
-                         T_path_C = T_path_C, T_start_C = T_start_C, T_end_C = T_end_C, dt_C = dt_C,
-                         P_bar = P_bar, Fe3Fet_init = Fe3Fet_init, H2O_init = H2O_init, CO2_init = CO2_init,
-                         find_liquidus = find_liquidus, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset,
-                         label = label, Crystallinity_limit = Crystallinity_limit, fluid_sat = fluid_sat,
-                         timeout = timeout, Suppress = Suppress, Suppress_except=Suppress_except,
-                         multi_processing = multi_processing, quiet_engine = quiet_engine, MgO_limit = MgO_limit)
-
+                        T_path_C = T_path_C, T_start_C = T_start_C, T_end_C = T_end_C, dt_C = dt_C,
+                        P_bar = P_bar, Fe3Fet_init = Fe3Fet_init, H2O_init = H2O_init, CO2_init = CO2_init,
+                        find_liquidus = find_liquidus, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset,
+                        label = label, Crystallinity_limit = Crystallinity_limit, fluid_sat = fluid_sat,
+                        timeout = timeout, Suppress = Suppress, Suppress_except=Suppress_except,
+                        multi_processing = multi_processing, quiet_engine = quiet_engine, MgO_limit = MgO_limit,
+                        trace_params = trace_params)
     return Results
 
 def isochoric_crystallisation(Model = None, bulk = None, Frac_solid = None, Frac_fluid = None, 
@@ -105,7 +112,7 @@ def isochoric_crystallisation(Model = None, bulk = None, Frac_solid = None, Frac
                               find_liquidus = False, fO2_buffer = None, fO2_offset = None, 
                               label = None, Crystallinity_limit = None, fluid_sat = False, 
                               timeout = None, Suppress = ['rutile', 'tridymite'], Suppress_except=False,
-                              multi_processing = True, quiet_engine = True, MgO_limit = None):
+                              multi_processing = True, quiet_engine = True, MgO_limit = None, trace_params = False):
     """
     Simulates isochoric (constant-volume) crystallization paths using the `multi_path` function.
 
@@ -157,11 +164,17 @@ def isochoric_crystallisation(Model = None, bulk = None, Frac_solid = None, Frac
     quiet_engine : bool, optional
         If True (default), the MELTS engine's own progress text is suppressed for speed. Set to
         False to see its raw per-step output for debugging. See `multi_path`.
+    trace_params : dict, optional
+        If given, the trace element engine is run on the results. Keys: 'initial_conc' (required,
+        e.g. {"Ni": 250.0}), 'partition_models' (optional, e.g. {"cpx": "Sun2012", "ol": "Sun2014"})
+        and 'D_coeffs' (optional, default "D_Gibson_2010"). See `multi_path`.
 
     Returns
     -------
     dict
         A dictionary of results with DataFrames for each phase.
+    trace_conc, trace_d : dict
+        Only with `trace_params`, in which case (Results, trace_conc, trace_d) is returned.
     """
     if H2O_Liq is not None:
         print('Warning - the kwarg "H2O_Liq" will be removed from v1.1.0 onwards. Please use "H2O_init" instead.')
@@ -186,7 +199,8 @@ def isochoric_crystallisation(Model = None, bulk = None, Frac_solid = None, Frac
                          find_liquidus = find_liquidus, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset,
                          label = label, Crystallinity_limit = Crystallinity_limit, fluid_sat = fluid_sat,
                          timeout = timeout, isochoric = True, Suppress = Suppress, Suppress_except=Suppress_except,
-                         multi_processing=multi_processing, quiet_engine = quiet_engine, MgO_limit = MgO_limit)
+                         multi_processing=multi_processing, quiet_engine = quiet_engine, MgO_limit = MgO_limit,
+                         trace_params = trace_params)
 
     return Results
 
@@ -197,7 +211,7 @@ def polybaric_crystallisation_path(Model = None, bulk = None, Frac_solid = None,
                                    CO2_init = None, CO2_Liq = None, find_liquidus = False, fO2_buffer = None, 
                                    fO2_offset = None, label = None, timeout = None, multi_processing=True, fluid_sat = False,
                                    Suppress = ['rutile', 'tridymite'], Suppress_except=False, quiet_engine = True,
-                                   MgO_limit = None):
+                                   MgO_limit = None, trace_params = False):
     """
     Simulates polybaric crystallization along a user-specified P-T path using the `multi_path` function.
 
@@ -254,11 +268,17 @@ def polybaric_crystallisation_path(Model = None, bulk = None, Frac_solid = None,
     quiet_engine : bool, optional
         If True (default), the MELTS engine's own progress text is suppressed for speed. Set to
         False to see its raw per-step output for debugging. See `multi_path`.
+    trace_params : dict, optional
+        If given, the trace element engine is run on the results. Keys: 'initial_conc' (required,
+        e.g. {"Ni": 250.0}), 'partition_models' (optional, e.g. {"cpx": "Sun2012", "ol": "Sun2014"})
+        and 'D_coeffs' (optional, default "D_Gibson_2010"). See `multi_path`.
 
     Returns
     -------
     dict
         A dictionary of results with DataFrames for each phase.
+    trace_conc, trace_d : dict
+        Only with `trace_params`, in which case (Results, trace_conc, trace_d) is returned.
     """
     if H2O_Liq is not None:
         print('Warning - the kwarg "H2O_Liq" will be removed from v1.0.0 onwards. Please use "H2O_init" instead.')
@@ -284,7 +304,7 @@ def polybaric_crystallisation_path(Model = None, bulk = None, Frac_solid = None,
                          fO2_buffer = fO2_buffer, fO2_offset = fO2_offset,
                          label = label, timeout = timeout, Suppress = Suppress, Suppress_except=Suppress_except,
                          multi_processing=multi_processing, fluid_sat=fluid_sat, quiet_engine = quiet_engine,
-                         MgO_limit = MgO_limit)
+                         MgO_limit = MgO_limit, trace_params = trace_params)
 
     return Results
 
@@ -294,7 +314,8 @@ def polybaric_crystallisation_onestep(Model = None, bulk = None, Frac_solid = No
                                       H2O_Liq = None, H2O_init = None, CO2_Liq = None, CO2_init = None, 
                                       find_liquidus = False, fO2_buffer = None, fO2_offset = None, label = None, 
                                       timeout = None, multi_processing = True, Suppress = ['rutile', 'tridymite'],
-                                      Suppress_except=False, fluid_sat = False, quiet_engine = True, MgO_limit = None):
+                                      Suppress_except=False, fluid_sat = False, quiet_engine = True, MgO_limit = None,
+                                      trace_params = False):
     """
     Simulates polybaric crystallization along a user-specified P-T path using the `multi_path` function.
 
@@ -349,11 +370,17 @@ def polybaric_crystallisation_onestep(Model = None, bulk = None, Frac_solid = No
     quiet_engine : bool, optional
         If True (default), the MELTS engine's own progress text is suppressed for speed. Set to
         False to see its raw per-step output for debugging. See `multi_path`.
+    trace_params : dict, optional
+        If given, the trace element engine is run on the results. Keys: 'initial_conc' (required,
+        e.g. {"Ni": 250.0}), 'partition_models' (optional, e.g. {"cpx": "Sun2012", "ol": "Sun2014"})
+        and 'D_coeffs' (optional, default "D_Gibson_2010"). See `multi_path`.
 
     Returns
     -------
     dict
         A dictionary of results with DataFrames for each phase.
+    trace_conc, trace_d : dict
+        Only with `trace_params`, in which case (Results, trace_conc, trace_d) is returned.
     """
     if H2O_Liq is not None:
         print('Warning - the kwarg "H2O_Liq" will be removed from v1.0.0 onwards. Please use "H2O_init" instead.')
@@ -411,7 +438,7 @@ def polybaric_crystallisation_onestep(Model = None, bulk = None, Frac_solid = No
                         find_liquidus = find_liquidus, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset,
                         label = label, timeout = timeout, Suppress = Suppress, Suppress_except=Suppress_except,
                         multi_processing=multi_processing, fluid_sat=fluid_sat, quiet_engine = quiet_engine,
-                        MgO_limit = MgO_limit)
+                        MgO_limit = MgO_limit, trace_params = trace_params)
 
     return Results
 
@@ -419,7 +446,7 @@ def polybaric_crystallisation_onestep(Model = None, bulk = None, Frac_solid = No
 # but never used (T_path_C is still built with a hard-coded step of 2, like polybaric_crystallisation_onestep
 # used to), it has dead branches, and some paths can leave `T_path_C` unbound. Do not fix in place without
 # re-reading all three branches below together.
-def polybaric_crystallisation_multistep(Model = None, bulk = None, Frac_solid = None, Frac_fluid = None, T_start_C = None, T_end_C = None, dt_C = None, T_step_C = None, P_step_bar = None, Fe3Fet_Liq = None, H2O_Liq = None, find_liquidus = None, fO2_buffer = None, fO2_offset = None, label = None, timeout = None, quiet_engine = True):
+def polybaric_crystallisation_multistep(Model = None, bulk = None, Frac_solid = None, Frac_fluid = None, T_start_C = None, T_end_C = None, dt_C = None, T_step_C = None, P_step_bar = None, Fe3Fet_Liq = None, H2O_Liq = None, find_liquidus = None, fO2_buffer = None, fO2_offset = None, label = None, timeout = None, quiet_engine = True, trace_params = False):
 
     comp = bulk.copy()
 
@@ -501,7 +528,7 @@ def polybaric_crystallisation_multistep(Model = None, bulk = None, Frac_solid = 
 
                 P_path_bar[i, np.where(T_path_C[i,:]<= T_step[-1])] = P_step[-1]
 
-    Results = multi_path(Model = Model, bulk = comp, Frac_solid = Frac_solid, Frac_fluid = Frac_fluid, T_path_C = T_path_C, P_path_bar = P_path_bar, Fe3Fet_Liq = Fe3Fet_Liq, H2O_Liq = H2O_Liq, find_liquidus = find_liquidus, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, label = label, timeout = timeout, quiet_engine = quiet_engine)
+    Results = multi_path(Model = Model, bulk = comp, Frac_solid = Frac_solid, Frac_fluid = Frac_fluid, T_path_C = T_path_C, P_path_bar = P_path_bar, Fe3Fet_Liq = Fe3Fet_Liq, H2O_Liq = H2O_Liq, find_liquidus = find_liquidus, fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, label = label, timeout = timeout, quiet_engine = quiet_engine, trace_params = trace_params)
 
     return Results
 
@@ -509,9 +536,9 @@ def isothermal_decompression(Model = None, bulk = None, Frac_solid = None, Frac_
                              T_C = None, P_start_bar = None, P_end_bar = None, dp_bar = None, 
                              Fe3Fet_Liq = None, Fe3Fet_init = None, H2O_Liq = None, H2O_init = None,
                              CO2_Liq = None, CO2_init = None, find_liquidus = False, fO2_buffer = None, 
-                             fO2_offset = None, label = None, timeout = None, fluid_sat = False, 
+                             fO2_offset = None, label = None, timeout = None, fluid_sat = False,
                              Suppress = ['rutile', 'tridymite'], Suppress_except=False, multi_processing = True,
-                             quiet_engine = True):
+                             quiet_engine = True, trace_params = False):
     """
     Simulates isothermal (constant-temperature) decompression calculations using the `multi_path` function.
 
@@ -560,11 +587,17 @@ def isothermal_decompression(Model = None, bulk = None, Frac_solid = None, Frac_
     quiet_engine : bool, optional
         If True (default), the MELTS engine's own progress text is suppressed for speed. Set to
         False to see its raw per-step output for debugging. See `multi_path`.
+    trace_params : dict, optional
+        If given, the trace element engine is run on the results. Keys: 'initial_conc' (required,
+        e.g. {"Ni": 250.0}), 'partition_models' (optional, e.g. {"cpx": "Sun2012", "ol": "Sun2014"})
+        and 'D_coeffs' (optional, default "D_Gibson_2010"). See `multi_path`.
 
     Returns
     -------
     dict
         A dictionary of results with DataFrames for each phase.
+    trace_conc, trace_d : dict
+        Only with `trace_params`, in which case (Results, trace_conc, trace_d) is returned.
     """
     if H2O_Liq is not None:
         print('Warning - the kwarg "H2O_Liq" will be removed from v1.0.0 onwards. Please use "H2O_init" instead.')
@@ -587,7 +620,7 @@ def isothermal_decompression(Model = None, bulk = None, Frac_solid = None, Frac_
                          Fe3Fet_init = Fe3Fet_init, H2O_init = H2O_init, CO2_init = CO2_init, find_liquidus = find_liquidus,
                          fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, label = label, timeout = timeout,
                          fluid_sat = fluid_sat, Suppress = Suppress, Suppress_except=Suppress_except,
-                         multi_processing=multi_processing, quiet_engine = quiet_engine)
+                         multi_processing=multi_processing, quiet_engine = quiet_engine, trace_params = trace_params)
 
     return Results
 
@@ -595,9 +628,9 @@ def isentropic_decompression(Model = None, bulk = None, Frac_solid = None, Frac_
                              T_C = None, P_start_bar = None, P_end_bar = None, dp_bar = None, 
                              Fe3Fet_Liq = None, Fe3Fet_init = None, H2O_Liq = None, H2O_init = None,
                              CO2_Liq = None, CO2_init = None, find_liquidus = False, fO2_buffer = None, 
-                             fO2_offset = None, label = None, timeout = None, fluid_sat = False, 
+                             fO2_offset = None, label = None, timeout = None, fluid_sat = False,
                              Suppress = ['rutile', 'tridymite'], Suppress_except=False, multi_processing = True,
-                             quiet_engine = True):
+                             quiet_engine = True, trace_params = False):
     """
     Simulates isentropic (constant-entropy) decompression calculations using the `multi_path` function.
 
@@ -643,11 +676,17 @@ def isentropic_decompression(Model = None, bulk = None, Frac_solid = None, Frac_
     quiet_engine : bool, optional
         If True (default), the MELTS engine's own progress text is suppressed for speed. Set to
         False to see its raw per-step output for debugging. See `multi_path`.
+    trace_params : dict, optional
+        If given, the trace element engine is run on the results. Keys: 'initial_conc' (required,
+        e.g. {"Ni": 250.0}), 'partition_models' (optional, e.g. {"cpx": "Sun2012", "ol": "Sun2014"})
+        and 'D_coeffs' (optional, default "D_Gibson_2010"). See `multi_path`.
 
     Returns
     -------
     dict
         A dictionary of results with DataFrames for each phase.
+    trace_conc, trace_d : dict
+        Only with `trace_params`, in which case (Results, trace_conc, trace_d) is returned.
     """
     if H2O_Liq is not None:
         print('Warning - the kwarg "H2O_Liq" will be removed from v1.0.0 onwards. Please use "H2O_init" instead.')
@@ -670,7 +709,7 @@ def isentropic_decompression(Model = None, bulk = None, Frac_solid = None, Frac_
                         Fe3Fet_init = Fe3Fet_init, H2O_init = H2O_init, CO2_init = CO2_init, find_liquidus = find_liquidus,
                         fO2_buffer = fO2_buffer, fO2_offset = fO2_offset, label = label, timeout = timeout,
                         isentropic = True, fluid_sat = fluid_sat, Suppress = Suppress, Suppress_except=Suppress_except,
-                         multi_processing=multi_processing, quiet_engine = quiet_engine)
+                         multi_processing=multi_processing, quiet_engine = quiet_engine, trace_params = trace_params)
 
     return Results
 

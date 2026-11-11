@@ -1142,3 +1142,53 @@ def _draw_stack(ax, x_vals: np.ndarray, phase_frame: np.ndarray,
     ax.grid(True, alpha=0.2)
 
 
+from matplotlib import colors
+
+REE = ["La", "Ce", "Pr", "Nd", "Pm", "Sm", "Eu", "Gd", "Tb", "Dy", "Ho", "Er", "Tm", "Yb", "Lu"]
+
+# CI chondrite, McDonough & Sun (1995), ppm
+CI_MS95 = {"La": 0.237, "Ce": 0.613, "Pr": 0.0928, "Nd": 0.457, "Sm": 0.148,
+           "Eu": 0.0563, "Gd": 0.199, "Tb": 0.0361, "Dy": 0.246, "Ho": 0.0546,
+           "Er": 0.160, "Tm": 0.0247, "Yb": 0.161, "Lu": 0.0246}
+
+
+def plot_ree(df, rows=None, every=1, chondrite=CI_MS95, color_by=None,
+             cbar_label="Step", cmap="Blues", ax=None, **line_kw):
+    """Chondrite-normalised REE diagram, one line per row of `df`."""
+    els = [e for e in REE if e in df.columns and e in chondrite]
+    data = df[els] if rows is None else df.loc[rows, els]
+    data = data.iloc[::every].replace([np.inf, -np.inf], np.nan)
+    data = data[(data > 0).any(axis=1)]            # drop empty / all-NaN rows
+    if data.empty:
+        raise ValueError("No rows with positive REE concentrations to plot.")
+    norm = data.div(pd.Series(chondrite)[els], axis=1)
+    x = [REE.index(e) for e in els]
+
+    if ax is None:
+        _, ax = plt.subplots(figsize=(6.5, 4.5))
+
+    # sequential colour, trimmed so the lightest lines stay visible
+    base = plt.get_cmap(cmap)
+    seq = colors.LinearSegmentedColormap.from_list("seq", base(np.linspace(0.35, 1.0, 256)))
+    vals = (color_by.loc[norm.index] if color_by is not None
+            else pd.Series(norm.index, index=norm.index)).astype(float)
+    cnorm = colors.Normalize(vals.min(), vals.max() if vals.max() > vals.min() else vals.min() + 1)
+
+    kw = {"lw": 1.5, "marker": "o", "ms": 3} | line_kw
+    for idx, row in norm.iterrows():
+        y = row.where(row > 0)                     # zeros can't go on a log axis
+        ax.plot(x, y.values, color=seq(cnorm(vals[idx])), **kw)
+
+    ax.set_yscale("log")
+    ax.set_xticks(range(len(REE)), REE)
+    ax.set_xlim(-0.5, len(REE) - 0.5)
+    ax.set_ylabel("Sample / CI chondrite")
+    ax.grid(True, which="major", color="0.9", lw=0.6)
+    ax.set_axisbelow(True)
+    for s in ("top", "right"):
+        ax.spines[s].set_visible(False)
+
+    if len(norm) > 1:
+        sm = plt.cm.ScalarMappable(norm=cnorm, cmap=seq)
+        ax.figure.colorbar(sm, ax=ax, label=cbar_label, pad=0.02)
+    return ax
